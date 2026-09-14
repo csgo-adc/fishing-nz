@@ -10,6 +10,8 @@ Firebase is configured through `app/google-services.json`. Analytics records an 
 
 Google Maps uses a local `secrets.properties` file. Copy `secrets.properties.example` to `secrets.properties` and set `MAPS_API_KEY`; this file is ignored by Git.
 
+The Map tab is configured with the `fishing-nz` Google Cloud project. The current debug key is restricted to **Maps SDK for Android**, package `nz.fishingnz.app`, and the local debug SHA-1 certificate. Billing and the Maps SDK are enabled, and the map has been verified on the Android emulator. If tiles appear blank after a fresh install, wait a few seconds for Google Play services to initialize and relaunch the app; the screen reports a configuration message after 8 seconds if initialization still fails.
+
 ## Demo flow
 
 - Choose land or boat fishing on the home screen.
@@ -25,3 +27,15 @@ The home recommendations and spot catalogue are still local sample data. Weather
 The photo picker, preview, loading state and result card are implemented in `MainActivity.kt`. `identifyFishPhoto()` is currently a deliberately marked demo adapter that returns a sample snapper result. For production, replace that adapter with a secured server-side vision endpoint and connect its species output to an authoritative, region-aware MPI rules dataset. Do not ship a provider API key in the Android client, and always show uncertainty plus the official-rules disclaimer.
 
 Open the project in Android Studio and run the `app` configuration on an emulator or Android device.
+
+## Architecture
+
+The app follows MVVM with a Compose UI:
+
+- `MainActivity.kt` only creates the activity and starts the app.
+- `ui/` contains the app shell and screen composables.
+- `viewmodel/` owns `FishingUiState`, user actions, and coroutine lifecycle.
+- `data/` contains repository boundaries for weather, tide, and fish identification.
+- `model/` contains shared data models and sample catalogue data.
+
+This keeps API calls and mutable state out of composables, making the vision provider and official rules repository replaceable without rewriting the screens.
