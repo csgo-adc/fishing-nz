@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Orange fish body, kept inside the adaptive-icon safe zone. -->
+    <path
+        android:fillColor="#E4784A"
+        android:pathData="M31,54 C39,40 54,35 68,38 C77,40 83,46 87,54 C81,57 77,61 72,66 C59,76 42,73 32,62 L24,68 L27,56 L24,45 Z" />
+    <!-- Cream belly and gill detail. -->
+    <path
+        android:fillColor="#F7F8F4"
+        android:pathData="M41,61 C50,66 61,66 72,59 C69,65 64,70 57,71 C50,71 44,68 41,61 Z" />
+    <path
+        android:fillColor="#F7F8F4"
+        android:pathData="M70,45 C67,50 67,56 70,61 C65,57 64,51 67,46 Z" />
+    <!-- Tail/checkmark cue. -->
+    <path
+        android:fillColor="#F7F8F4"
+        android:pathData="M24,45 L32,53 L42,44 L45,47 L32,62 L27,56 Z" />
+    <!-- Eye. -->
+    <path
+        android:fillColor="#123B43"
+        android:pathData="M76,47 A4,4 0 1,0 76,55 A4,4 0 1,0 76,47" />
+    <path
+        android:fillColor="#F7F8F4"
+        android:pathData="M76,49 A1.5,1.5 0 1,0 76,52 A1.5,1.5 0 1,0 76,49" />
+    <!-- Seafoam wave underline. -->
+    <path
+        android:fillColor="#DCEFE7"
+        android:pathData="M29,78 C41,72 51,77 61,80 C70,83 77,80 82,76 C77,86 66,89 56,85 C45,81 38,77 29,82 Z" />
+</vector>

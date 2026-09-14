@@ -4,10 +4,13 @@ import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.app.DatePickerDialog
+import android.graphics.BitmapFactory
+import android.net.Uri
 import com.google.firebase.analytics.FirebaseAnalytics
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
@@ -38,6 +41,9 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -77,6 +85,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Calendar
+import kotlinx.coroutines.launch
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -115,6 +124,15 @@ data class TideState(
     val events: List<TideEvent> = emptyList(),
     val points: List<TidePoint> = emptyList(),
     val stationName: String = ""
+)
+data class FishCheck(
+    val commonName: String,
+    val scientificName: String,
+    val confidence: Int,
+    val minimumSize: String,
+    val dailyLimit: String,
+    val status: String,
+    val note: String
 )
 data class GeoPoint(val latitude: Double, val longitude: Double)
 data class TideStation(val id: String, val name: String, val region: String, val latitude: Double, val longitude: Double)
@@ -162,6 +180,7 @@ fun FishingNzApp() {
     var selectedSpot by remember { mutableStateOf<Recommendation?>(null) }
     var date by remember { mutableStateOf("This Saturday") }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val preferences = context.getSharedPreferences("fishing_nz", android.content.Context.MODE_PRIVATE)
     var savedSpots by remember { mutableStateOf(preferences.getStringSet("saved_spots", emptySet())?.toSet() ?: emptySet()) }
     var activeTrip by remember { mutableStateOf<Recommendation?>(null) }
@@ -174,6 +193,13 @@ fun FishingNzApp() {
     var weatherError by remember { mutableStateOf(false) }
     var location by remember { mutableStateOf(GeoPoint(-36.85, 174.76)) }
     var usingDeviceLocation by remember { mutableStateOf(false) }
+    var fishPhoto by remember { mutableStateOf<Uri?>(null) }
+    var fishCheck by remember { mutableStateOf<FishCheck?>(null) }
+    var fishChecking by remember { mutableStateOf(false) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        fishPhoto = uri
+        fishCheck = null
+    }
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
             requestCurrentLocation(context) { point ->
@@ -225,7 +251,14 @@ fun FishingNzApp() {
             }
         ) { padding ->
             when (tab) {
-                0 -> HomeScreen(Modifier.padding(padding), boat, { boat = it }, date, { date = it }, weather, tide, weatherError, usingDeviceLocation, { showResults = true })
+                0 -> HomeScreen(Modifier.padding(padding), boat, { boat = it }, date, { date = it }, weather, tide, weatherError, usingDeviceLocation, { showResults = true }, fishPhoto, fishCheck, fishChecking, { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, {
+                    fishChecking = true
+                    fishCheck = null
+                    coroutineScope.launch {
+                        fishCheck = identifyFishPhoto(fishPhoto)
+                        fishChecking = false
+                    }
+                })
                 1 -> MapScreen(Modifier.padding(padding), location, refreshLocation)
                 2 -> TideScreen(
                     modifier = Modifier.padding(padding),
@@ -252,7 +285,7 @@ fun FishingNzApp() {
 }
 
 @Composable
-private fun HomeScreen(modifier: Modifier, boat: Boolean, setBoat: (Boolean) -> Unit, date: String, setDate: (String) -> Unit, weather: WeatherState?, tide: TideState?, weatherError: Boolean, usingDeviceLocation: Boolean, find: () -> Unit) {
+private fun HomeScreen(modifier: Modifier, boat: Boolean, setBoat: (Boolean) -> Unit, date: String, setDate: (String) -> Unit, weather: WeatherState?, tide: TideState?, weatherError: Boolean, usingDeviceLocation: Boolean, find: () -> Unit, fishPhoto: Uri?, fishCheck: FishCheck?, fishChecking: Boolean, chooseFishPhoto: () -> Unit, checkFish: () -> Unit) {
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Spacer(Modifier.height(18.dp))
@@ -286,12 +319,53 @@ private fun HomeScreen(modifier: Modifier, boat: Boolean, setBoat: (Boolean) -> 
             Spacer(Modifier.height(10.dp))
             ActionCard("Find the best location", "Rank spots by conditions and distance", Icons.Default.LocationOn, find, outlined = true)
         }
+        item { FishIdentifierCard(fishPhoto, fishCheck, fishChecking, chooseFishPhoto, checkFish) }
         item { Text("Quick forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
         item { ForecastCard(boat, weather, tide, weatherError) }
         item { Text("Your next best window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
         item { RecommendationCard(sampleRecommendations.first(), onClick = find) }
         item { Spacer(Modifier.height(12.dp)) }
     }
+}
+
+@Composable
+private fun FishIdentifierCard(photo: Uri?, result: FishCheck?, loading: Boolean, choosePhoto: () -> Unit, checkFish: () -> Unit) {
+    val context = LocalContext.current
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }
+                Spacer(Modifier.width(12.dp))
+                Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy); Text("AI ID + local rules check", color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
+            }
+            if (photo != null) {
+                val bitmap = remember(photo) { context.contentResolver.openInputStream(photo)?.use { BitmapFactory.decodeStream(it) } }
+                bitmap?.let { androidx.compose.foundation.Image(it.asImageBitmap(), contentDescription = "Selected fish photo", modifier = Modifier.fillMaxWidth().height(180.dp), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+            }
+            if (result != null) {
+                Card(colors = CardDefaults.cardColors(containerColor = Seafoam), shape = RoundedCornerShape(14.dp)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(result.commonName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy); Text("${result.confidence}% match", color = Orange, fontWeight = FontWeight.Bold) }
+                        Text(result.scientificName, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        Text("${result.status} · min ${result.minimumSize} · ${result.dailyLimit}", color = Navy, fontWeight = FontWeight.SemiBold)
+                        Text(result.note, color = Color.DarkGray, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            if (loading) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = choosePhoto, modifier = Modifier.weight(1f)) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text(if (photo == null) "Choose photo" else "Change") }
+                Button(enabled = photo != null && !loading, onClick = checkFish, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(6.dp)); Text("Identify") }
+            }
+            Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private suspend fun identifyFishPhoto(photo: Uri?): FishCheck = withContext(Dispatchers.Default) {
+    // Replace this demo adapter with the secured server-side vision endpoint in production.
+    kotlinx.coroutines.delay(650)
+    FishCheck("Snapper", "Pagrus auratus", 91, "30 cm", "7 per person / day", "Likely legal", "Check the regional MPI rules and measure from the nose to the shortest tail length before keeping it.")
 }
 
 @Composable
