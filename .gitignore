@@ -5,3 +5,8 @@ app/build/
 local.properties
 app/google-services.json
 secrets.properties
+
+# macOS and Xcode workspace state
+.DS_Store
+xcuserdata/
+*.xcuserstate

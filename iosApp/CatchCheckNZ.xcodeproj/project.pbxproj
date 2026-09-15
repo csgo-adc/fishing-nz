@@ -1,0 +1,73 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA000001 /* CatchCheckNZApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100001 /* CatchCheckNZApp.swift */; };
+		AA000002 /* FishingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100002 /* FishingModels.swift */; };
+		AA000003 /* FishingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100003 /* FishingRepository.swift */; };
+		AA000004 /* FishingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100004 /* FishingViewModel.swift */; };
+		AA000005 /* CatchCheckRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100005 /* CatchCheckRootView.swift */; };
+		AA000006 /* FeatureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100006 /* FeatureViews.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA100001 /* CatchCheckNZApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchCheckNZApp.swift; sourceTree = "<group>"; };
+		AA100002 /* FishingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FishingModels.swift; sourceTree = "<group>"; };
+		AA100003 /* FishingRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FishingRepository.swift; sourceTree = "<group>"; };
+		AA100004 /* FishingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FishingViewModel.swift; sourceTree = "<group>"; };
+		AA100005 /* CatchCheckRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchCheckRootView.swift; sourceTree = "<group>"; };
+		AA100006 /* FeatureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureViews.swift; sourceTree = "<group>"; };
+		AA100007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA100008 /* CatchCheckNZ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CatchCheckNZ.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA200001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA300001 = {isa = PBXGroup; children = (AA300002 /* CatchCheckNZ */, AA300003 /* Products */); sourceTree = "<group>"; };
+		AA300002 /* CatchCheckNZ */ = {isa = PBXGroup; children = (AA300004 /* App */, AA300005 /* Models */, AA300006 /* Services */, AA300007 /* ViewModels */, AA300008 /* Views */, AA300009 /* Resources */); path = CatchCheckNZ; sourceTree = "<group>"; };
+		AA300003 /* Products */ = {isa = PBXGroup; children = (AA100008 /* CatchCheckNZ.app */); name = Products; sourceTree = "<group>"; };
+		AA300004 /* App */ = {isa = PBXGroup; children = (AA100001 /* CatchCheckNZApp.swift */); path = App; sourceTree = "<group>"; };
+		AA300005 /* Models */ = {isa = PBXGroup; children = (AA100002 /* FishingModels.swift */); path = Models; sourceTree = "<group>"; };
+		AA300006 /* Services */ = {isa = PBXGroup; children = (AA100003 /* FishingRepository.swift */); path = Services; sourceTree = "<group>"; };
+		AA300007 /* ViewModels */ = {isa = PBXGroup; children = (AA100004 /* FishingViewModel.swift */); path = ViewModels; sourceTree = "<group>"; };
+		AA300008 /* Views */ = {isa = PBXGroup; children = (AA100005 /* CatchCheckRootView.swift */, AA100006 /* FeatureViews.swift */); path = Views; sourceTree = "<group>"; };
+		AA300009 /* Resources */ = {isa = PBXGroup; children = (AA100007 /* Info.plist */); path = Resources; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA400001 /* CatchCheckNZ */ = {isa = PBXNativeTarget; buildConfigurationList = AA500002 /* Build configuration list for PBXNativeTarget "CatchCheckNZ" */; buildPhases = (AA200002 /* Sources */, AA200001 /* Frameworks */, AA200003 /* Resources */); buildRules = (); dependencies = (); name = CatchCheckNZ; productName = CatchCheckNZ; productReference = AA100008 /* CatchCheckNZ.app */; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA600001 /* Project object */ = {isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2600; LastUpgradeCheck = 2600; TargetAttributes = { AA400001 = { CreatedOnToolsVersion = 26.0; }; }; }; buildConfigurationList = AA500001 /* Build configuration list for PBXProject "CatchCheckNZ" */; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = AA300001; productRefGroup = AA300003 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (AA400001 /* CatchCheckNZ */); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA200003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA200002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AA000001 /* CatchCheckNZApp.swift in Sources */, AA000002 /* FishingModels.swift in Sources */, AA000003 /* FishingRepository.swift in Sources */, AA000004 /* FishingViewModel.swift in Sources */, AA000005 /* CatchCheckRootView.swift in Sources */, AA000006 /* FeatureViews.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA700001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; DEBUG_INFORMATION_FORMAT = dwarf; GCC_C_LANGUAGE_STANDARD = gnu17; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		AA700002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu17; SWIFT_COMPILATION_MODE = wholemodule; }; name = Release; };
+		AA700003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = ""; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 0.1; PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		AA700004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = ""; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 0.1; PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA500001 /* Build configuration list for PBXProject "CatchCheckNZ" */ = {isa = XCConfigurationList; buildConfigurations = (AA700001 /* Debug */, AA700002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		AA500002 /* Build configuration list for PBXNativeTarget "CatchCheckNZ" */ = {isa = XCConfigurationList; buildConfigurations = (AA700003 /* Debug */, AA700004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = AA600001 /* Project object */;
+}
