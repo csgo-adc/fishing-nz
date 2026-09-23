@@ -37,11 +37,11 @@ The home recommendations and spot catalogue are still local sample data. Weather
 
 ## Fish identification
 
-Fish identification now uses Fishial through a small server-side proxy. The app compresses the selected photo and posts it to `POST /v1/fish/identify`; the proxy obtains a Fishial access token, submits the image, and returns the most confident match. The Fishial client secret never goes into either mobile app.
+Fish identification uses OpenAI vision through the existing server-side proxy. Android and iOS send the selected photo to `POST /v1/fish/identify`; the proxy asks `gpt-5.6-luna` for a likely species, prioritizing the New Zealand common name, and returns the scientific name and an AI confidence estimate. The OpenAI API key stays in the Worker secret and never goes into either mobile app. The existing API response remains compatible with both apps.
 
-To configure the included Cloudflare Worker:
+To configure the included Cloudflare Worker (the `server/fishial-proxy` folder and Worker name are retained so the existing deployment can be updated in place):
 
-1. In `server/fishial-proxy`, run `npm install`, then set `FISHIAL_CLIENT_ID` and `FISHIAL_CLIENT_SECRET` with `npx wrangler secret put ...`.
+1. In `server/fishial-proxy`, run `npm install`, then set `OPENAI_API_KEY` with `npx wrangler secret put OPENAI_API_KEY`.
 2. Apply the fishing-rules database migration with `npx wrangler d1 migrations apply catchcheck-rules --remote`.
 3. Create a strong random token, save it in the ignored `server/fishial-proxy/.rules-ingest-token` file, and set the same token with `npx wrangler secret put RULES_INGEST_TOKEN`.
 4. Deploy it with `npm run deploy`. The existing Worker API is available at `https://fishing.ct518.online`.

@@ -1,6 +1,5 @@
 export interface Env {
-  FISHIAL_CLIENT_ID: string;
-  FISHIAL_CLIENT_SECRET: string;
+  OPENAI_API_KEY: string;
   RULES_DB: D1Database;
   RULES_INGEST_TOKEN: string;
 }
@@ -22,16 +21,30 @@ const rulesSlugs: Record<string, string> = {
   fiordland: "fiordland-marine-area-fishing-rules",
 };
 
-type FishialAuth = { access_token: string };
-type FishialRecognition = {
-  ok: boolean;
-  objects?: Array<{ species?: Array<{ id: string; certainty: number }> }>;
-  definitions?: Record<string, { commonName?: string; scientificName?: string }>;
-  error?: string;
-  message?: string;
+type OpenAIFishIdentification = {
+  is_fish: boolean;
+  common_name_nz: string;
+  scientific_name: string;
+  confidence: number;
+  other_possibilities: string[];
+  visible_clues: string;
+  note: string;
 };
 
-const fishialURL = "https://api-recognition.fishial.ai";
+const openAIFishSchema = {
+  type: "object",
+  properties: {
+    is_fish: { type: "boolean" },
+    common_name_nz: { type: "string" },
+    scientific_name: { type: "string" },
+    confidence: { type: "number" },
+    other_possibilities: { type: "array", items: { type: "string" } },
+    visible_clues: { type: "string" },
+    note: { type: "string" },
+  },
+  required: ["is_fish", "common_name_nz", "scientific_name", "confidence", "other_possibilities", "visible_clues", "note"],
+  additionalProperties: false,
+};
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -52,28 +65,14 @@ export default {
     }
 
     try {
+      if (!env.OPENAI_API_KEY) return json({ error: "Fish identification is not configured. Add the OpenAI API key to the Worker secrets." }, 503);
       const image = await request.arrayBuffer();
       if (image.byteLength === 0 || image.byteLength > 20 * 1024 * 1024) {
         return json({ error: "Upload an image smaller than 20 MB." }, 400);
       }
-      const authResponse = await fetch(`${fishialURL}/v2/auth`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ client_id: env.FISHIAL_CLIENT_ID, client_secret: env.FISHIAL_CLIENT_SECRET }),
-      });
-      if (!authResponse.ok) return json({ error: "Fish identification is temporarily unavailable." }, 502);
-      const auth = await authResponse.json<FishialAuth>();
-      const recognitionResponse = await fetch(`${fishialURL}/v2/recognize`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${auth.access_token}`, "content-type": contentType },
-        body: image,
-      });
-      const recognition = await recognitionResponse.json<FishialRecognition>();
-      if (!recognitionResponse.ok || !recognition.ok) return json({ error: recognition.message || "Fish identification failed." }, 502);
-      const match = recognition.objects?.[0]?.species?.[0];
-      const species = match && recognition.definitions?.[match.id];
-      if (!match || !species) return json({ error: "No fish species could be identified in this photo." }, 422);
-      const commonName = species.commonName || species.scientificName || "Unknown fish";
+      const identification = await identifyFishWithOpenAI(image, contentType, env.OPENAI_API_KEY);
+      if (!identification.is_fish) return json({ error: "No fish could be identified in this photo." }, 422);
+      const commonName = identification.common_name_nz || "Unknown fish";
       const point = parseLocation(request.headers.get("x-location-lat-lon"));
       const areaId = rulesAreaForLocation(point.latitude, point.longitude);
       const rulePage = await env.RULES_DB.prepare("SELECT area_name, source_url, reviewed_at, tables_json FROM mpi_fishing_rules WHERE area_id = ?")
@@ -81,8 +80,12 @@ export default {
       const rules = rulePage ? findFishRules(rulePage.tables_json, commonName) : [];
       return json({
         commonName,
-        scientificName: species.scientificName || "",
-        confidence: match.certainty,
+        scientificName: identification.scientific_name || "",
+        confidence: Math.max(0, Math.min(1, Number(identification.confidence) || 0)),
+        confidenceLevel: confidenceLevel(identification.confidence),
+        otherPossibilities: identification.other_possibilities,
+        visibleClues: identification.visible_clues,
+        identificationNote: identification.note,
         areaId,
         areaName: rulePage?.area_name || rulesAreas.get(areaId),
         areaEstimated: request.headers.get("x-location-source") !== "device",
@@ -90,8 +93,9 @@ export default {
         rulesSourceUrl: rulePage?.source_url || null,
         fishRules: rules,
       });
-    } catch {
-      return json({ error: "Fish identification is temporarily unavailable." }, 502);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Fish identification is temporarily unavailable.";
+      return json({ error: message }, message.startsWith("OpenAI API usage limit") ? 429 : 502);
     }
     } catch (error) {
       return json({ error: "Internal Worker error.", detail: String(error) }, 500);
@@ -105,6 +109,58 @@ export default {
     if (!refreshed) throw new Error(`MPI rules refresh failed for ${areaId}. See /v1/rules/status.`);
   },
 };
+
+async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, apiKey: string): Promise<OpenAIFishIdentification> {
+  if (!apiKey) throw new Error("Fish identification is not configured yet. Add the OpenAI API key to the Worker secrets.");
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-5.6-luna",
+      reasoning: { effort: "none" },
+      max_output_tokens: 800,
+      input: [{
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: "Identify the fish for a New Zealand angler. Prefer the familiar New Zealand common name (for example snapper, kahawai, kingfish, blue cod, or tarakihi), then give the scientific name if you can support it. Use visible features and NZ species knowledge. Do not invent a species. If this is not clearly a fish, set is_fish false. If the species cannot be distinguished, use common_name_nz 'Unknown fish', an empty scientific_name, and low confidence. Return confidence from 0 to 1 conservatively: 1 means unmistakable visible features; 0.5 means uncertain. Give up to three alternatives and briefly state visible clues and uncertainty. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
+          },
+          { type: "input_image", image_url: `data:${contentType};base64,${arrayBufferToBase64(image)}`, detail: "high" },
+        ],
+      }],
+      text: { format: { type: "json_schema", name: "fish_identification", strict: true, schema: openAIFishSchema } },
+    }),
+  });
+  const payload = await response.json<{ error?: { message?: string }; status?: string; output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }>();
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("OpenAI API usage limit reached. Check the API account's billing and limits.");
+    throw new Error("Fish identification is temporarily unavailable.");
+  }
+  if (payload.status === "incomplete") throw new Error("The fish identification response was incomplete. Please try again.");
+  const resultText = payload.output?.flatMap((item) => item.type === "message" ? item.content || [] : []).find((item) => item.type === "output_text")?.text;
+  if (!resultText) throw new Error("No fish species could be identified in this photo.");
+  let result: OpenAIFishIdentification;
+  try { result = JSON.parse(resultText) as OpenAIFishIdentification; }
+  catch { throw new Error("The fish identification response was incomplete. Please try again."); }
+  if (typeof result.is_fish !== "boolean" || typeof result.common_name_nz !== "string" || typeof result.confidence !== "number") {
+    throw new Error("The fish identification response was invalid. Please try again.");
+  }
+  return result;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function confidenceLevel(value: number): string {
+  return value >= 0.8 ? "high" : value >= 0.5 ? "medium" : "low";
+}
 
 type RulePage = {
   area_id: string;

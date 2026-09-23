@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>NZ Fish ID demo</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #102a43; background: #f3f8f7; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 36px 18px; background: radial-gradient(ellipse at 50% -18%, #c5ede3 0, transparent 46%), #f3f8f7; }
+    main { width: min(680px, 100%); margin: 0 auto; }
+    .eyebrow { color: #168474; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; font-size: .74rem; }
+    h1 { font-size: clamp(2rem, 7vw, 3rem); letter-spacing: -.045em; margin: 8px 0; }
+    .intro { margin: 0 0 24px; color: #526779; line-height: 1.6; }
+    .panel { background: white; border: 1px solid #dbe7e5; border-radius: 22px; padding: clamp(18px, 4vw, 28px); box-shadow: 0 18px 48px #1038490c; }
+    .drop { min-height: 240px; border: 2px dashed #bed3d1; border-radius: 17px; display: grid; place-items: center; overflow: hidden; text-align: center; background: #f8fbfa; position: relative; }
+    .drop.drag { border-color: #168474; background: #effaf7; }
+    .drop img { display: none; width: 100%; max-height: 360px; object-fit: contain; }
+    .drop.has-image img { display: block; }
+    .drop.has-image .placeholder { display: none; }
+    .placeholder { padding: 24px; }
+    .fish-icon { font-size: 2.8rem; }
+    .placeholder strong { display: block; margin: 10px 0 4px; }
+    .muted { color: #718496; font-size: .9rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    button, .choose { border-radius: 12px; min-height: 48px; padding: 0 18px; font: inherit; font-weight: 700; cursor: pointer; }
+    .choose { border: 1px solid #c7d7d5; display: inline-flex; align-items: center; color: #173c50; background: white; }
+    input[type=file] { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }
+    button { border: 0; color: white; background: #087c70; flex: 1; }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    #status { min-height: 26px; margin-top: 14px; color: #526779; font-size: .94rem; }
+    #status.error { color: #a52828; }
+    .result { display: none; margin-top: 20px; border: 1px solid #cfe4df; background: #f5fbf9; border-radius: 17px; padding: 20px; }
+    .result.show { display: block; }
+    .result-label { color: #168474; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .result h2 { font-size: 1.8rem; margin: 5px 0 0; }
+    .scientific { color: #5a7080; font-style: italic; margin-top: 3px; }
+    .confidence { display: inline-block; margin-top: 12px; border-radius: 99px; background: #e4f1ed; color: #176655; padding: 5px 11px; font-size: .8rem; font-weight: 750; text-transform: capitalize; }
+    .result p { line-height: 1.55; margin: 12px 0 0; }
+    .alternatives { color: #526779; }
+    .notice { margin-top: 15px; color: #718496; font-size: .8rem; line-height: 1.5; }
+    @media (max-width: 480px) { body { padding: 24px 14px; } .drop { min-height: 205px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">CatchCheck · quick demo</div>
+    <h1>What fish is this?</h1>
+    <p class="intro">Upload one photo to get a likely species, using the name a New Zealand angler would know.</p>
+    <section class="panel" aria-label="Fish photo identification">
+      <div class="drop" id="drop">
+        <div class="placeholder"><div class="fish-icon" aria-hidden="true">🐟</div><strong>Choose or drop a fish photo</strong><span class="muted">A clear side view works best · up to 10 MB</span></div>
+        <img id="preview" alt="Selected fish photo preview">
+      </div>
+      <div class="actions">
+        <label class="choose" for="photo">Choose photo</label>
+        <input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        <button id="identify" type="button" disabled>Identify fish</button>
+      </div>
+      <div id="status" role="status" aria-live="polite"></div>
+      <article class="result" id="result" aria-live="polite"></article>
+      <p class="notice">AI identification can be wrong. This demo only suggests a species; it does not provide fishing rules or confirm that a fish is legal to keep. Your image is sent to OpenAI for analysis.</p>
+    </section>
+  </main>
+  <script>
+    const input = document.querySelector("#photo");
+    const preview = document.querySelector("#preview");
+    const drop = document.querySelector("#drop");
+    const identifyButton = document.querySelector("#identify");
+    const status = document.querySelector("#status");
+    const result = document.querySelector("#result");
+    let selectedFile;
+    let previewUrl;
+
+    input.addEventListener("change", () => setFile(input.files?.[0]));
+    for (const eventName of ["dragenter", "dragover"]) drop.addEventListener(eventName, (event) => { event.preventDefault(); drop.classList.add("drag"); });
+    for (const eventName of ["dragleave", "drop"]) drop.addEventListener(eventName, (event) => { event.preventDefault(); drop.classList.remove("drag"); });
+    drop.addEventListener("drop", (event) => setFile(event.dataTransfer.files?.[0]));
+    identifyButton.addEventListener("click", identify);
+
+    function setFile(file) {
+      result.classList.remove("show");
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return showError("Choose an image file.");
+      if (file.size > 10 * 1024 * 1024) return showError("That photo is too large. Choose an image under 10 MB.");
+      selectedFile = file;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(file);
+      preview.src = previewUrl;
+      drop.classList.add("has-image");
+      identifyButton.disabled = false;
+      status.textContent = "Photo ready.";
+      status.classList.remove("error");
+    }
+
+    async function identify() {
+      if (!selectedFile) return;
+      identifyButton.disabled = true;
+      result.classList.remove("show");
+      status.classList.remove("error");
+      status.textContent = "Looking closely at the photo…";
+      try {
+        const prepared = await resizeImage(selectedFile);
+        const image = await toDataUrl(prepared.blob);
+        const response = await fetch("/identify", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mimeType: prepared.blob.type || "image/jpeg", image: image.split(",")[1] }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Identification failed.");
+        renderResult(data);
+        status.textContent = "Done.";
+      } catch (error) {
+        showError(error.message || "Could not identify this photo. Try another one.");
+      } finally {
+        identifyButton.disabled = !selectedFile;
+      }
+    }
+
+    function resizeImage(file) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        image.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(image.naturalWidth * scale);
+          canvas.height = Math.round(image.naturalHeight * scale);
+          canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => blob ? resolve({ blob }) : reject(new Error("Could not prepare that image.")), "image/jpeg", 0.86);
+        };
+        image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Could not open that image.")); };
+        image.src = objectUrl;
+      });
+    }
+
+    function toDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read that image."));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function renderResult(data) {
+      const title = data.is_fish ? (data.common_name_nz || "Unknown fish") : "No fish identified";
+      result.innerHTML = `
+        <div class="result-label">Likely New Zealand name</div>
+        <h2>${escapeHtml(title)}</h2>
+        ${data.scientific_name ? `<div class="scientific">${escapeHtml(data.scientific_name)}</div>` : ""}
+        <span class="confidence">${escapeHtml(data.confidence || "uncertain")} confidence</span>
+        ${data.visible_clues ? `<p><strong>Visible clues:</strong> ${escapeHtml(data.visible_clues)}</p>` : ""}
+        ${data.other_possibilities?.length ? `<p class="alternatives"><strong>Could also be:</strong> ${data.other_possibilities.map(escapeHtml).join(", ")}</p>` : ""}
+        ${data.note ? `<p>${escapeHtml(data.note)}</p>` : ""}`;
+      result.classList.add("show");
+    }
+
+    function showError(message) { status.textContent = message; status.classList.add("error"); }
+    function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]); }
+  </script>
+</body>
+</html>
