@@ -4,6 +4,15 @@ CatchCheck NZ is a cross-platform fishing companion that helps New Zealand angle
 
 CatchCheck NZ is a native Kotlin + Jetpack Compose fishing companion for New Zealand. The name makes the promise clear: plan a catch, identify a fish, and check whether it is legal to keep.
 
+## Repository apps
+
+- `app/` — native Android app using Kotlin and Jetpack Compose
+- `iosApp/` — native iOS app using Swift and SwiftUI
+- `web/` — public Next.js website with an `/admin` workspace
+- `backend/` — shared Python FastAPI service for all clients
+
+Run the web app with `cd web && npm run dev`. Run the API with the setup instructions in [`backend/README.md`](backend/README.md).
+
 Android package: `nz.fishingnz.app`
 
 The repository also contains the native SwiftUI iOS app at [`iosApp/`](iosApp/README.md). Open `iosApp/CatchCheckNZ.xcodeproj` in Xcode to run it on iOS 17 or later. Android and iOS currently share product behaviour and API contracts, while their UI and device integrations remain native to each platform.
