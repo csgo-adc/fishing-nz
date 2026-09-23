@@ -15,6 +15,12 @@ Run the web app with `cd web && npm run dev`. Run the API with the setup instruc
 
 Android package: `nz.fishingnz.app`
 
+## Download an Android build
+
+Every push to `main` builds a debug APK with GitHub Actions. Open the repository's **Actions** tab, select the latest **Android APK** run, then download the **CatchCheckNZ-debug** artifact from its summary. The artifact is kept for 90 days.
+
+The workflow creates temporary app configuration and never commits it. To include working Firebase Analytics and Google Maps in the downloadable APK, add repository Actions secrets named `GOOGLE_SERVICES_JSON` (the Firebase config JSON contents) and `MAPS_API_KEY`. Without these optional secrets the build still succeeds, but Firebase uses a CI-only config and Google Maps is unavailable. Fish identification uses the existing public API endpoint.
+
 The repository also contains the native SwiftUI iOS app at [`iosApp/`](iosApp/README.md). Open `iosApp/CatchCheckNZ.xcodeproj` in Xcode to run it on iOS 17 or later. Android and iOS currently share product behaviour and API contracts, while their UI and device integrations remain native to each platform.
 
 The launcher icon is an Android adaptive icon: `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml` use a separate navy background and safe-zone foreground so the fish/checkmark remains clear in circular, squircle, and legacy rectangular launcher shapes. The original generated concept is retained at `app/src/main/res/drawable/catchcheck_icon.png`.

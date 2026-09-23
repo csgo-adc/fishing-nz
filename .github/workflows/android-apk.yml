@@ -1,0 +1,98 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build downloadable Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platforms;android-37
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Prepare temporary app configuration
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            cat > app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "100000000000",
+              "project_id": "catchcheck-ci-build",
+              "storage_bucket": "catchcheck-ci-build.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:100000000000:android:000000000000000000000000",
+                "android_client_info": { "package_name": "nz.fishingnz.app" }
+              },
+              "oauth_client": [],
+              "api_key": [{ "current_key": "CI_BUILD_ONLY_NOT_A_REAL_KEY" }],
+              "services": {}
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+          fi
+
+          {
+            printf 'MAPS_API_KEY=%s\n' "$MAPS_API_KEY"
+            printf 'FISH_ID_API_BASE_URL=https://fishing.ct518.online\n'
+          } > secrets.properties
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        id: apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: CatchCheckNZ-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Add download link to run summary
+        env:
+          APK_URL: ${{ steps.apk.outputs.artifact-url }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo '## Android APK ready'
+            echo
+            echo "Built from commit \`$COMMIT_SHA\`."
+            echo
+            echo "[Download the APK]($APK_URL)"
+            echo
+            echo 'The artifact is retained for 90 days. Without the optional GitHub Actions secrets GOOGLE_SERVICES_JSON and MAPS_API_KEY, the APK builds with CI-only Firebase configuration and Google Maps will not load.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary app configuration
+        if: always()
+        run: rm -f app/google-services.json secrets.properties
