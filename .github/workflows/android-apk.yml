@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -70,28 +70,32 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --no-daemon :app:assembleDebug
 
-      - name: Upload APK
-        id: apk
-        uses: actions/upload-artifact@v4
-        with:
-          name: CatchCheckNZ-debug-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Add download link to run summary
+      - name: Publish APK to GitHub Releases
         env:
-          APK_URL: ${{ steps.apk.outputs.artifact-url }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: android-build-${{ github.run_number }}-${{ github.run_attempt }}
+          RELEASE_NUMBER: ${{ github.run_number }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
+          gh release create "$RELEASE_TAG" \
+            "app/build/outputs/apk/debug/app-debug.apk#CatchCheckNZ-debug.apk" \
+            --target "$COMMIT_SHA" \
+            --title "Android build #$RELEASE_NUMBER (attempt $RELEASE_ATTEMPT)" \
+            --notes "Automated debug APK built from commit $COMMIT_SHA." \
+            --prerelease
+
+      - name: Add download link to run summary
+        run: |
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/android-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           {
             echo '## Android APK ready'
             echo
-            echo "Built from commit \`$COMMIT_SHA\`."
+            echo "Built from commit \`${GITHUB_SHA}\`."
             echo
-            echo "[Download the APK]($APK_URL)"
+            echo "[Download the APK from Releases]($RELEASE_URL)"
             echo
-            echo 'The artifact is retained for 90 days. Without the optional GitHub Actions secrets GOOGLE_SERVICES_JSON and MAPS_API_KEY, the APK builds with CI-only Firebase configuration and Google Maps will not load.'
+            echo 'This is an automated debug build. Without the optional GitHub Actions secrets GOOGLE_SERVICES_JSON and MAPS_API_KEY, the APK uses CI-only Firebase configuration and Google Maps will not load.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove temporary app configuration

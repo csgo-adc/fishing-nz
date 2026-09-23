@@ -17,7 +17,7 @@ Android package: `nz.fishingnz.app`
 
 ## Download an Android build
 
-Every push to `main` builds a debug APK with GitHub Actions. Open the repository's **Actions** tab, select the latest **Android APK** run, then download the **CatchCheckNZ-debug** artifact from its summary. The artifact is kept for 90 days.
+Every push to `main` builds a debug APK with GitHub Actions and publishes it as a prerelease on the repository's **Releases** page. Open the latest **Android build** prerelease and download `CatchCheckNZ-debug.apk`. The workflow summary links directly to the release.
 
 The workflow creates temporary app configuration and never commits it. To include working Firebase Analytics and Google Maps in the downloadable APK, add repository Actions secrets named `GOOGLE_SERVICES_JSON` (the Firebase config JSON contents) and `MAPS_API_KEY`. Without these optional secrets the build still succeeds, but Firebase uses a CI-only config and Google Maps is unavailable. Fish identification uses the existing public API endpoint.
 
