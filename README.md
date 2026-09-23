@@ -1,5 +1,7 @@
 # CatchCheck NZ
 
+CatchCheck NZ is a cross-platform fishing companion that helps New Zealand anglers plan trips, identify fish, and check catch rules.
+
 CatchCheck NZ is a native Kotlin + Jetpack Compose fishing companion for New Zealand. The name makes the promise clear: plan a catch, identify a fish, and check whether it is legal to keep.
 
 Android package: `nz.fishingnz.app`
@@ -26,7 +28,24 @@ The home recommendations and spot catalogue are still local sample data. Weather
 
 ## Fish identification
 
-The photo picker, preview, loading state and result card are implemented in `MainActivity.kt`. `identifyFishPhoto()` is currently a deliberately marked demo adapter that returns a sample snapper result. For production, replace that adapter with a secured server-side vision endpoint and connect its species output to an authoritative, region-aware MPI rules dataset. Do not ship a provider API key in the Android client, and always show uncertainty plus the official-rules disclaimer.
+Fish identification now uses Fishial through a small server-side proxy. The app compresses the selected photo and posts it to `POST /v1/fish/identify`; the proxy obtains a Fishial access token, submits the image, and returns the most confident match. The Fishial client secret never goes into either mobile app.
+
+To configure the included Cloudflare Worker:
+
+1. In `server/fishial-proxy`, run `npm install`, then set `FISHIAL_CLIENT_ID` and `FISHIAL_CLIENT_SECRET` with `npx wrangler secret put ...`.
+2. Apply the fishing-rules database migration with `npx wrangler d1 migrations apply catchcheck-rules --remote`.
+3. Create a strong random token, save it in the ignored `server/fishial-proxy/.rules-ingest-token` file, and set the same token with `npx wrangler secret put RULES_INGEST_TOKEN`.
+4. Deploy it with `npm run deploy`. The existing Worker API is available at `https://fishing.ct518.online`.
+5. Add `FISH_ID_API_BASE_URL=https://fishing.ct518.online` to the ignored root `secrets.properties` file before building Android.
+6. In Xcode, set the `FishIdentificationAPIBaseURL` value in the iOS app's `Info.plist` to the same address (or move it into an xcconfig for separate build environments).
+
+The Worker has a daily Cron Trigger at 16:00 UTC. It attempts one fishing area per day, rotating through all eight areas over an eight-day cycle to honor MPI's 10-second `robots.txt` crawl delay. Successful pages are saved to D1 with their source, fetch time, review date, content hash, and original HTML. Failures are recorded at `GET https://fishing.ct518.online/v1/rules/status`; a failed attempt leaves any previous saved rules intact. The mobile app reads rules through the Pages frontend and the public `GET https://fishing.ct518.online/v1/rules?area=<area-id>` API.
+
+For a manual import, install the crawler dependency with `python3 -m pip install -r tools/requirements.txt`, then run `python3 tools/crawl_mpi_rules.py --api-base-url https://fishing.ct518.online/v1/rules --source direct`. The crawler follows the 10-second delay, imports only complete page fetches, and keeps a local SQLite copy in `data/mpi_fishing_rules.sqlite3`. It needs the ignored token file. If MPI blocks the crawler's network, it stops without importing partial or challenge-page data.
+
+The UI shows confidence as an AI suggestion only. It intentionally does not declare a catch legal: connect its species output to an authoritative, region-aware MPI rules source before presenting size or bag-limit advice.
+
+The Rules tab on Android and iOS opens the CatchCheck rules page at [catchcheck-nz-rules.pages.dev](https://catchcheck-nz-rules.pages.dev). That Pages frontend requests cached area data from the Cloudflare Worker API, which reads the `catchcheck-rules` D1 database. If no cached record is available, the page links to MPI's official area rules. The fish-photo result still uses a small offline Auckland/Kermadec lookup as a demonstration and should not be treated as a live legal check.
 
 Open the project in Android Studio and run the `app` configuration on an emulator or Android device.
 

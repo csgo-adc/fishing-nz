@@ -1,0 +1,12 @@
+name = "catchcheck-fishial-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[[d1_databases]]
+binding = "RULES_DB"
+database_name = "catchcheck-rules"
+database_id = "187f606b-c1d2-4552-b247-f112615e953f"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["0 16 * * *"]

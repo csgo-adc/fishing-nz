@@ -7,7 +7,9 @@ data class TidePoint(val time: String, val level: Double)
 data class TideState(val currentLevel: String, val nextEvent: String, val eventTime: String, val events: List<TideEvent> = emptyList(), val points: List<TidePoint> = emptyList(), val stationName: String = "")
 data class TideStation(val id: String, val name: String, val region: String, val latitude: Double, val longitude: Double)
 data class Recommendation(val name: String, val area: String, val rating: Int, val time: String, val distance: String, val reasons: List<String>, val boat: Boolean = false)
-data class FishCheck(val commonName: String, val scientificName: String, val confidence: Int, val minimumSize: String, val dailyLimit: String, val status: String, val note: String)
+data class FishRuleDetail(val label: String, val value: String)
+data class FishRuleMatch(val species: String, val dailyLimit: String?, val minimumSize: String?, val details: List<FishRuleDetail>)
+data class FishCheck(val commonName: String, val scientificName: String, val confidence: Int, val areaName: String, val areaIsEstimated: Boolean, val rulesReviewedAt: String?, val fishRules: List<FishRuleMatch>)
 
 val sampleRecommendations = listOf(
     Recommendation("Mission Bay", "Auckland", 86, "6:10 – 8:40 AM", "18 min away", listOf("Incoming tide", "Light SW wind", "17–20°C")),

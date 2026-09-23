@@ -67,6 +67,7 @@ private struct FishIdentifierView: View {
             if let photo = vm.selectedPhoto { Image(uiImage: photo).resizable().scaledToFill().frame(height: 160).clipShape(RoundedRectangle(cornerRadius: 12)) }
             if let result = vm.fishCheck { FishCheckCard(result: result) }
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
+            if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack { Button { showCamera = true } label: { Label("Take photo", systemImage: "camera") }.buttonStyle(.bordered).frame(maxWidth: .infinity); PhotosPicker(selection: $photoItem, matching: .images) { Label(galleryLabel, systemImage: "photo") }.buttonStyle(.bordered).frame(maxWidth: .infinity) }
             Button { vm.identifyFish() } label: { Label("Identify fish", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.selectedPhoto == nil || vm.isCheckingFish)
             Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
@@ -89,7 +90,37 @@ struct SpotDetailView: View {
 
 private struct ActionCard: View { let title: String; let detail: String; var outlined = false; let action: () -> Void; var body: some View { Button(action: action) { HStack { Image(systemName: "location.fill").foregroundStyle(CatchCheckColor.navy).frame(width: 44, height: 44).background(outlined ? CatchCheckColor.seafoam : .white, in: Circle()); VStack(alignment: .leading) { Text(title).bold(); Text(detail).font(.caption).foregroundStyle(.secondary) }; Spacer() }.foregroundStyle(CatchCheckColor.navy).padding(16).frame(maxWidth: .infinity, alignment: .leading).background(outlined ? .white : CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 18)) } } }
 struct RecommendationCard: View { let spot: Recommendation; let action: () -> Void; var body: some View { Button(action: action) { VStack(alignment: .leading, spacing: 6) { HStack { VStack(alignment: .leading) { Text(spot.name).font(.headline); Text(spot.area).foregroundStyle(.secondary) }; Spacer(); Text("\(spot.rating)/100").bold().foregroundStyle(CatchCheckColor.orange) }; Text(spot.time).bold(); Text(spot.distance).font(.caption).foregroundStyle(.secondary); HStack { ForEach(spot.reasons, id: \.self) { Text($0).font(.caption2).padding(7).background(CatchCheckColor.seafoam, in: Capsule()) } } }.foregroundStyle(CatchCheckColor.navy).padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 18)) } } }
-private struct FishCheckCard: View { let result: FishCheck; var body: some View { VStack(alignment: .leading, spacing: 5) { HStack { Text(result.commonName).bold(); Spacer(); Text("\(result.confidence)% match").bold().foregroundStyle(CatchCheckColor.orange) }; Text(result.scientificName).foregroundStyle(.secondary); Text("\(result.status) · min \(result.minimumSize) · \(result.dailyLimit)").font(.subheadline.bold()); Text(result.note).font(.caption).foregroundStyle(.secondary) }.foregroundStyle(CatchCheckColor.navy).padding(14).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14)) } }
+private struct FishCheckCard: View {
+    let result: FishCheck
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack { Text(result.commonName).bold(); Spacer(); Text("\(result.confidence)% match").bold().foregroundStyle(CatchCheckColor.orange) }
+            Text(result.scientificName).foregroundStyle(.secondary)
+            HStack {
+                Text("MPI rules · \(result.areaName)").font(.subheadline.bold())
+                Spacer()
+                if let reviewed = result.rulesReviewedAt { Text("Reviewed \(reviewed)").font(.caption).foregroundStyle(.secondary) }
+            }
+            if result.fishRules.isEmpty {
+                Text("No species-specific size or catch-limit entry was found in the saved rules for this area. Check local closures and restrictions before keeping this fish.")
+                    .font(.subheadline).foregroundStyle(.secondary).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 10))
+            } else {
+                ForEach(result.fishRules) { rule in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(rule.species).font(.subheadline.bold())
+                        if let minimumSize = rule.minimumSize { Text("Minimum size: \(minimumSize)") }
+                        if let dailyLimit = rule.dailyLimit { Text("Daily limit: \(dailyLimit)") }
+                        ForEach(rule.details) { detail in Text("\(detail.label): \(detail.value)") }
+                    }
+                    .font(.subheadline).foregroundStyle(CatchCheckColor.navy).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+            Text(result.areaIsEstimated ? "Fishing area is estimated because device location was unavailable. Confirm the area where you are fishing." : "Area selected from current device location. Confirm the exact fishing location.")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("Check local closures and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
+        }.foregroundStyle(CatchCheckColor.navy).padding(14).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
 struct Card<Content: View>: View { var background: Color = .white; @ViewBuilder let content: Content; var body: some View { VStack(alignment: .leading, spacing: 10, content: { content }).padding(18).frame(maxWidth: .infinity, alignment: .leading).background(background, in: RoundedRectangle(cornerRadius: 18)) } }
 private struct Metric: View { let label: String; let value: String; var body: some View { VStack(alignment: .leading) { Text(label).font(.caption).foregroundStyle(.secondary); Text(value).bold().foregroundStyle(CatchCheckColor.navy) } } }
 struct ChoiceButton: ButtonStyle { let selected: Bool; func makeBody(configuration: Configuration) -> some View { configuration.label.padding(.horizontal, 12).padding(.vertical, 8).background(selected ? CatchCheckColor.navy : .white, in: Capsule()).foregroundStyle(selected ? .white : CatchCheckColor.navy).opacity(configuration.isPressed ? 0.7 : 1) } }

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123b43">
+  <title>CatchCheck NZ · Fishing rules</title>
+  <style>
+    :root { color-scheme: light; --navy:#123b43; --foam:#dcefe7; --cream:#f7f8f4; --orange:#e4784a; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--cream); color:#183438; font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    header { background:var(--navy); color:white; padding:24px max(20px,calc((100% - 900px)/2)) }
+    header h1 { margin:0 0 4px; font-size:1.7rem }
+    header p { margin:0; opacity:.82 }
+    main { max-width:900px; margin:0 auto; padding:22px 18px 48px }
+    label { display:block; color:var(--navy); font-weight:700; margin-bottom:6px }
+    select { width:100%; max-width:520px; border:1px solid #a7b7b2; border-radius:10px; background:white; padding:12px; font:inherit }
+    .notice { margin:16px 0; padding:14px 16px; border-radius:12px; background:var(--foam) }
+    .card { background:white; border-radius:16px; padding:18px; box-shadow:0 2px 10px #123b4312 }
+    .card h2 { color:var(--navy); margin-top:0 }
+    .rules { white-space:pre-wrap; overflow-wrap:anywhere }
+    .rules h2,.rules h3,.rules h4 { color:var(--navy); line-height:1.25; margin:1.4em 0 .45em }
+    .rules h2 { font-size:1.35rem }.rules h3 { font-size:1.15rem }
+    .rules p { margin:.4em 0 .9em }
+    .rules ul { padding-left:1.5em }
+    .rules table { width:100%; border-collapse:collapse; display:block; overflow-x:auto; margin:12px 0 20px; white-space:normal }
+    .rules th,.rules td { border:1px solid #d4dfdb; padding:8px 10px; text-align:left; vertical-align:top }
+    .rules th { background:var(--foam); color:var(--navy) }
+    .fish-focus { background:#fff2e8; border-left:4px solid var(--orange); padding:12px 14px; border-radius:8px; margin:12px 0 }
+    .rules tr.match { background:#fff2e8 }
+    a { color:#145c65; font-weight:650 }
+    .meta,.small { color:#627579; font-size:.87rem }
+    .error { color:#7f291b }
+    [hidden] { display:none!important }
+  </style>
+</head>
+<body>
+  <header><h1>CatchCheck NZ</h1><p>Fishing rules from Fisheries New Zealand (MPI)</p></header>
+  <main>
+    <label for="area">Fishing area</label>
+    <select id="area">
+      <option value="auckland-kermadec">Auckland / Kermadec</option>
+      <option value="central">Central</option>
+      <option value="challenger">Challenger</option>
+      <option value="south-east">South-East</option>
+      <option value="southland">Southland</option>
+      <option value="kaikoura">Kaikōura</option>
+      <option value="chatham-rise">Chatham Rise</option>
+      <option value="fiordland">Fiordland</option>
+    </select>
+    <p class="notice">Use the location that matches where you are fishing. Rules can differ within an area and MPI recommends checking them each time you fish.</p>
+    <p id="fish-focus" class="fish-focus" hidden></p>
+    <p id="status" class="meta" role="status">Loading cached rules…</p>
+    <section id="cached" class="card rules" hidden></section>
+    <section id="empty" class="card" hidden>
+      <h2>Rules are not cached yet</h2>
+      <p id="crawl-status">The backend will show the latest saved rules after a successful scheduled refresh.</p>
+      <p><a id="official" target="_blank" rel="noopener noreferrer">Open the official MPI rules for this area</a></p>
+    </section>
+    <p class="small">Source: Fisheries New Zealand (MPI). Always confirm local closures and temporary restrictions at the fishing location.</p>
+  </main>
+  <script>
+    const API = "https://fishing.ct518.online/v1/rules";
+    const slugs = {
+      "auckland-kermadec":"auckland-kermadec-fishing-rules", central:"central-fishing-rules",
+      challenger:"challenger-fishing-rules", "south-east":"south-east-fishing-rules",
+      southland:"southland-fishing-rules", kaikoura:"kaikoura-fishing-rules",
+      "chatham-rise":"chatham-rise-area-recreational-fishing-rules",
+      fiordland:"fiordland-marine-area-fishing-rules"
+    };
+    const picker = document.getElementById("area");
+    const statusLine = document.getElementById("status");
+    const cached = document.getElementById("cached");
+    const empty = document.getElementById("empty");
+    const officialLink = document.getElementById("official");
+    const crawlStatus = document.getElementById("crawl-status");
+    const fishFocus = document.getElementById("fish-focus");
+    const params = new URLSearchParams(location.search);
+    const fish = (params.get("fish") || params.get("species") || "").trim();
+    const officialUrl = id => `https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/${slugs[id]}`;
+
+    function addRulesContent(target, rule) {
+      target.replaceChildren();
+      const stamp = document.createElement("p");
+      stamp.className = "meta";
+      stamp.textContent = `MPI last reviewed: ${rule.reviewed_at || "date not available"} · Saved: ${new Date(rule.fetched_at).toLocaleString()}`;
+      target.append(stamp);
+
+      if (rule.page_html) {
+        const parsed = new DOMParser().parseFromString(rule.page_html, "text/html");
+        const content = parsed.querySelector("main, article, #content, .main-content") || parsed.body;
+        for (const node of content.querySelectorAll("script,style,noscript,nav,footer,header,svg")) node.remove();
+        const sourceTitle = content.querySelector("h1");
+        if (sourceTitle) {
+          const heading = document.createElement("h2");
+          heading.textContent = sourceTitle.textContent.trim();
+          target.append(heading);
+        }
+        const blocks = content.querySelectorAll("h2,h3,h4,p,ul,ol,table");
+        for (const block of blocks) {
+          if (block.closest("nav,footer,header")) continue;
+          // Cell paragraphs and nested list blocks are already rendered with their parent table/list.
+          // Emitting them again as standalone blocks duplicated many saved MPI rules.
+          if (block.parentElement?.closest("ul,ol,table")) continue;
+          if (/^H[234]$/.test(block.tagName)) {
+            const heading = document.createElement(block.tagName.toLowerCase());
+            heading.textContent = block.textContent.trim();
+            target.append(heading);
+          } else if (block.tagName === "TABLE") {
+            const table = document.createElement("table");
+            for (const row of block.querySelectorAll("tr")) {
+              const tr = document.createElement("tr");
+              for (const cell of row.querySelectorAll("th,td")) {
+                const td = document.createElement(cell.tagName.toLowerCase());
+                td.textContent = cell.textContent.trim();
+                tr.append(td);
+              }
+              table.append(tr);
+            }
+            target.append(table);
+          } else if (block.tagName === "UL" || block.tagName === "OL") {
+            const list = document.createElement(block.tagName.toLowerCase());
+            for (const item of block.querySelectorAll(":scope > li")) {
+              const li = document.createElement("li"); li.textContent = item.textContent.trim(); list.append(li);
+            }
+            target.append(list);
+          } else if (block.textContent.trim()) {
+            const p = document.createElement("p"); p.textContent = block.textContent.trim(); target.append(p);
+          }
+        }
+      } else {
+        const text = document.createElement("p");
+        text.textContent = rule.page_text || "The saved rule page has no readable text.";
+        target.append(text);
+      }
+      target.hidden = false;
+    }
+
+    function normalize(value) {
+      return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    }
+
+    function focusFishRules(target) {
+      fishFocus.hidden = !fish;
+      if (!fish) return;
+      fishFocus.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = `Showing rules that mention ${fish}. `;
+      const allRules = document.createElement("a");
+      allRules.href = `?area=${encodeURIComponent(picker.value)}`;
+      allRules.textContent = "Show all area rules";
+      fishFocus.append(title, allRules);
+
+      const term = normalize(fish);
+      let matches = 0;
+      for (const table of target.querySelectorAll("table")) {
+        const rows = [...table.querySelectorAll("tr")];
+        let tableMatches = 0;
+        rows.forEach((row, index) => {
+          const isHeader = index === 0 && row.querySelector("th");
+          const hit = normalize(row.textContent).includes(term);
+          row.hidden = !isHeader && !hit;
+          row.classList.toggle("match", hit);
+          if (hit) tableMatches++;
+        });
+        table.hidden = tableMatches === 0;
+        matches += tableMatches;
+      }
+      for (const block of target.querySelectorAll("p,li")) {
+        if (block.classList.contains("meta")) continue;
+        block.hidden = !normalize(block.textContent).includes(term);
+        if (!block.hidden) matches++;
+      }
+      if (matches === 0) {
+        fishFocus.firstChild.textContent = `No specific ${fish} entry was found in this area’s saved page. Showing all area rules so you can check related limits and restrictions. `;
+        for (const element of target.querySelectorAll("table,p,li")) element.hidden = false;
+      }
+    }
+
+    async function loadArea() {
+      const id = picker.value;
+      const areaName = picker.selectedOptions[0].textContent;
+      const url = officialUrl(id);
+      officialLink.href = url;
+      cached.hidden = true; empty.hidden = true;
+      statusLine.className = "meta";
+      statusLine.textContent = `Loading ${areaName} rules…`;
+      try {
+        const response = await fetch(`${API}?area=${encodeURIComponent(id)}`, { cache:"no-store" });
+        if (response.ok) {
+          const payload = await response.json();
+          const rule = payload.rules?.[0];
+          if (rule) {
+            addRulesContent(cached, rule);
+            focusFishRules(cached);
+            statusLine.textContent = fish ? `${fish} · ${areaName} · cached official MPI data` : `${areaName} · cached official MPI data`;
+            return;
+          }
+        }
+        const stateResponse = await fetch(`${API}/status`, { cache:"no-store" });
+        if (stateResponse.ok) {
+          const state = await stateResponse.json();
+          const areaState = state.areas?.find(item => item.area_id === id);
+          if (areaState?.status === "failed") crawlStatus.textContent = `Last refresh attempt failed (${areaState.http_status || "network"}). The previous saved rules, if any, are retained.`;
+          else crawlStatus.textContent = "No successful scheduled refresh has been saved for this area yet.";
+        }
+        empty.hidden = false;
+        statusLine.textContent = `${areaName} · no cached data`;
+      } catch (error) {
+        empty.hidden = false;
+        statusLine.className = "meta error";
+        statusLine.textContent = "The rules API is temporarily unavailable. You can still open MPI’s official area page.";
+      }
+    }
+
+    const initial = params.get("area");
+    if (initial && slugs[initial]) picker.value = initial;
+    picker.addEventListener("change", () => {
+      const next = new URLSearchParams(location.search);
+      next.set("area", picker.value);
+      history.replaceState(null, "", `?${next.toString()}`);
+      loadArea();
+    });
+    loadArea();
+  </script>
+</body>
+</html>

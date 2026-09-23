@@ -5,6 +5,8 @@ import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.provider.MediaStore
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -88,13 +90,49 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
     val context = LocalContext.current
     var showCamera by remember { mutableStateOf(false) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) showCamera = true }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        val image = s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }?.let { bitmap -> java.io.ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }.toByteArray() } }
+        if (image != null && granted) requestCurrentLocation(context, { vm.identifyFish(image, it, true) }, { vm.identifyFish(image, s.location, false) })
+        else if (image != null) vm.identifyFish(image, s.location, false)
+    }
+    fun identifyAtCurrentLocation(image: ByteArray) {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) requestCurrentLocation(context, { vm.identifyFish(image, it, true) }, { vm.identifyFish(image, s.location, s.hasDeviceLocation) })
+        else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
     Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(20.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = Color.Gray, style = MaterialTheme.typography.bodySmall) } }
         s.fishPhoto?.let { uri -> val bitmap = remember(uri) { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
-        s.fishCheck?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp)) { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text("${result.confidence}% match", color = Orange, fontWeight = FontWeight.Bold) }; Text(result.scientificName, color = Color.Gray); Text("${result.status} · min ${result.minimumSize} · ${result.dailyLimit}", color = Navy, fontWeight = FontWeight.SemiBold); Text(result.note, color = Color.DarkGray, style = MaterialTheme.typography.bodySmall) } } }
+        s.fishCheck?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text("${result.confidence}% match", color = Orange, fontWeight = FontWeight.Bold) }
+            Text(result.scientificName, color = Color.Gray)
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("MPI rules · ${result.areaName}", color = Navy, fontWeight = FontWeight.SemiBold); result.rulesReviewedAt?.let { Text("Reviewed $it", color = Color.Gray, style = MaterialTheme.typography.labelSmall) } }
+            if (result.fishRules.isEmpty()) Text("No species-specific size or catch-limit entry was found in the saved rules for this area. Check local closures and restrictions before keeping this fish.", color = Color.DarkGray, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp))
+            result.fishRules.forEach { rule ->
+                Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(rule.species, color = Navy, fontWeight = FontWeight.Bold)
+                    rule.minimumSize?.let { Text("Minimum size: $it", color = Navy) }
+                    rule.dailyLimit?.let { Text("Daily limit: $it", color = Navy) }
+                    rule.details.forEach { Text("${it.label}: ${it.value}", color = Navy) }
+                }
+            }
+            Text(if (result.areaIsEstimated) "Fishing area is estimated because device location was unavailable. Confirm where you are fishing." else "Area selected from current device location. Confirm the exact fishing location.", color = Color.DarkGray, style = MaterialTheme.typography.bodySmall)
+            Text("Check local closures and current MPI rules before keeping a fish.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        } } }
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
+        s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Take photo") }; OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(4.dp)); Text(if (s.fishPhoto == null) "Choose photo" else "Gallery") } }
-        Button(enabled = s.fishPhoto != null && !s.fishChecking, onClick = { vm.identifyFish() }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text("Identify fish") }
+        Button(enabled = s.fishPhoto != null && !s.fishChecking, onClick = {
+            s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input)?.let { bitmap ->
+                    val output = java.io.ByteArrayOutputStream()
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, output)
+                    identifyAtCurrentLocation(output.toByteArray())
+                }
+            } }
+        }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text("Identify fish") }
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
     } }
     if (showCamera) Dialog(onDismissRequest = { showCamera = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -199,7 +237,42 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
 
 @Composable fun TripsScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) { LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { item { Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy); Text("Saved spots and active plans", color = Color.Gray) }; s.activeTrip?.let { item { Card(colors = CardDefaults.cardColors(Seafoam)) { Column(Modifier.padding(16.dp)) { Text("Active trip", color = Navy, fontWeight = FontWeight.Bold); Text(it.name, style = MaterialTheme.typography.titleLarge, color = Navy); OutlinedButton({ vm.endTrip() }) { Text("End trip") } } } } }; item { Text("Saved spots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }; items(sampleRecommendations.filter { it.name in s.savedSpots }) { RecommendationCard(it) { vm.openSpot(it) } } }
 }
-@Composable fun RulesScreen(modifier: Modifier) { LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { item { Text("Fishing rules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy); Text("Auckland / Kermadec example", color = Color.Gray) }; item { RuleCard("Before you go", "Rules vary by fishing area. Check the latest official MPI rules before every trip.") }; item { RuleCard("Catch limits", "Daily limits and minimum sizes depend on species and region. Keep only legal-sized catch.") }; item { RuleCard("Closed areas", "Marine reserves, mātaitai and taiāpure may have additional restrictions or complete closures.") } } }
+private data class FishingRulesArea(val name: String, val url: String)
+private val fishingRulesAreas = listOf(
+    FishingRulesArea("Auckland / Kermadec", "https://catchcheck-nz-rules.pages.dev/?area=auckland-kermadec"),
+    FishingRulesArea("Central", "https://catchcheck-nz-rules.pages.dev/?area=central"),
+    FishingRulesArea("Challenger", "https://catchcheck-nz-rules.pages.dev/?area=challenger"),
+    FishingRulesArea("South-East", "https://catchcheck-nz-rules.pages.dev/?area=south-east"),
+    FishingRulesArea("Southland", "https://catchcheck-nz-rules.pages.dev/?area=southland"),
+    FishingRulesArea("Kaikōura", "https://catchcheck-nz-rules.pages.dev/?area=kaikoura"),
+    FishingRulesArea("Chatham Rise", "https://catchcheck-nz-rules.pages.dev/?area=chatham-rise"),
+    FishingRulesArea("Fiordland", "https://catchcheck-nz-rules.pages.dev/?area=fiordland")
+)
+
+@Composable fun RulesScreen(modifier: Modifier) {
+    var selected by rememberSaveable { mutableIntStateOf(0) }
+    val area = fishingRulesAreas[selected]
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Spacer(Modifier.height(8.dp))
+            Text("Fishing rules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+            Text("Choose an area to view rules saved from Fisheries New Zealand (MPI).", color = Color.Gray)
+            Text("Rules include legal sizes, catch limits, closures and gear restrictions. Check the exact location before fishing.", color = Color.DarkGray, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+        }
+        item { Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { fishingRulesAreas.forEachIndexed { index, item -> FilterChip(selected == index, onClick = { selected = index }, label = { Text(item.name) }) } } }
+        item {
+            Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().height(680.dp),
+                    factory = { context -> WebView(context).apply { settings.javaScriptEnabled = true; settings.domStorageEnabled = true; settings.allowFileAccess = false; settings.allowContentAccess = false; webViewClient = WebViewClient(); tag = area.url; loadUrl(area.url) } },
+                    update = { webView -> if (webView.tag != area.url) { webView.tag = area.url; webView.loadUrl(area.url) } }
+                )
+            }
+        }
+        item { Text("Official source: mpi.govt.nz · MPI says to check the rules each time you fish.", color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
+        item { Spacer(Modifier.height(12.dp)) }
+    }
+}
 @Composable private fun RuleCard(title: String, body: String) { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp)) { Text(title, color = Navy, fontWeight = FontWeight.Bold); Text(body, color = Color.DarkGray, modifier = Modifier.padding(top = 6.dp)) } } }
 private data class MapSpot(val name: String, val latitude: Double, val longitude: Double, val detail: String, val boat: Boolean)
 private val mapSpots = listOf(
@@ -218,7 +291,7 @@ private val mapSpots = listOf(
     var requestedPermission by rememberSaveable { mutableStateOf(false) }
     val visibleSpots = mapSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) }
     val cameraState = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(LatLng(-41.2, 174.8), 5.1f) }
-    fun locate() { requestCurrentLocation(context) { point -> vm.updateLocation(point); cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 13f)) } }
+    fun locate() { requestCurrentLocation(context, onLocation = { point -> vm.updateLocation(point); cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 13f)) }) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true) locate()
     }
@@ -289,9 +362,9 @@ private val mapSpots = listOf(
     }
 }
 
-private fun requestCurrentLocation(context: android.content.Context, onLocation: (GeoPoint) -> Unit) {
+private fun requestCurrentLocation(context: android.content.Context, onLocation: (GeoPoint) -> Unit, onUnavailable: () -> Unit = {}) {
     try {
         val token = CancellationTokenSource()
-        LocationServices.getFusedLocationProviderClient(context).getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token).addOnSuccessListener { location -> location?.let { onLocation(GeoPoint(it.latitude, it.longitude)) } }
-    } catch (_: SecurityException) { }
+        LocationServices.getFusedLocationProviderClient(context).getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token).addOnSuccessListener { location -> if (location != null) onLocation(GeoPoint(location.latitude, location.longitude)) else onUnavailable() }.addOnFailureListener { onUnavailable() }
+    } catch (_: SecurityException) { onUnavailable() }
 }

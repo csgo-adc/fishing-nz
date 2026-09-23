@@ -8,7 +8,9 @@ struct TidePoint: Identifiable { let time: String; let level: Double; var id: St
 struct TideState { let currentLevel: String; let nextEvent: String; let eventTime: String; let events: [TideEvent]; let points: [TidePoint]; let stationName: String }
 struct TideStation: Identifiable, Equatable { let id: String; let name: String; let region: String; let latitude: Double; let longitude: Double }
 struct Recommendation: Identifiable, Equatable { let name: String; let area: String; let rating: Int; let time: String; let distance: String; let reasons: [String]; let boat: Bool; var id: String { name } }
-struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let minimumSize: String; let dailyLimit: String; let status: String; let note: String }
+struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
+struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
+struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let areaName: String; let areaIsEstimated: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?; let fishRules: [FishRuleMatch] }
 
 let sampleRecommendations = [
     Recommendation(name: "Mission Bay", area: "Auckland", rating: 86, time: "6:10 – 8:40 AM", distance: "18 min away", reasons: ["Incoming tide", "Light SW wind", "17–20°C"], boat: false),

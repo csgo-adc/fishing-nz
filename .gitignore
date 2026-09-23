@@ -5,6 +5,11 @@ app/build/
 local.properties
 app/google-services.json
 secrets.properties
+server/fishial-proxy/.dev.vars
+server/fishial-proxy/.rules-ingest-token
+node_modules/
+data/*.sqlite3*
+server/fishial-proxy/.wrangler/
 
 # macOS and Xcode workspace state
 .DS_Store

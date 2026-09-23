@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct FishingRepository {
     private let decoder = JSONDecoder()
@@ -38,15 +39,38 @@ struct FishingRepository {
         return TideState(currentLevel: String(format: "%.2f m", level), nextEvent: upcoming?.1.type ?? "—", eventTime: upcoming.map { Self.eventTime.string(from: $0.0) } ?? "No event", events: events.map(\.1), points: points, stationName: station.name)
     }
 
-    func identifyFish() async -> FishCheck {
-        try? await Task.sleep(for: .milliseconds(650))
-        return FishCheck(commonName: "Snapper", scientificName: "Pagrus auratus", confidence: 91, minimumSize: "30 cm", dailyLimit: "7 per person / day", status: "Likely legal", note: "Confirm the region and current MPI rules before keeping it.")
+    func identifyFish(image: UIImage, at point: GeoPoint, hasDeviceLocation: Bool) async throws -> FishCheck {
+        guard let baseURL = Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String,
+              let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/fish/identify"),
+              let imageData = image.jpegData(compressionQuality: 0.88) else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"; request.httpBody = imageData
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("\(point.latitude),\(point.longitude)", forHTTPHeaderField: "X-Location-Lat-Lon")
+        request.setValue(hasDeviceLocation ? "device" : "fallback", forHTTPHeaderField: "X-Location-Source")
+        request.timeoutInterval = 30
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let payload = try JSONDecoder().decode(FishIdentificationResponse.self, from: data)
+        guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NSError(domain: "FishIdentification", code: 1, userInfo: [NSLocalizedDescriptionKey: payload.error ?? "Fish identification failed."]) }
+        let commonName = payload.commonName ?? "Unknown fish"
+        let scientificName = payload.scientificName ?? ""
+        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaName: payload.areaName ?? "Fishing area", areaIsEstimated: payload.areaIsEstimated ?? true, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [])
     }
 
     private static let apiDay = DateFormatter.make("yyyy-MM-dd")
     private static let apiTime = DateFormatter.make("yyyy-MM-dd'T'HH:mm")
     private static let time = DateFormatter.make("h:mm a")
     private static let eventTime = DateFormatter.make("EEE d MMM · h:mm a")
+}
+
+private struct FishIdentificationResponse: Decodable {
+    let commonName: String?; let scientificName: String?; let confidence: Double?; let error: String?
+    let areaName: String?; let areaIsEstimated: Bool?; let rulesReviewedAt: String?; let rulesSourceURL: String?; let fishRules: [FishRuleMatch]?
+    enum CodingKeys: String, CodingKey {
+        case commonName, scientificName, confidence, error, areaName, areaIsEstimated, rulesReviewedAt, fishRules
+        case rulesSourceURL = "rulesSourceUrl"
+    }
 }
 
 private extension DateFormatter { static func make(_ format: String) -> DateFormatter { let formatter = DateFormatter(); formatter.dateFormat = format; formatter.locale = Locale(identifier: "en_US_POSIX"); return formatter } }

@@ -1,5 +1,7 @@
 import SwiftUI
 import MapKit
+import WebKit
+import UIKit
 
 struct FishingMapView: View {
     @EnvironmentObject private var vm: FishingViewModel
@@ -32,5 +34,45 @@ struct TripsView: View {
     var body: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 16) { Text("Your trips").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Saved spots and active plans").foregroundStyle(.secondary); if let active = vm.activeTrip { Card(background: CatchCheckColor.seafoam) { Text("Active trip").bold().foregroundStyle(CatchCheckColor.navy); Text(active.name).font(.title2).foregroundStyle(CatchCheckColor.navy); Button("End trip") { vm.activeTrip = nil }.buttonStyle(.bordered) } }; Text("Saved spots").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy); if saved.isEmpty { Text("Save a recommended spot to see it here.").foregroundStyle(.secondary) } else { ForEach(saved) { spot in RecommendationCard(spot: spot) { vm.selectedSpot = spot } } } }.padding(20) }.background(CatchCheckColor.cream).navigationTitle("Trips").navigationBarTitleDisplayMode(.inline) } }
 }
 
-struct RulesView: View { var body: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 16) { Text("Fishing rules").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Auckland / Kermadec example").foregroundStyle(.secondary); RuleCard(title: "Before you go", text: "Rules vary by fishing area. Check the latest official MPI rules before every trip."); RuleCard(title: "Catch limits", text: "Daily limits and minimum sizes depend on species and region. Keep only legal-sized catch."); RuleCard(title: "Closed areas", text: "Marine reserves, mātaitai and taiāpure may have additional restrictions or complete closures.") }.padding(20) }.background(CatchCheckColor.cream).navigationTitle("Rules").navigationBarTitleDisplayMode(.inline) } } }
+private struct FishingRulesArea: Identifiable, Hashable { let name: String; let url: URL; var id: String { name } }
+private let fishingRulesAreas = [
+    FishingRulesArea(name: "Auckland / Kermadec", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=auckland-kermadec")!),
+    FishingRulesArea(name: "Central", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=central")!),
+    FishingRulesArea(name: "Challenger", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=challenger")!),
+    FishingRulesArea(name: "South-East", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=south-east")!),
+    FishingRulesArea(name: "Southland", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=southland")!),
+    FishingRulesArea(name: "Kaikōura", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=kaikoura")!),
+    FishingRulesArea(name: "Chatham Rise", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=chatham-rise")!),
+    FishingRulesArea(name: "Fiordland", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=fiordland")!)
+]
+
+struct RulesView: View {
+    @State private var selectedArea = fishingRulesAreas[0]
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Fishing rules").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text("Choose an area to view rules saved from Fisheries New Zealand (MPI). The rules include legal sizes, catch limits, closures and gear restrictions.").foregroundStyle(.secondary)
+                    Picker("Fishing area", selection: $selectedArea) { ForEach(fishingRulesAreas) { area in Text(area.name).tag(area) } }.pickerStyle(.menu)
+                    OfficialRulesPage(url: selectedArea.url).frame(height: 720).clipShape(RoundedRectangle(cornerRadius: 12))
+                    Text("Official source: mpi.govt.nz · MPI says to check the rules each time you fish.").font(.caption).foregroundStyle(.secondary)
+                }.padding(20)
+            }.background(CatchCheckColor.cream).navigationTitle("Rules").navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct OfficialRulesPage: UIViewRepresentable {
+    let url: URL
+    func makeUIView(context: Context) -> WKWebView {
+        let view = WKWebView()
+        view.load(URLRequest(url: url))
+        return view
+    }
+    func updateUIView(_ view: WKWebView, context: Context) {
+        guard view.url != url else { return }
+        view.load(URLRequest(url: url))
+    }
+}
 private struct RuleCard: View { let title: String; let text: String; var body: some View { Card { Text(title).bold().foregroundStyle(CatchCheckColor.navy); Text(text).foregroundStyle(.secondary) } } }

@@ -27,7 +27,10 @@ android {
         versionCode = 1
         versionName = "0.1"
         manifestPlaceholders["MAPS_API_KEY"] = secrets.getProperty("MAPS_API_KEY", "")
+        buildConfigField("String", "FISH_ID_API_BASE_URL", "\"${secrets.getProperty("FISH_ID_API_BASE_URL", "")}\"")
     }
+
+    buildFeatures { buildConfig = true }
 
 }
 

@@ -2,6 +2,7 @@ package nz.fishingnz.app.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import nz.fishingnz.app.BuildConfig
 import nz.fishingnz.app.model.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -44,9 +45,52 @@ class FishingRepository {
         } finally { connection.disconnect() }
     }
 
-    suspend fun identifyFish(): FishCheck = withContext(Dispatchers.Default) {
-        kotlinx.coroutines.delay(650)
-        FishCheck("Snapper", "Pagrus auratus", 91, "30 cm", "7 per person / day", "Likely legal", "Confirm the region and current MPI rules before keeping it.")
+    suspend fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean): FishCheck = withContext(Dispatchers.IO) {
+        val baseUrl = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/')
+        require(baseUrl.isNotBlank()) { "Fish identification is not configured yet." }
+        val connection = (URL("$baseUrl/v1/fish/identify").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", "image/jpeg")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("X-Location-Lat-Lon", "${point.latitude},${point.longitude}")
+            setRequestProperty("X-Location-Source", if (hasDeviceLocation) "device" else "fallback")
+            connectTimeout = 15_000
+            readTimeout = 30_000
+        }
+        try {
+            connection.outputStream.use { it.write(image) }
+            val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val payload = JSONObject(body)
+            if (connection.responseCode !in 200..299) error(payload.optString("error", "Fish identification failed."))
+            val commonName = payload.getString("commonName")
+            val scientificName = payload.getString("scientificName")
+            val rules = payload.optJSONArray("fishRules")
+            val fishRules = (0 until (rules?.length() ?: 0)).map { index ->
+                val item = rules!!.getJSONObject(index)
+                val details = item.optJSONArray("details")
+                val parsedDetails = (0 until (details?.length() ?: 0)).map { detailIndex ->
+                    val detail = details!!.getJSONObject(detailIndex)
+                    FishRuleDetail(detail.optString("label"), detail.optString("value"))
+                }
+                FishRuleMatch(
+                    item.optString("species"),
+                    item.optString("dailyLimit").takeIf { it.isNotBlank() && it != "null" },
+                    item.optString("minimumSize").takeIf { it.isNotBlank() && it != "null" },
+                    parsedDetails
+                )
+            }
+            FishCheck(
+                commonName = commonName,
+                scientificName = scientificName,
+                confidence = payload.getDouble("confidence").times(100).toInt(),
+                areaName = payload.optString("areaName", "Fishing area"),
+                areaIsEstimated = payload.optBoolean("areaIsEstimated", true),
+                rulesReviewedAt = payload.optString("rulesReviewedAt").takeIf { it.isNotBlank() && it != "null" },
+                fishRules = fishRules
+            )
+        } finally { connection.disconnect() }
     }
 
     private fun get(url: String) = (URL(url).openConnection() as HttpURLConnection).apply { requestMethod = "GET"; connectTimeout = 8_000; readTimeout = 8_000 }
