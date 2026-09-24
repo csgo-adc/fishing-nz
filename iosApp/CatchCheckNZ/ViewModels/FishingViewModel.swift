@@ -82,7 +82,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                     verificationPending = true
                 } else {
                     let snapshot = try await repository.registerOrLogin(email: email, password: password)
-                    account = snapshot.user; fishIdentityAvailable = snapshot.permissions.features.fishIdentity; accountNotice = "You’re signed in."; verificationPending = false
+                    account = snapshot.user; fishIdentityAvailable = snapshot.permissions?.features.fishIdentity ?? false; accountNotice = "You’re signed in."; verificationPending = false
                 }
             } catch { accountError = error.localizedDescription }
             accountBusy = false
