@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Security
+import CoreLocation
 
 struct FishingRepository {
     private let decoder = JSONDecoder()
@@ -75,39 +76,93 @@ struct FishingRepository {
         return try decoder.decode(T.self, from: data)
     }
 
-    func conditions(at point: GeoPoint) async throws -> (WeatherState, TideState) {
+    func conditions(at point: GeoPoint) async throws -> (WeatherState, TideState?) {
         let weatherURL = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(point.latitude)&longitude=\(point.longitude)&current=temperature_2m,wind_speed_10m,precipitation&timezone=auto")!
         let (data, response) = try await URLSession.shared.data(from: weatherURL)
         guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
         let weather = try decoder.decode(WeatherResponse.self, from: data).current
         let state = WeatherState(temperature: "\(Int(weather.temperature2m))°C", wind: "\(Int(weather.windSpeed10m)) km/h", rain: "\(weather.precipitation) mm")
-        let currentStation = TideStation(id: "current", name: "Current location", region: "", latitude: point.latitude, longitude: point.longitude)
-        return (state, try await tide(for: currentStation, date: .now))
+        let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        let nearest = tideStations.min {
+            origin.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <
+            origin.distance(from: CLLocation(latitude: $1.latitude, longitude: $1.longitude))
+        }
+        guard let nearest else { return (state, nil) }
+        return (state, try? await tide(for: nearest, date: .now))
     }
 
     func tide(for station: TideStation, date: Date) async throws -> TideState {
-        let day = Self.apiDay.string(from: date)
-        guard let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: date) else { throw URLError(.badURL) }
-        let url = URL(string: "https://marine-api.open-meteo.com/v1/marine?latitude=\(station.latitude)&longitude=\(station.longitude)&hourly=sea_level_height_msl&start_date=\(day)&end_date=\(Self.apiDay.string(from: nextDay))&cell_selection=sea&timezone=auto")!
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-        let hourly = try decoder.decode(MarineResponse.self, from: data).hourly
-        let rows = zip(hourly.time, hourly.seaLevelHeightMsl).compactMap { raw, level -> (Date, Double)? in
-            guard let parsed = Self.apiTime.date(from: raw) else { return nil }; return (parsed, level)
+        let calendar = Self.tideCalendar
+        let dayStart = calendar.startOfDay(for: date)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { throw URLError(.badURL) }
+        let year = calendar.component(.year, from: date)
+        var predictions = try await Self.tideStore.load(stationName: station.name, year: year)
+        let month = calendar.component(.month, from: date)
+        let day = calendar.component(.day, from: date)
+        if month == 1 && day == 1,
+           let prior = try? await Self.tideStore.load(stationName: station.name, year: year - 1) {
+            predictions.insert(contentsOf: prior.suffix(2), at: 0)
         }
-        let calendar = Calendar.current
-        let todayRows = rows.filter { calendar.isDate($0.0, inSameDayAs: date) }
-        let points = todayRows.map { TidePoint(time: Self.time.string(from: $0.0), level: $0.1) }
-        let events = (1..<(rows.count - 1)).compactMap { index -> (Date, TideEvent)? in
-            let prior = rows[index - 1].1, current = rows[index].1, next = rows[index + 1].1
-            guard (current > prior && current >= next) || (current < prior && current <= next) else { return nil }
-            let type = current > prior ? "High" : "Low"
-            return (rows[index].0, TideEvent(time: Self.time.string(from: rows[index].0), height: String(format: "%.2f m", current), type: type))
-        }.filter { calendar.isDate($0.0, inSameDayAs: date) }
+        if month == 12 && day == 31,
+           let following = try? await Self.tideStore.load(stationName: station.name, year: year + 1) {
+            predictions.append(contentsOf: following.prefix(2))
+        }
+        predictions.sort { $0.time < $1.time }
+
+        let daily = predictions.filter { $0.time >= dayStart && $0.time < dayEnd }
+        guard !daily.isEmpty else { throw TideDataError.noPredictions }
+        let events: [(Date, TideEvent)] = daily.compactMap { prediction in
+            guard let index = predictions.firstIndex(where: { $0.time == prediction.time }) else { return nil }
+            let type: String
+            if predictions.indices.contains(index + 1) {
+                type = prediction.height > predictions[index + 1].height ? "High" : "Low"
+            } else if predictions.indices.contains(index - 1) {
+                type = prediction.height > predictions[index - 1].height ? "High" : "Low"
+            } else { return nil }
+            return (prediction.time, TideEvent(time: Self.time.string(from: prediction.time), height: String(format: "%.1f m", prediction.height), type: type))
+        }
+
+        var points: [TidePoint] = []
+        var sample = dayStart
+        while sample < dayEnd {
+            if let height = Self.interpolatedHeight(at: sample, predictions: predictions) {
+                points.append(TidePoint(time: Self.time.string(from: sample), level: height))
+            }
+            sample.addTimeInterval(10 * 60)
+        }
+        guard !points.isEmpty else { throw TideDataError.noPredictions }
         let now = Date()
-        let upcoming = calendar.isDate(date, inSameDayAs: now) ? events.first { $0.0 > now } : events.first
-        let level = (calendar.isDate(date, inSameDayAs: now) ? rows.last(where: { $0.0 <= now }) : todayRows.first)?.1 ?? 0
-        return TideState(currentLevel: String(format: "%.2f m", level), nextEvent: upcoming?.1.type ?? "—", eventTime: upcoming.map { Self.eventTime.string(from: $0.0) } ?? "No event", events: events.map(\.1), points: points, stationName: station.name)
+        let isToday = calendar.isDate(date, inSameDayAs: now)
+        let nextPrediction = isToday ? predictions.first(where: { $0.time > now }) : daily.first
+        let nextEvent = nextPrediction.flatMap { prediction -> String? in
+            if let event = events.first(where: { $0.0 == prediction.time }) { return event.1.type }
+            guard let index = predictions.firstIndex(where: { $0.time == prediction.time }),
+                  predictions.indices.contains(index + 1) else { return nil }
+            return prediction.height > predictions[index + 1].height ? "High" : "Low"
+        }
+        let referenceTime = isToday ? now : (calendar.date(byAdding: .hour, value: 12, to: dayStart) ?? dayStart)
+        let referenceHeight = Self.interpolatedHeight(at: referenceTime, predictions: predictions)
+        return TideState(
+            currentLevel: referenceHeight.map { String(format: "%.2f m", $0) } ?? "—",
+            nextEvent: nextEvent ?? "—",
+            eventTime: nextPrediction.map { Self.eventTime.string(from: $0.time) } ?? "No event",
+            events: events.map(\.1),
+            points: points,
+            stationName: station.name
+        )
+    }
+
+    private static func interpolatedHeight(at time: Date, predictions: [LINZTidePrediction]) -> Double? {
+        guard let afterIndex = predictions.firstIndex(where: { $0.time >= time }) else { return nil }
+        if predictions[afterIndex].time == time { return predictions[afterIndex].height }
+        guard afterIndex > 0 else { return nil }
+        let before = predictions[afterIndex - 1]
+        let after = predictions[afterIndex]
+        let duration = after.time.timeIntervalSince(before.time)
+        guard duration > 0 else { return nil }
+        let progress = time.timeIntervalSince(before.time) / duration
+        let smoothProgress = (1 - cos(.pi * progress)) / 2
+        return before.height + (after.height - before.height) * smoothProgress
     }
 
     func identifyFish(image: UIImage, at point: GeoPoint, hasDeviceLocation: Bool) async throws -> FishCheck {
@@ -131,10 +186,14 @@ struct FishingRepository {
         return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaName: payload.areaName ?? "Fishing area", areaIsEstimated: payload.areaIsEstimated ?? true, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [])
     }
 
-    private static let apiDay = DateFormatter.make("yyyy-MM-dd")
-    private static let apiTime = DateFormatter.make("yyyy-MM-dd'T'HH:mm")
-    private static let time = DateFormatter.make("h:mm a")
-    private static let eventTime = DateFormatter.make("EEE d MMM · h:mm a")
+    private static let tideStore = LINZTideStore()
+    private static let tideCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        return calendar
+    }()
+    private static let time = DateFormatter.make("h:mm a", timeZone: tideCalendar.timeZone)
+    private static let eventTime = DateFormatter.make("EEE d MMM · h:mm a", timeZone: tideCalendar.timeZone)
 }
 
 private struct FishIdentificationResponse: Decodable {
@@ -176,6 +235,72 @@ private enum KeychainSession {
     }
 }
 
-private extension DateFormatter { static func make(_ format: String) -> DateFormatter { let formatter = DateFormatter(); formatter.dateFormat = format; formatter.locale = Locale(identifier: "en_US_POSIX"); return formatter } }
+private extension DateFormatter {
+    static func make(_ format: String, timeZone: TimeZone) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        return formatter
+    }
+}
 private struct WeatherResponse: Decodable { let current: Current; struct Current: Decodable { let temperature2m: Double; let windSpeed10m: Double; let precipitation: Double; enum CodingKeys: String, CodingKey { case temperature2m = "temperature_2m", windSpeed10m = "wind_speed_10m", precipitation } } }
-private struct MarineResponse: Decodable { let hourly: Hourly; struct Hourly: Decodable { let time: [String]; let seaLevelHeightMsl: [Double]; enum CodingKeys: String, CodingKey { case time; case seaLevelHeightMsl = "sea_level_height_msl" } } }
+
+private enum TideDataError: LocalizedError {
+    case noPredictions
+    var errorDescription: String? { "LINZ tide predictions are unavailable for this station and date." }
+}
+
+private struct LINZTidePrediction: Sendable {
+    let time: Date
+    let height: Double
+}
+
+private actor LINZTideStore {
+    private var annualCache: [String: [LINZTidePrediction]] = [:]
+
+    func load(stationName: String, year: Int) async throws -> [LINZTidePrediction] {
+        let key = "\(stationName)-\(year)"
+        if let cached = annualCache[key] { return cached }
+        guard let stationPath = stationName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/\(stationPath)%20\(year).csv")
+        else { throw URLError(.badURL) }
+        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
+        guard let csv = String(data: data, encoding: .utf8) else { throw TideDataError.noPredictions }
+
+        let timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        var predictions: [LINZTidePrediction] = []
+        for line in csv.split(whereSeparator: \.isNewline) {
+            let fields = line.split(separator: ",", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard fields.count >= 6,
+                  let day = Int(fields[0]), let month = Int(fields[2]), let rowYear = Int(fields[3]),
+                  rowYear == year, (1...12).contains(month), (1...31).contains(day)
+            else { continue }
+            for index in stride(from: 4, to: fields.count - 1, by: 2) {
+                let clock = fields[index].split(separator: ":")
+                guard clock.count == 2, let hour = Int(clock[0]), let minute = Int(clock[1]),
+                      let height = Double(fields[index + 1]), height.isFinite
+                else { continue }
+                var components = DateComponents()
+                components.timeZone = timeZone
+                components.year = rowYear
+                components.month = month
+                components.day = day
+                components.hour = hour
+                components.minute = minute
+                if let time = calendar.date(from: components) {
+                    predictions.append(LINZTidePrediction(time: time, height: height))
+                }
+            }
+        }
+        predictions.sort { $0.time < $1.time }
+        guard !predictions.isEmpty else { throw TideDataError.noPredictions }
+        annualCache[key] = predictions
+        return predictions
+    }
+}

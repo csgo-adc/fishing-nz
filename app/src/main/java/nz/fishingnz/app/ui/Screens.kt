@@ -13,6 +13,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -34,10 +36,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -68,21 +73,118 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import nz.fishingnz.app.model.*
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.math.roundToInt
+
+private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
 @Composable fun HomeScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { vm.setFishPhoto(it) }
+    val context = LocalContext.current
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+            requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
+        else vm.locationUnavailable()
+    }
+    fun search() {
+        vm.startLocationSearch()
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
+        else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Spacer(Modifier.height(18.dp)); Text("Kia ora, Alex", color = Color.Gray); Text("Plan your next catch", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy) }
-        item { Card(colors = CardDefaults.cardColors(Navy), shape = RoundedCornerShape(24.dp)) { Column(Modifier.padding(20.dp)) { Text("What are you fishing for?", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land fishing") }); FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat fishing") }) }; Text("Auckland demo · ${s.dateLabel}", color = Color.White.copy(.8f), modifier = Modifier.padding(top = 12.dp)) } } }
-        item { Text("When are you going?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("Today", "Tomorrow", "Friday", "Saturday", "Sunday", "Next 7 days").forEach { FilterChip(selected = s.dateLabel == it, onClick = { vm.setDate(it) }, label = { Text(it) }) } } }
-        item { ActionCard("Find the best time", "See the best fishing window near you", { vm.showResults() }); Spacer(Modifier.height(2.dp)); ActionCard("Find the best location", "Rank spots by conditions and distance", { vm.showResults() }, true) }
+        item { Card(colors = CardDefaults.cardColors(Navy), shape = RoundedCornerShape(24.dp)) { Column(Modifier.padding(20.dp)) { Text("What are you fishing for?", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land fishing") }); FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat fishing") }) }; Text(s.originName?.let { "Searching from $it" } ?: "Search with device location or choose a city", color = Color.White.copy(.8f), modifier = Modifier.padding(top = 12.dp)) } } }
+        item { RecommendationFilters(s, vm) }
+        item { ActionCard("Find the best time", "See the best forecast window near you", { search() }); Spacer(Modifier.height(2.dp)); ActionCard("Find the best location", "Rank nearby spots by forecast and distance", { search() }, true) }
         item { FishIdentifierCard(s, picker, vm) }
         item { Text("Quick forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween) { Metric("Wind", s.weather?.wind ?: "—"); Metric("Tide", s.tide?.nextEvent ?: "—"); Metric("Temp", s.weather?.temperature ?: "—") } } }
+        item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+            if (s.originName == null) Text("Use current location or choose a city to see local conditions.", color = Color.Gray, modifier = Modifier.padding(18.dp))
+            else Column(Modifier.padding(18.dp)) {
+                Text("From ${s.originName}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Metric("Wind", s.weather?.wind ?: "—"); Metric("Tide", s.tide?.nextEvent ?: "—"); Metric("Temp", s.weather?.temperature ?: "—") }
+            }
+        } }
         item { Text("Your next best window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { RecommendationCard(sampleRecommendations.first()) { vm.showResults() } }
+        item { s.recommendationSearch?.items?.firstOrNull()?.let { RecommendationCard(it) { vm.showResults() } } ?: Text("Choose a date and search to see forecast-based scores.", color = Color.Gray) }
         item { Spacer(Modifier.height(12.dp)) }
     }
+}
+
+@Composable private fun RecommendationFilters(s: FishingUiState, vm: FishingViewModel) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text("When are you going?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Today", "In 3 days", "Next 3 days", "This weekend").forEach { choice ->
+                FilterChip(selected = s.dateLabel == choice, onClick = { vm.setDate(choice) }, label = { Text(choice) })
+            }
+            FilterChip(selected = s.dateLabel == "Custom", onClick = {
+                showCustomDateRange(context, s.dateStart, s.dateEnd) { start, end -> vm.setCustomDates(start, end) }
+            }, label = { Text("Choose dates") })
+        }
+        Text("${s.dateStart} to ${s.dateEnd}", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        Text("What time suits you?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = s.preferredTimeIsSuggested, onClick = { vm.setSuggestedHours() }, label = { Text("7:00 AM–9:00 PM") })
+            FilterChip(selected = s.preferredTime == null, onClick = { vm.clearPreferredHours() }, label = { Text("Anytime") })
+            FilterChip(selected = s.preferredTime != null && !s.preferredTimeIsSuggested, onClick = {
+                showCustomTimeRange(context, s.preferredTime) { start, end -> vm.setPreferredHours(start, end) }
+            }, label = { Text(if (s.preferredTime != null && !s.preferredTimeIsSuggested) "Change times" else "Choose times") })
+        }
+        if (s.preferredTime != null && !s.preferredTimeIsSuggested) {
+            Text("${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}" +
+                if (s.preferredTime.end.isBefore(s.preferredTime.start)) " (ends next day)" else "",
+                color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        }
+        Text("Only full 2–3 hour windows within these hours are shown. Each selected day is a window's start day.",
+            color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        Text("Search radius", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(10, 30, 50, 100, 200, 300, 400, 500).forEach { radius ->
+                FilterChip(selected = s.radiusKm == radius, onClick = { vm.setRadius(radius) }, label = { Text("$radius km") })
+            }
+        }
+    }
+}
+
+private fun showCustomTimeRange(context: android.content.Context, selected: PreferredTimeRange?, done: (LocalTime, LocalTime) -> Unit) {
+    val initialStart = selected?.start ?: LocalTime.of(7, 0)
+    val initialEnd = selected?.end ?: LocalTime.of(21, 0)
+    android.app.TimePickerDialog(context, { _, startHour, startMinute ->
+        android.app.TimePickerDialog(context, { _, endHour, endMinute ->
+            val start = LocalTime.of(startHour, startMinute)
+            val end = LocalTime.of(endHour, endMinute)
+            if (start == end) android.widget.Toast.makeText(context, "Choose different start and end times", android.widget.Toast.LENGTH_SHORT).show()
+            else done(start, end)
+        }, initialEnd.hour, initialEnd.minute, false).apply { setTitle("Preferred end time") }.show()
+    }, initialStart.hour, initialStart.minute, false).apply { setTitle("Preferred start time") }.show()
+}
+
+private fun showCustomDateRange(context: android.content.Context, selectedStart: java.time.LocalDate, selectedEnd: java.time.LocalDate, done: (java.time.LocalDate, java.time.LocalDate) -> Unit) {
+    val zone = java.time.ZoneId.of("Pacific/Auckland")
+    val today = java.time.LocalDate.now(zone)
+    val maxDate = today.plusDays(15)
+    val start = selectedStart.coerceIn(today, maxDate)
+    val startPicker = android.app.DatePickerDialog(context, { _, year, month, day ->
+        val selected = java.time.LocalDate.of(year, month + 1, day)
+        val end = selectedEnd.coerceIn(selected, maxDate)
+        android.app.DatePickerDialog(context, { _, endYear, endMonth, endDay ->
+            done(selected, java.time.LocalDate.of(endYear, endMonth + 1, endDay))
+        }, end.year, end.monthValue - 1, end.dayOfMonth).apply {
+            setTitle("Last fishing day")
+            datePicker.minDate = selected.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            datePicker.maxDate = maxDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        }.show()
+    }, start.year, start.monthValue - 1, start.dayOfMonth)
+    startPicker.setTitle("First fishing day")
+    startPicker.datePicker.minDate = today.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    startPicker.datePicker.maxDate = maxDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    startPicker.show()
 }
 
 @Composable private fun ActionCard(title: String, subtitle: String, click: () -> Unit, outlined: Boolean = false) { Card(onClick = click, colors = CardDefaults.cardColors(if (outlined) Color.White else Seafoam), shape = RoundedCornerShape(18.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(if (outlined) Seafoam else Color.White, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.LocationOn, null, tint = Navy) }; Spacer(Modifier.width(14.dp)); Column { Text(title, color = Navy, fontWeight = FontWeight.Bold); Text(subtitle, color = Color.Gray, style = MaterialTheme.typography.bodySmall) } } } }
@@ -285,13 +387,112 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
     }
 }
 
-@Composable private fun RecommendationCard(item: Recommendation, click: () -> Unit = {}) { Card(onClick = click, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp)) { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Column { Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy); Text(item.area, color = Color.Gray) }; Text("${item.rating}/100", color = Orange, fontWeight = FontWeight.Bold) }; Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold); Text(item.distance, color = Color.Gray, style = MaterialTheme.typography.bodySmall); Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { item.reasons.forEach { Text(it, color = Navy, style = MaterialTheme.typography.labelSmall, modifier = Modifier.background(Seafoam, RoundedCornerShape(50)).padding(7.dp)) } } } } }
+@Composable private fun RecommendationCard(item: Recommendation, click: () -> Unit = {}) {
+    Card(onClick = click, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                Column { Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy); Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = Color.Gray) }
+                Text("${item.rating}/100", color = Orange, fontWeight = FontWeight.Bold)
+            }
+            Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold)
+            Text(item.distance, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            item.reasons.forEach { Text("• $it", color = Navy, style = MaterialTheme.typography.bodySmall) }
+            if (item.warning != null) Text("Partial forecast · ${item.coveragePercent}% of score factors available", color = Orange, style = MaterialTheme.typography.bodySmall)
+            item.warnings.firstOrNull { it.startsWith("Long-range") || it.startsWith("Strong gusts") || it.startsWith("Elevated waves") }?.let {
+                Text(it, color = Orange, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
 @Composable private fun Metric(label: String, value: String) { Column { Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall); Text(value, color = Navy, fontWeight = FontWeight.SemiBold) } }
 
-@Composable fun ResultsScreen(s: FishingUiState, vm: FishingViewModel) { Surface(modifier = Modifier.fillMaxSize(), color = Cream) { LazyColumn(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { item { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text("Best options", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy); OutlinedButton(onClick = { vm.closeResults() }) { Text("Back") } } }; items(sampleRecommendations.filter { !s.boat || it.boat }) { RecommendationCard(it) { vm.openSpot(it) } }; item { Text("Safety and fishing rules always override the score.", color = Color.Gray) } } } }
-@Composable fun SpotDetailScreen(spot: Recommendation, saved: Boolean, vm: FishingViewModel) { Surface(modifier = Modifier.fillMaxSize(), color = Cream) { Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) { OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }; Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy); Text(spot.area, color = Color.Gray); Text("${spot.rating}/100 · ${spot.time}", color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp)) { Text("Why this spot?", fontWeight = FontWeight.Bold, color = Navy); spot.reasons.forEach { Text("✓  $it", color = Color.DarkGray, modifier = Modifier.padding(vertical = 4.dp)) } } }; OutlinedButton(onClick = { vm.toggleSaved(spot.name) }, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Remove saved spot" else "Save spot") }; Button(onClick = { vm.startTrip() }, modifier = Modifier.fillMaxWidth()) { Text("Start fishing trip") } } } }
+@Composable fun ResultsScreen(s: FishingUiState, vm: FishingViewModel) {
+    val context = LocalContext.current
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+            requestCurrentLocation(context, { vm.completeLocationSearch(it) }, { vm.locationUnavailable() })
+        else vm.locationUnavailable()
+    }
+    fun useCurrentLocation() {
+        vm.startLocationSearch()
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) requestCurrentLocation(context, { vm.completeLocationSearch(it) }, { vm.locationUnavailable() })
+        else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+    Surface(modifier = Modifier.fillMaxSize(), color = Cream) {
+        LazyColumn(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            item { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text("Best options", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy); OutlinedButton(onClick = { vm.closeResults() }) { Text("Back") } } }
+            item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land") }); FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat") }) } }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(s.originName?.let { "From $it · straight-line radius" } ?: "Choose where to search from", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text("Search from a city", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        searchOrigins.forEach { origin -> FilterChip(selected = !s.hasDeviceLocation && s.originName == origin.name,
+                            onClick = { vm.selectManualOrigin(origin) }, label = { Text(origin.name) }) }
+                    }
+                    OutlinedButton(onClick = { useCurrentLocation() }) { Icon(Icons.Default.NearMe, null); Spacer(Modifier.width(6.dp)); Text("Use current location") }
+                    s.locationNotice?.let { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+            item { RecommendationFilters(s, vm) }
+            when {
+                s.locating -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Getting current location…", color = Navy) } }
+                s.recommendationsLoading -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Checking hourly forecasts…", color = Navy) } }
+                s.recommendationsError != null -> item { Column { Text(s.recommendationsError, color = Orange); TextButton(onClick = { vm.refreshRecommendations() }) { Text("Try again") } } }
+                s.recommendationSearch?.nearbySpots == 0 -> item {
+                    val nearest = s.recommendationSearch
+                    Text("No known ${if (s.boat) "boat" else "land"} fishing areas are within ${s.radiusKm} km." +
+                        (if (nearest?.nearestSpot != null) " The nearest is ${nearest.nearestSpot}, about ${nearest.nearestSpotDistanceKm} km away. Try a wider radius." else " Try a wider radius or another city."), color = Navy)
+                }
+                s.recommendationSearch?.items?.isEmpty() == true -> item {
+                    Text(when {
+                        s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
+                        s.dateLabel == "Today" -> "No safe 2–3 hour window remains today within your selected hours. Try Next 3 days, wider hours or Anytime."
+                        else -> "No safe 2–3 hour windows fit these dates and hours. Try wider hours, Anytime or another date."
+                    }, color = Navy)
+                }
+                else -> items(s.recommendationSearch?.items ?: emptyList()) { RecommendationCard(it) { vm.openSpot(it) } }
+            }
+            if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); those spots have no score.", color = Orange, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Scores compare the best 2–3 hour window at each named area. Land scores include tide movement. Boat scores omit tide and give more weight to waves and wind. Severe conditions found in available forecasts are excluded. Check local access, marine warnings and fishing rules before leaving.", color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Weather and marine forecasts: Open-Meteo (open-meteo.com). Tide model accuracy is limited near shore; do not use it for navigation.", color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+@Composable fun SpotDetailScreen(spot: Recommendation, saved: Boolean, vm: FishingViewModel) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Cream) {
+        Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }
+            Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy)
+            Text(spot.area, color = Color.Gray)
+            Text("${spot.rating}/100 · ${spot.time}", color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(spot.distance, color = Color.Gray)
+            Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Score breakdown", fontWeight = FontWeight.Bold, color = Navy)
+                    spot.factors.forEach { factor ->
+                        Text("${factor.name}: ${factor.score}/100 × ${factor.weight}%", color = Navy, fontWeight = FontWeight.SemiBold)
+                        Text(factor.explanation, color = Color.DarkGray, style = MaterialTheme.typography.bodySmall)
+                    }
+                    spot.warning?.let { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) }
+                    Text("Available weights are normalized to 100. Scores with missing marine factors are capped at 79; forecasts more than seven days away are capped at 89.", color = Color.DarkGray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (spot.warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Check before you go", fontWeight = FontWeight.Bold, color = Navy)
+                    spot.warnings.forEach { Text("• $it", color = Color.DarkGray, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+            OutlinedButton(onClick = { vm.toggleSaved(spot) }, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Remove saved spot" else "Save spot") }
+            Button(onClick = { vm.startTrip() }, modifier = Modifier.fillMaxWidth()) { Text("Start fishing trip") }
+        }
+    }
+}
 
-@Composable fun TripsScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) { LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { item { Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy); Text("Saved spots and active plans", color = Color.Gray) }; s.activeTrip?.let { item { Card(colors = CardDefaults.cardColors(Seafoam)) { Column(Modifier.padding(16.dp)) { Text("Active trip", color = Navy, fontWeight = FontWeight.Bold); Text(it.name, style = MaterialTheme.typography.titleLarge, color = Navy); OutlinedButton({ vm.endTrip() }) { Text("End trip") } } } } }; item { Text("Saved spots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }; items(sampleRecommendations.filter { it.name in s.savedSpots }) { RecommendationCard(it) { vm.openSpot(it) } } }
+@Composable fun TripsScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) { LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { item { Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy); Text("Saved spots and active plans", color = Color.Gray) }; s.activeTrip?.let { item { Card(colors = CardDefaults.cardColors(Seafoam)) { Column(Modifier.padding(16.dp)) { Text("Active trip", color = Navy, fontWeight = FontWeight.Bold); Text(it.name, style = MaterialTheme.typography.titleLarge, color = Navy); OutlinedButton({ vm.endTrip() }) { Text("End trip") } } } } }; item { Text("Saved spots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }; items(s.savedRecommendations) { RecommendationCard(it) { vm.openSpot(it) } } }
 }
 private data class FishingRulesArea(val name: String, val url: String)
 private val fishingRulesAreas = listOf(
@@ -330,22 +531,13 @@ private val fishingRulesAreas = listOf(
     }
 }
 @Composable private fun RuleCard(title: String, body: String) { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp)) { Text(title, color = Navy, fontWeight = FontWeight.Bold); Text(body, color = Color.DarkGray, modifier = Modifier.padding(top = 6.dp)) } } }
-private data class MapSpot(val name: String, val latitude: Double, val longitude: Double, val detail: String, val boat: Boolean)
-private val mapSpots = listOf(
-    MapSpot("Whangārei Harbour", -35.72, 174.32, "Good · Land fishing", false), MapSpot("Mission Bay", -36.8485, 174.7633, "86/100 · Best 6:10–8:40 AM", false),
-    MapSpot("Coromandel Harbour", -37.0, 175.35, "Good · Land fishing", false), MapSpot("Gisborne Harbour", -38.02, 177.29, "Good · Land fishing", false),
-    MapSpot("Wellington Harbour", -41.28, 174.78, "Good · Boat fishing", true), MapSpot("Nelson Harbour", -41.27, 173.28, "Good · Boat fishing", true),
-    MapSpot("Lyttelton Harbour", -43.53, 172.64, "Good · Boat fishing", true), MapSpot("Otago Harbour", -45.88, 170.51, "Good · Boat fishing", true),
-    MapSpot("Bluff Harbour", -46.41, 168.35, "Good · Boat fishing", true)
-)
-
 @Composable fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
     var filter by remember { mutableStateOf("All") }
     var mapLoaded by remember { mutableStateOf(false) }
     var mapTimedOut by remember { mutableStateOf(false) }
     var requestedPermission by rememberSaveable { mutableStateOf(false) }
-    val visibleSpots = mapSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) }
+    val visibleSpots = fishingSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) }
     val cameraState = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(LatLng(-41.2, 174.8), 5.1f) }
     fun locate() { requestCurrentLocation(context, onLocation = { point -> vm.updateLocation(point); cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 13f)) }) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -378,7 +570,7 @@ private val mapSpots = listOf(
                 properties = MapProperties(isBuildingEnabled = true), uiSettings = MapUiSettings(zoomControlsEnabled = true), onMapLoaded = { mapLoaded = true }
             ) {
                 if (s.hasDeviceLocation) Marker(state = MarkerState(LatLng(s.location.latitude, s.location.longitude)), title = "Your location")
-                visibleSpots.forEach { spot -> Marker(state = MarkerState(LatLng(spot.latitude, spot.longitude)), title = spot.name, snippet = spot.detail) }
+                visibleSpots.forEach { spot -> Marker(state = MarkerState(LatLng(spot.latitude, spot.longitude)), title = spot.name, snippet = "${spot.area} · ${if (spot.boat) "Boat" else "Land"} area") }
             }
             IconButton(onClick = { locate() }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 112.dp).background(Color.White, CircleShape)) {
                 Icon(Icons.Default.NearMe, contentDescription = "Jump to my location", tint = Navy)
@@ -390,37 +582,161 @@ private val mapSpots = listOf(
     }
 }
 @Composable fun TideScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
-    val formatter = java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", java.util.Locale.US)
+    val context = LocalContext.current
+    val today = java.time.LocalDate.now(java.time.ZoneId.of("Pacific/Auckland"))
+    val formatter = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy", Locale.US)
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+            requestCurrentLocation(context, { vm.updateTideLocation(it) }, { vm.tideLocationUnavailable() })
+        else vm.tideLocationUnavailable()
+    }
+    fun useCurrentLocation() {
+        vm.beginTideLocationSearch()
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) requestCurrentLocation(context, { vm.updateTideLocation(it) }, { vm.tideLocationUnavailable() })
+        else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+    LaunchedEffect(Unit) { if (!s.tideLocationAttempted) useCurrentLocation() }
     LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { Text("Tide forecast", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy); Text("Live marine forecast · ${s.selectedStation.name}", color = Color.Gray) }
-        item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Choose harbour", color = Navy, fontWeight = FontWeight.Bold); Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { tideStations.take(6).forEach { station -> FilterChip(selected = station.id == s.selectedStation.id, onClick = { vm.chooseStation(station) }, label = { Text(station.name.substringBefore(" Harbour")) }) } } } } }
-        item { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text(s.tideDate.format(formatter), color = Navy, fontWeight = FontWeight.Bold); Row { TextButton(enabled = s.tideDate > java.time.LocalDate.now(), onClick = { vm.changeTideDate(s.tideDate.minusDays(1)) }) { Text("‹") }; TextButton(enabled = s.tideDate < java.time.LocalDate.now().plusDays(7), onClick = { vm.changeTideDate(s.tideDate.plusDays(1)) }) { Text("›") } } } }
+        item {
+            Text("Tide forecast", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+            Text("${s.selectedStation.name} · official LINZ tide times", color = Color.Gray)
+        }
+        item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Text("Tide station", color = Navy, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = ::useCurrentLocation) { Text("Use my location") }
+                }
+                Text(if (s.tideStationManual) "Selected: ${s.selectedStation.name}"
+                    else if (s.tideDeviceLocation != null) "Nearest to your location: ${s.selectedStation.name}"
+                    else "Using ${s.selectedStation.name} until your location is available", color = Color.Gray,
+                    style = MaterialTheme.typography.bodySmall)
+                s.tideLocationNotice?.let { Text(it, color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
+                key(s.selectedStation.id) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        (listOf(s.selectedStation) + tideStations.filter { it.id != s.selectedStation.id }).forEach { station ->
+                            FilterChip(selected = station.id == s.selectedStation.id,
+                                onClick = { vm.chooseStation(station) }, label = { Text(station.name) })
+                        }
+                    }
+                }
+            }
+        } }
+        item { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Text(s.tideDate.format(formatter), color = Navy, fontWeight = FontWeight.Bold)
+            Row {
+                TextButton(enabled = s.tideDate > today, onClick = { vm.changeTideDate(s.tideDate.minusDays(1)) }) { Text("‹") }
+                TextButton(enabled = s.tideDate < java.time.LocalDate.of(2029, 12, 31), onClick = { vm.changeTideDate(s.tideDate.plusDays(1)) }) { Text("›") }
+            }
+        } }
         s.stationTide?.let { tide ->
-            item { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(18.dp)) { Text("Current level", color = Color.Gray); Text(tide.currentLevel, style = MaterialTheme.typography.headlineMedium, color = Navy, fontWeight = FontWeight.Bold); Text("Next ${tide.nextEvent} · ${tide.eventTime}", color = Color.DarkGray) } } }
-            item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp)) { Text("Tide curve", color = Navy, fontWeight = FontWeight.Bold); TideCurve(tide.points) } } }
-            item { tide.events.forEach { event -> Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), Arrangement.SpaceBetween) { Text(event.type, color = Navy, fontWeight = FontWeight.SemiBold); Text("${event.time} · ${event.height}", color = Color.DarkGray) } } }
-        } ?: item { Text("Loading live tide data…", color = Navy) }
-        item { Text("Source: Open-Meteo marine model. Confirm official LINZ predictions for safety-critical decisions.", color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
+            item { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text((if (s.tideDate == today) "Estimated now" else "Estimated at 12:00 PM") +
+                        " · ${tide.currentLevel} above Chart Datum", color = Navy, fontWeight = FontWeight.Bold)
+                    Text("Next ${tide.nextEvent} · ${tide.eventTime}", color = Color.DarkGray)
+                }
+            } }
+            item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tide curve", color = Navy, fontWeight = FontWeight.Bold)
+                    Text("Slide left or right to inspect the time and height", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    TideCurve(tide.points, s.tideDate)
+                    if (tide.points.firstOrNull()?.minuteOfDay != 0 || tide.points.lastOrNull()?.minuteOfDay != 1440)
+                        Text("Curve is limited where an adjacent day's table is unavailable.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text("Curve heights between LINZ high and low tides are estimates.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            } }
+            item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Official high and low tides", color = Navy, fontWeight = FontWeight.Bold)
+                tide.events.forEach { event -> Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), Arrangement.SpaceBetween) {
+                    Text(event.type, color = Navy, fontWeight = FontWeight.SemiBold)
+                    Text("${event.time} · ${event.height}", color = Color.DarkGray)
+                } }
+            } }
+        } ?: item {
+            if (s.tideLoading) CircularProgressIndicator()
+            else Text(s.tideError ?: "LINZ tide data unavailable for this station and date.", color = Navy)
+        }
+        item { Text("High and low tide predictions: Toitū Te Whenua Land Information New Zealand (LINZ). Times are New Zealand local time; heights are above the station's Chart Datum. Check the official table before planning around water depth.", color = Color.Gray, style = MaterialTheme.typography.bodySmall) }
     }
 }
 
-@Composable private fun TideCurve(points: List<TidePoint>) {
+@Composable private fun TideCurve(points: List<TidePoint>, date: java.time.LocalDate) {
     if (points.size < 2) return
-    val min = points.minOf { it.level }; val max = points.maxOf { it.level }; val range = (max - min).coerceAtLeast(0.1)
-    Canvas(Modifier.fillMaxWidth().height(150.dp).padding(vertical = 10.dp)) {
-        val path = Path()
-        points.forEachIndexed { index, point ->
-            val x = size.width * index / (points.lastIndex.toFloat())
-            val y = size.height * (1f - ((point.level - min) / range).toFloat())
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    val today = java.time.LocalDate.now(java.time.ZoneId.of("Pacific/Auckland"))
+    val currentTime = LocalTime.now(java.time.ZoneId.of("Pacific/Auckland"))
+    var minute by remember(points, date) { mutableFloatStateOf(
+        (if (date == today) currentTime.hour * 60 + currentTime.minute else 720).toFloat()
+            .coerceIn(points.first().minuteOfDay.toFloat(), points.last().minuteOfDay.toFloat())) }
+    val left = points.lastOrNull { it.minuteOfDay <= minute } ?: points.first()
+    val right = points.firstOrNull { it.minuteOfDay >= minute } ?: points.last()
+    val fraction = if (right.minuteOfDay == left.minuteOfDay) 0.0
+        else ((minute - left.minuteOfDay) / (right.minuteOfDay - left.minuteOfDay)).toDouble()
+    val selectedHeight = left.level + (right.level - left.level) * fraction
+    val selectedMinute = minute.roundToInt().coerceIn(0, 1440)
+    val selectedTime = LocalTime.of((selectedMinute / 60) % 24, selectedMinute % 60).format(preferredTimeFormatter) +
+        if (selectedMinute == 1440) " next day" else ""
+    val minimum = points.minOf { it.level }; val maximum = points.maxOf { it.level }
+    val range = (maximum - minimum).coerceAtLeast(0.2)
+    Text("$selectedTime  ·  ${"%.2f".format(Locale.US, selectedHeight)} m", color = Navy,
+        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Canvas(Modifier.fillMaxWidth().height(190.dp)
+        .pointerInput(points) { detectTapGestures { offset ->
+            minute = (offset.x / size.width * 1440f).coerceIn(points.first().minuteOfDay.toFloat(), points.last().minuteOfDay.toFloat())
+        } }
+        .pointerInput(points) { detectHorizontalDragGestures(onDragStart = { offset ->
+            minute = (offset.x / size.width * 1440f).coerceIn(points.first().minuteOfDay.toFloat(), points.last().minuteOfDay.toFloat())
+        }, onHorizontalDrag = { change, _ ->
+            minute = (change.position.x / size.width * 1440f).coerceIn(points.first().minuteOfDay.toFloat(), points.last().minuteOfDay.toFloat())
+            change.consume()
+        }) }) {
+        val top = 12.dp.toPx(); val bottom = size.height - 12.dp.toPx()
+        fun x(point: TidePoint) = size.width * point.minuteOfDay / 1440f
+        fun y(level: Double) = (top + (maximum - level) / range * (bottom - top)).toFloat()
+        for (step in 0..3) {
+            val guideY = top + (bottom - top) * step / 3f
+            drawLine(Seafoam, Offset(0f, guideY), Offset(size.width, guideY), 1.dp.toPx())
         }
-        drawPath(path, Navy, style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
+        val path = Path().apply { points.forEachIndexed { index, point ->
+            if (index == 0) moveTo(x(point), y(point.level)) else lineTo(x(point), y(point.level))
+        } }
+        val area = Path().apply {
+            moveTo(x(points.first()), bottom)
+            points.forEach { lineTo(x(it), y(it.level)) }
+            lineTo(x(points.last()), bottom)
+            close()
+        }
+        drawPath(area, Brush.verticalGradient(listOf(Seafoam, Color.White), startY = top, endY = bottom))
+        drawPath(path, Navy, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+        val selectedX = size.width * minute / 1440f
+        drawLine(Orange, Offset(selectedX, top), Offset(selectedX, bottom), 1.5.dp.toPx())
+        drawCircle(Orange, 6.dp.toPx(), Offset(selectedX, y(selectedHeight)))
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        listOf("12 AM", "6 AM", "12 PM", "6 PM", "12 AM").forEach { label ->
+            Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
 private fun requestCurrentLocation(context: android.content.Context, onLocation: (GeoPoint) -> Unit, onUnavailable: () -> Unit = {}) {
     try {
+        val client = LocationServices.getFusedLocationProviderClient(context)
+        fun useRecentCachedLocation() {
+            client.lastLocation.addOnSuccessListener { cached ->
+                if (cached != null && System.currentTimeMillis() - cached.time in 0L..300_000L)
+                    onLocation(GeoPoint(cached.latitude, cached.longitude))
+                else onUnavailable()
+            }.addOnFailureListener { onUnavailable() }
+        }
         val token = CancellationTokenSource()
-        LocationServices.getFusedLocationProviderClient(context).getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token).addOnSuccessListener { location -> if (location != null) onLocation(GeoPoint(location.latitude, location.longitude)) else onUnavailable() }.addOnFailureListener { onUnavailable() }
+        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token)
+            .addOnSuccessListener { location ->
+                if (location != null) onLocation(GeoPoint(location.latitude, location.longitude))
+                else useRecentCachedLocation()
+            }.addOnFailureListener { useRecentCachedLocation() }
     } catch (_: SecurityException) { onUnavailable() }
 }

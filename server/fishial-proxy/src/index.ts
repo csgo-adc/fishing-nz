@@ -20,7 +20,8 @@ type Account = {
 type AccountWithCredentials = Account & { password_hash: string; password_salt: string };
 type AuthContext = { account: Account; sessionToken: string };
 type PublicAccount = Omit<Account, "email_verified"> & { email_verified: boolean };
-const PASSWORD_ITERATIONS = 120_000;
+// Cloudflare Workers caps a single PBKDF2 operation at 100,000 iterations.
+const PASSWORD_ITERATIONS = 100_000;
 const SESSION_LIFETIME_DAYS = 30;
 
 const rulesAreas = new Map([

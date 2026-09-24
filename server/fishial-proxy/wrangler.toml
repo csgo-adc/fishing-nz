@@ -2,6 +2,9 @@ name = "catchcheck-fishial-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 
+[vars]
+ACCOUNT_EMAIL_FROM = "CatchCheck NZ <accounts@fishnz.space>"
+
 [[routes]]
 pattern = "fishing.fishnz.space"
 custom_domain = true

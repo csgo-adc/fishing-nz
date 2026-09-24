@@ -31,26 +31,84 @@ struct HomeView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
-    private let dates = ["Today", "Tomorrow", "Friday", "Saturday", "Sunday", "Next 7 days"]
+    private let radii = [10, 30, 50, 100, 200, 300, 400, 500]
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 3) { Text("Kia ora, Alex").foregroundStyle(.secondary); Text("Plan your next catch").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy) }
+                    VStack(alignment: .leading, spacing: 3) { Text("Kia ora").foregroundStyle(.secondary); Text("Plan your next catch").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy) }
                     Card(background: CatchCheckColor.navy) {
                         Text("What are you fishing for?").font(.title3.bold()).foregroundStyle(.white)
                         Picker("Fishing type", selection: $vm.isBoatFishing) { Text("Land fishing").tag(false); Text("Boat fishing").tag(true) }.pickerStyle(.segmented).padding(.top, 6)
-                        Text("Auckland demo · \(vm.dateLabel)").foregroundStyle(.white.opacity(0.8)).padding(.top, 8)
+                        Text(vm.locationSummary).foregroundStyle(.white.opacity(0.8)).padding(.top, 8)
+                        SearchPlaceMenu(dark: true)
                     }
                     Text("When are you going?").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                    ScrollView(.horizontal, showsIndicators: false) { HStack { ForEach(dates, id: \.self) { day in Button(day) { vm.dateLabel = day }.buttonStyle(ChoiceButton(selected: vm.dateLabel == day)) } } }
-                    ActionCard(title: "Find the best time", detail: "See the best fishing window near you") { vm.showingResults = true }
-                    ActionCard(title: "Find the best location", detail: "Rank spots by conditions and distance", outlined: true) { vm.showingResults = true }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack { ForEach(FishingDatePreset.allCases, id: \.self) { preset in
+                            Button(preset.rawValue) { vm.datePreset = preset }.buttonStyle(ChoiceButton(selected: vm.datePreset == preset))
+                        } }
+                    }
+                    if vm.datePreset == .custom {
+                        Card {
+                            DatePicker("From", selection: $vm.customStartDate, in: Calendar.current.startOfDay(for: .now)...vm.latestSelectableDate, displayedComponents: .date)
+                                .onChange(of: vm.customStartDate) { _, start in if vm.customEndDate < start { vm.customEndDate = start } }
+                            DatePicker("To", selection: $vm.customEndDate, in: vm.customStartDate...vm.latestSelectableDate, displayedComponents: .date)
+                            Text("Choose dates within the next 16 days.").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("What time works for you?").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                    Picker("Preferred time", selection: $vm.timeMode) {
+                        ForEach(FishingTimeMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
+                    }.pickerStyle(.segmented)
+                    if vm.timeMode == .custom {
+                        Card {
+                            Picker("From", selection: $vm.preferredStartMinute) {
+                                ForEach(0..<48, id: \.self) { step in
+                                    Text(FishingViewModel.clockLabel(minutes: step * 30)).tag(step * 30)
+                                }
+                            }.pickerStyle(.menu)
+                            Picker("Until", selection: $vm.preferredEndMinute) {
+                                ForEach(0..<48, id: \.self) { step in
+                                    Text(FishingViewModel.clockLabel(minutes: step * 30)).tag(step * 30)
+                                }
+                            }.pickerStyle(.menu)
+                            Text("Only complete 2–3 hour windows within \(vm.timeSummary) will appear.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            if vm.preferredStartMinute > vm.preferredEndMinute {
+                                Text("This time range continues after midnight; the selected date is when fishing starts.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else if vm.preferredStartMinute == vm.preferredEndMinute {
+                                Text("Matching start and end times include the full day.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Button("Clear preferred time") { vm.timeMode = .anytime }
+                                .buttonStyle(.bordered)
+                        }
+                    } else if vm.timeMode == .comfortable {
+                        Text("Suggestions fit between 7:00 AM and 9:00 PM. Choose hours or Anytime to include earlier trips.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("How far from you?").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack { ForEach(radii, id: \.self) { radius in
+                            Button("\(radius) km") { vm.radiusKm = radius }.buttonStyle(ChoiceButton(selected: vm.radiusKm == radius))
+                        } }
+                    }
+                    ActionCard(title: "Find fishing windows", detail: vm.isBoatFishing
+                               ? "Rank nearby areas by wind, waves, weather and time"
+                               : "Rank nearby areas by tide, wind, weather and time") { vm.showRecommendations() }
+                    Text("Distances are straight-line estimates. Forecast scores do not replace local safety checks or fishing rules.").font(.caption).foregroundStyle(.secondary)
                     FishIdentifierView(photoItem: $photoItem, showCamera: $showCamera)
                     Text("Quick forecast").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Card { HStack { Metric(label: "Wind", value: vm.weather?.wind ?? "—"); Spacer(); Metric(label: "Tide", value: vm.currentTide?.nextEvent ?? "—"); Spacer(); Metric(label: "Temp", value: vm.weather?.temperature ?? "—") } }
+                    if let conditionsError = vm.conditionsError { Text(conditionsError).font(.caption).foregroundStyle(.secondary) }
                     Text("Your next best window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                    RecommendationCard(spot: sampleRecommendations[0]) { vm.showingResults = true }
+                    if let best = vm.recommendations.first {
+                        RecommendationCard(spot: best) { vm.showingResults = true }
+                    } else {
+                        Card { Text("Choose a distance and dates, then search for live fishing windows.").foregroundStyle(.secondary) }
+                    }
                 }.padding(20)
             }.background(CatchCheckColor.cream)
         }
@@ -283,17 +341,165 @@ private struct AccountInput<Content: View>: View {
 
 struct ResultsView: View {
     @EnvironmentObject private var vm: FishingViewModel
-    var body: some View { NavigationStack { List { Section { ForEach(sampleRecommendations.filter { !vm.isBoatFishing || $0.boat }) { spot in RecommendationCard(spot: spot) { vm.showingResults = false; vm.selectedSpot = spot }.listRowInsets(EdgeInsets()) } } footer: { Text("Safety and fishing rules always override the score.") } }.listStyle(.plain).navigationTitle("Best options").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.showingResults = false } } } } }
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("\(vm.dateSummary) · \(vm.timeSummary) · within \(vm.radiusKm) km · \(vm.locationSummary)")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if vm.isResolvingRecommendationLocation {
+                        ProgressView("Getting your current location…").frame(maxWidth: .infinity).padding(.vertical, 28)
+                        SearchPlaceMenu()
+                    } else if let locationError = vm.recommendationLocationError {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(locationError).foregroundStyle(.red)
+                            Button("Try current location again") { vm.selectSearchPlace(nil) }.buttonStyle(.bordered)
+                            SearchPlaceMenu()
+                        }.padding(.vertical, 14)
+                    } else if vm.isLoadingRecommendations {
+                        ProgressView("Comparing hourly forecasts…").frame(maxWidth: .infinity).padding(.vertical, 28)
+                    } else if let error = vm.recommendationError {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(error).foregroundStyle(.red)
+                            Button("Try again") { vm.searchRecommendations() }.buttonStyle(.bordered)
+                        }.padding(.vertical, 14)
+                    } else if vm.recommendations.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(vm.nearbySpotCount == 0
+                                 ? "No catalogued \(vm.isBoatFishing ? "boat" : "land") areas are within this radius."
+                                 : "No suitable 2–3 hour forecast window fits these dates, hours and conditions.")
+                                .foregroundStyle(.secondary)
+                            if vm.nearbySpotCount == 0, let hint = vm.nearestSpotHint {
+                                Text(hint).font(.subheadline).foregroundStyle(.secondary)
+                                if let radius = vm.suggestedRadiusKm {
+                                    Button("Search within \(radius) km") { vm.radiusKm = radius; vm.searchRecommendations() }.buttonStyle(.borderedProminent)
+                                }
+                            } else if vm.timeMode != .anytime {
+                                Button(vm.timeMode == .custom ? "Clear preferred time and search again" : "Search anytime") {
+                                    vm.timeMode = .anytime
+                                    vm.searchRecommendations()
+                                }.buttonStyle(.bordered)
+                            }
+                            if vm.nearbySpotCount > 0, vm.datePreset == .today {
+                                Text("Today may have too little time left for a 2–3 hour window. Try the next three days.")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                Button("Search next 3 days") { vm.datePreset = .nextThreeDays; vm.searchRecommendations() }.buttonStyle(.bordered)
+                            }
+                            if !vm.nearbyPlacesWithoutWindows.isEmpty {
+                                Text("Nearby areas checked: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }.padding(.vertical, 14)
+                    } else {
+                        ForEach(vm.recommendations) { spot in
+                            RecommendationCard(spot: spot) { vm.showingResults = false; vm.selectedSpot = spot }
+                                .listRowInsets(EdgeInsets())
+                        }
+                        if !vm.nearbyPlacesWithoutWindows.isEmpty {
+                            Text("No suitable scored window at: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                } footer: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Scores compare forecast conditions, not fish abundance. Check local hazards, marine forecasts and current fishing rules before you go.")
+                        Link("Forecast data: Open-Meteo", destination: URL(string: "https://open-meteo.com/")!)
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Best options")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.showingResults = false } } }
+        }
+    }
+}
+
+private struct SearchPlaceMenu: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    var dark = false
+
+    var body: some View {
+        Menu {
+            Button { vm.selectSearchPlace(nil) } label: { Label("Use current location", systemImage: "location.fill") }
+            Divider()
+            ForEach(fishingSearchPlaces) { place in
+                Button(place.name) { vm.selectSearchPlace(place.name) }
+            }
+        } label: {
+            Label("Choose search town", systemImage: "location.circle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(dark ? .white : CatchCheckColor.navy)
+        }
+    }
 }
 
 struct SpotDetailView: View {
     @EnvironmentObject private var vm: FishingViewModel
     let spot: Recommendation
-    var body: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 16) { Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text(spot.area).foregroundStyle(.secondary); Text("\(spot.rating)/100 · \(spot.time)").font(.title3.bold()).foregroundStyle(CatchCheckColor.orange); Card(background: CatchCheckColor.seafoam) { Text("Why this spot?").bold().foregroundStyle(CatchCheckColor.navy); ForEach(spot.reasons, id: \.self) { Text("✓  \($0)") } }; Button(vm.savedSpotNames.contains(spot.name) ? "Remove saved spot" : "Save spot") { vm.toggleSaved(spot) }.buttonStyle(.bordered).frame(maxWidth: .infinity); Button("Start fishing trip") { vm.startTrip(spot) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).frame(maxWidth: .infinity) }.padding(20) }.background(CatchCheckColor.cream).navigationTitle("Spot details").navigationBarTitleDisplayMode(.inline).toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.selectedSpot = nil } } } } }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text(spot.area).foregroundStyle(.secondary)
+                    if spot.rating > 0 {
+                        Text("\(spot.rating)/100 · \(spot.time)").font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
+                        Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
+                        Card(background: CatchCheckColor.seafoam) {
+                            Text("Why this window?").bold().foregroundStyle(CatchCheckColor.navy)
+                            ForEach(spot.reasons, id: \.self) { Text("✓  \($0)") }
+                        }
+                        if !spot.warnings.isEmpty {
+                            Card { ForEach(spot.warnings, id: \.self) { warning in Label(warning, systemImage: "exclamationmark.triangle").font(.subheadline) } }
+                        }
+                    } else {
+                        Card { Text("Search from Home to see a live forecast score for this spot.").foregroundStyle(.secondary) }
+                    }
+                    Button(vm.savedSpotNames.contains(spot.id) ? "Remove saved spot" : "Save spot") { vm.toggleSaved(spot) }.buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    Button("Start fishing trip") { vm.startTrip(spot) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).frame(maxWidth: .infinity)
+                }.padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle("Spot details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.selectedSpot = nil } } }
+        }
+    }
 }
 
 private struct ActionCard: View { let title: String; let detail: String; var outlined = false; let action: () -> Void; var body: some View { Button(action: action) { HStack { Image(systemName: "location.fill").foregroundStyle(CatchCheckColor.navy).frame(width: 44, height: 44).background(outlined ? CatchCheckColor.seafoam : .white, in: Circle()); VStack(alignment: .leading) { Text(title).bold(); Text(detail).font(.caption).foregroundStyle(.secondary) }; Spacer() }.foregroundStyle(CatchCheckColor.navy).padding(16).frame(maxWidth: .infinity, alignment: .leading).background(outlined ? .white : CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 18)) } } }
-struct RecommendationCard: View { let spot: Recommendation; let action: () -> Void; var body: some View { Button(action: action) { VStack(alignment: .leading, spacing: 6) { HStack { VStack(alignment: .leading) { Text(spot.name).font(.headline); Text(spot.area).foregroundStyle(.secondary) }; Spacer(); Text("\(spot.rating)/100").bold().foregroundStyle(CatchCheckColor.orange) }; Text(spot.time).bold(); Text(spot.distance).font(.caption).foregroundStyle(.secondary); HStack { ForEach(spot.reasons, id: \.self) { Text($0).font(.caption2).padding(7).background(CatchCheckColor.seafoam, in: Capsule()) } } }.foregroundStyle(CatchCheckColor.navy).padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 18)) } } }
+struct RecommendationCard: View {
+    let spot: Recommendation
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(spot.name).font(.headline)
+                        Text(spot.area).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if spot.rating > 0 { Text("\(spot.rating)/100").bold().foregroundStyle(CatchCheckColor.orange) }
+                }
+                if spot.rating > 0 { Text(spot.time).bold() }
+                Text(spot.distance).font(.caption).foregroundStyle(.secondary)
+                if !spot.reasons.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack { ForEach(spot.reasons.prefix(3), id: \.self) { reason in Text(reason).font(.caption2).padding(7).background(CatchCheckColor.seafoam, in: Capsule()) } }
+                    }
+                }
+                if !spot.warnings.isEmpty {
+                    Label(spot.warnings[0], systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(CatchCheckColor.orange)
+                }
+            }
+            .foregroundStyle(CatchCheckColor.navy)
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white, in: RoundedRectangle(cornerRadius: 18))
+        }
+    }
+}
 private struct FishCheckCard: View {
     let result: FishCheck
     var body: some View {

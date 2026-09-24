@@ -36,7 +36,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
             }
         }
         if (state.showResults) ResultsScreen(state, vm)
-        state.selectedSpot?.let { SpotDetailScreen(it, state.savedSpots.contains(it.name), vm) }
+        state.selectedSpot?.let { SpotDetailScreen(it, state.savedSpots.contains(recommendationKey(it)), vm) }
     }
 }
 

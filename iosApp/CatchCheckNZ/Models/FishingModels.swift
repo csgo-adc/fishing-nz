@@ -1,13 +1,12 @@
 import Foundation
-import CoreLocation
 
-struct GeoPoint: Equatable { let latitude: Double; let longitude: Double }
+struct GeoPoint: Equatable, Sendable { let latitude: Double; let longitude: Double }
 struct WeatherState { let temperature: String; let wind: String; let rain: String }
 struct TideEvent: Identifiable { let time: String; let height: String; let type: String; var id: String { "\(time)-\(type)" } }
 struct TidePoint: Identifiable { let time: String; let level: Double; var id: String { time } }
 struct TideState { let currentLevel: String; let nextEvent: String; let eventTime: String; let events: [TideEvent]; let points: [TidePoint]; let stationName: String }
 struct TideStation: Identifiable, Equatable { let id: String; let name: String; let region: String; let latitude: Double; let longitude: Double }
-struct Recommendation: Identifiable, Equatable { let name: String; let area: String; let rating: Int; let time: String; let distance: String; let reasons: [String]; let boat: Bool; var id: String { name } }
+struct Recommendation: Identifiable, Equatable { let name: String; let area: String; let rating: Int; let time: String; let distance: String; let reasons: [String]; let boat: Bool; var warnings: [String] = []; var id: String { "\(boat ? "boat" : "land"):\(name)" } }
 struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
 struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let areaName: String; let areaIsEstimated: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?; let fishRules: [FishRuleMatch] }
@@ -27,28 +26,21 @@ struct AccountProfileEnvelope: Decodable { let user: AccountProfile }
 struct AccountPermissionsEnvelope: Decodable { let plan: String; let features: AccountFeatures }
 struct AccountAuthResponse: Decodable { let token: String; let user: AccountProfile; let permissions: AccountPermissions }
 
-let sampleRecommendations = [
-    Recommendation(name: "Mission Bay", area: "Auckland", rating: 86, time: "6:10 – 8:40 AM", distance: "18 min away", reasons: ["Incoming tide", "Light SW wind", "17–20°C"], boat: false),
-    Recommendation(name: "Rangitoto Channel", area: "Auckland", rating: 82, time: "7:00 – 10:00 AM", distance: "25 min to ramp", reasons: ["Sheltered water", "Gentle swell", "Good current movement"], boat: true),
-    Recommendation(name: "Takapuna Beach", area: "Auckland", rating: 74, time: "5:30 – 7:30 PM", distance: "22 min away", reasons: ["Low rain chance", "Outgoing tide", "Good evening light"], boat: false)
-]
-
 let tideStations = [
-    TideStation(id: "auckland", name: "Auckland Harbour", region: "Auckland", latitude: -36.84, longitude: 174.76),
-    TideStation(id: "manukau", name: "Manukau Harbour", region: "Auckland", latitude: -37.05, longitude: 174.65),
-    TideStation(id: "whangarei", name: "Whangārei Harbour", region: "Northland", latitude: -35.72, longitude: 174.32),
-    TideStation(id: "tauranga", name: "Tauranga Harbour", region: "Bay of Plenty", latitude: -37.64, longitude: 176.18),
-    TideStation(id: "wellington", name: "Wellington Harbour", region: "Wellington", latitude: -41.28, longitude: 174.78),
-    TideStation(id: "nelson", name: "Nelson Harbour", region: "Nelson", latitude: -41.27, longitude: 173.28)
-]
-
-let mapSpots = [
-    Recommendation(name: "Whangārei Harbour", area: "Northland", rating: 76, time: "Good now", distance: "Land fishing", reasons: [], boat: false),
-    sampleRecommendations[0], sampleRecommendations[1], sampleRecommendations[2],
-    Recommendation(name: "Wellington Harbour", area: "Wellington", rating: 78, time: "Good now", distance: "Boat fishing", reasons: [], boat: true),
-    Recommendation(name: "Nelson Harbour", area: "Nelson", rating: 77, time: "Good now", distance: "Boat fishing", reasons: [], boat: true)
-]
-
-let mapCoordinates: [String: CLLocationCoordinate2D] = [
-    "Whangārei Harbour": .init(latitude: -35.72, longitude: 174.32), "Mission Bay": .init(latitude: -36.8485, longitude: 174.7633), "Rangitoto Channel": .init(latitude: -36.78, longitude: 174.93), "Takapuna Beach": .init(latitude: -36.786, longitude: 174.773), "Wellington Harbour": .init(latitude: -41.28, longitude: 174.78), "Nelson Harbour": .init(latitude: -41.27, longitude: 173.28)
+    TideStation(id: "auckland", name: "Auckland", region: "Auckland", latitude: -36.843, longitude: 174.768),
+    TideStation(id: "onehunga", name: "Onehunga", region: "Auckland", latitude: -36.924, longitude: 174.786),
+    TideStation(id: "whangarei", name: "Whangārei", region: "Northland", latitude: -35.729, longitude: 174.325),
+    TideStation(id: "tauranga", name: "Tauranga", region: "Bay of Plenty", latitude: -37.673, longitude: 176.169),
+    TideStation(id: "raglan", name: "Raglan", region: "Waikato", latitude: -37.800, longitude: 174.883),
+    TideStation(id: "thames", name: "Thames", region: "Waikato", latitude: -37.138, longitude: 175.540),
+    TideStation(id: "kawhia", name: "Kawhia", region: "Waikato", latitude: -38.069, longitude: 174.820),
+    TideStation(id: "whitianga", name: "Whitianga", region: "Coromandel", latitude: -36.837, longitude: 175.706),
+    TideStation(id: "gisborne", name: "Gisborne", region: "Tairāwhiti", latitude: -38.661, longitude: 178.017),
+    TideStation(id: "wellington", name: "Wellington", region: "Wellington", latitude: -41.285, longitude: 174.783),
+    TideStation(id: "nelson", name: "Nelson", region: "Nelson", latitude: -41.263, longitude: 173.283),
+    TideStation(id: "lyttelton", name: "Lyttelton", region: "Canterbury", latitude: -43.605, longitude: 172.720),
+    TideStation(id: "akaroa", name: "Akaroa", region: "Canterbury", latitude: -43.804, longitude: 172.968),
+    TideStation(id: "port-chalmers", name: "Port Chalmers", region: "Otago", latitude: -45.816, longitude: 170.621),
+    TideStation(id: "dunedin", name: "Dunedin", region: "Otago", latitude: -45.874, longitude: 170.504),
+    TideStation(id: "bluff", name: "Bluff", region: "Southland", latitude: -46.600, longitude: 168.333)
 ]
