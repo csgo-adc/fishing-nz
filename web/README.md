@@ -10,7 +10,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000` for the public website, `http://localhost:3000/account` for registration and account management, and `http://localhost:3000/admin` for the account CMS. The account and CMS server routes use `FISH_ID_API_BASE_URL` (defaulting to the deployed CatchCheck Worker). Deploy the website with Next.js Route Handler support for these routes to work.
+The account page is at `/account`. The live account CMS is at [https://cms.fishnz.space/admin](https://cms.fishnz.space/admin). Sign in with the `ACCOUNT_ADMIN_TOKEN` configured on the CatchCheck Worker. The CMS and account proxy run on Cloudflare Workers through OpenNext; deploy from this folder with `npm run deploy`. The app calls the account API at `https://fishing.fishnz.space` by default.
 
 ## Checks
 

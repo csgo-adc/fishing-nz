@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "catchcheck-cms",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "cms.fishnz.space",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "FISH_ID_API_BASE_URL": "https://fishing.fishnz.space"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
