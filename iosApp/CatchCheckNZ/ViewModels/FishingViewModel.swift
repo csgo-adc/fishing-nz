@@ -4,7 +4,14 @@ import UIKit
 
 @MainActor
 final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
-    @Published var selectedTab = 0
+    @Published var selectedTab = 0 {
+        didSet {
+            guard oldValue != selectedTab else { return }
+            let features = ["home", "map", "tide", "trip_planning", "fishing_rules", "account"]
+            guard features.indices.contains(selectedTab) else { return }
+            Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
+        }
+    }
     @Published var isBoatFishing = false
     @Published var dateLabel = "This Saturday"
     @Published var location = GeoPoint(latitude: -36.85, longitude: 174.76)
@@ -22,12 +29,18 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var activeTrip: Recommendation?
     @Published var selectedSpot: Recommendation?
     @Published var showingResults = false
+    @Published var account: AccountProfile?
+    @Published var fishIdentityAvailable = false
+    @Published var accountBusy = false
+    @Published var accountError: String?
+    @Published var accountNotice: String?
+    @Published var verificationPending = false
 
     private let repository = FishingRepository()
     private let locationManager = CLLocationManager()
     private var pendingFishPhoto: UIImage?
 
-    override init() { super.init(); locationManager.delegate = self; refreshConditions(); refreshStationTide() }
+    override init() { super.init(); locationManager.delegate = self; refreshConditions(); refreshStationTide(); refreshAccount() }
     func requestLocation() {
         if locationManager.authorizationStatus == .notDetermined { locationManager.requestWhenInUseAuthorization() }
         else if locationManager.authorizationStatus == .authorizedAlways || locationManager.authorizationStatus == .authorizedWhenInUse { locationManager.requestLocation() }
@@ -50,6 +63,59 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     func changeTideDate(by days: Int) { tideDate = Calendar.current.date(byAdding: .day, value: days, to: tideDate) ?? tideDate; refreshStationTide() }
     func toggleSaved(_ spot: Recommendation) { if savedSpotNames.contains(spot.name) { savedSpotNames.remove(spot.name) } else { savedSpotNames.insert(spot.name) } }
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }
+    func refreshAccount() {
+        Task {
+            do {
+                let snapshot = try await repository.currentAccount()
+                account = snapshot?.user
+                fishIdentityAvailable = snapshot?.permissions?.features.fishIdentity ?? false
+                if snapshot != nil { await repository.trackEvent("app_opened", feature: nil, platform: "ios") }
+            } catch { account = nil; fishIdentityAvailable = false }
+        }
+    }
+    func signIn(email: String, password: String, displayName: String, createAccount: Bool) {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                if createAccount {
+                    accountNotice = try await repository.createAccount(email: email, password: password, displayName: displayName)
+                    verificationPending = true
+                } else {
+                    let snapshot = try await repository.registerOrLogin(email: email, password: password)
+                    account = snapshot.user; fishIdentityAvailable = snapshot.permissions.features.fishIdentity; accountNotice = "You’re signed in."; verificationPending = false
+                }
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func resendVerification(email: String) {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do { accountNotice = try await repository.resendVerification(email: email); verificationPending = true }
+            catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func saveAccountProfile(displayName: String, countryCode: String) {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do { let snapshot = try await repository.saveProfile(displayName: displayName, countryCode: countryCode); account = snapshot.user; fishIdentityAvailable = snapshot.permissions?.features.fishIdentity ?? false; accountNotice = "Profile saved." }
+            catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func sendFeedback(category: String, message: String, rating: Int) {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do { try await repository.sendFeedback(category: category, message: message, rating: rating); accountNotice = "Thanks for your feedback." }
+            catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func signOut() {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task { await repository.signOut(); account = nil; fishIdentityAvailable = false; verificationPending = false; accountBusy = false; accountNotice = "You’re signed out." }
+    }
     func identifyFish() {
         guard let photo = selectedPhoto else { return }
         error = nil

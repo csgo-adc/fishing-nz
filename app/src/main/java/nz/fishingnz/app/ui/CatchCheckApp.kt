@@ -3,6 +3,7 @@ package nz.fishingnz.app.ui
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.NearMe
@@ -20,7 +21,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Navy, secondary = Orange, background = Cream)) {
         Scaffold(containerColor = Cream, bottomBar = {
             NavigationBar(containerColor = androidx.compose.ui.graphics.Color.White) {
-                listOf(Icons.Default.NearMe to "Home", Icons.Default.Map to "Map", Icons.Default.Waves to "Tide", Icons.Default.CalendarMonth to "Trips", Icons.Default.MenuBook to "Rules").forEachIndexed { index, item ->
+                listOf(Icons.Default.NearMe to "Home", Icons.Default.Map to "Map", Icons.Default.Waves to "Tide", Icons.Default.CalendarMonth to "Trips", Icons.Default.MenuBook to "Rules", Icons.Default.AccountCircle to "Account").forEachIndexed { index, item ->
                     NavigationBarItem(selected = state.tab == index, onClick = { vm.selectTab(index) }, icon = { Icon(item.first, null) }, label = { Text(item.second) })
                 }
             }
@@ -30,7 +31,8 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                 1 -> MapScreen(Modifier.padding(padding), state, vm)
                 2 -> TideScreen(Modifier.padding(padding), state, vm)
                 3 -> TripsScreen(Modifier.padding(padding), state, vm)
-                else -> RulesScreen(Modifier.padding(padding))
+                4 -> RulesScreen(Modifier.padding(padding))
+                else -> AccountScreen(Modifier.padding(padding), state, vm)
             }
         }
         if (state.showResults) ResultsScreen(state, vm)

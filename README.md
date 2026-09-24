@@ -50,17 +50,40 @@ To configure the included Cloudflare Worker (the `server/fishial-proxy` folder a
 1. In `server/fishial-proxy`, run `npm install`, then set `OPENAI_API_KEY` with `npx wrangler secret put OPENAI_API_KEY`.
 2. Apply the fishing-rules database migration with `npx wrangler d1 migrations apply catchcheck-rules --remote`.
 3. Create a strong random token, save it in the ignored `server/fishial-proxy/.rules-ingest-token` file, and set the same token with `npx wrangler secret put RULES_INGEST_TOKEN`.
-4. Deploy it with `npm run deploy`. The existing Worker API is available at `https://fishing.ct518.online`.
-5. Add `FISH_ID_API_BASE_URL=https://fishing.ct518.online` to the ignored root `secrets.properties` file before building Android.
+4. Deploy it with `npm run deploy`. The existing Worker API is available at `https://fishing.fishnz.space`.
+5. Add `FISH_ID_API_BASE_URL=https://fishing.fishnz.space` to the ignored root `secrets.properties` file before building Android.
 6. In Xcode, set the `FishIdentificationAPIBaseURL` value in the iOS app's `Info.plist` to the same address (or move it into an xcconfig for separate build environments).
 
-The Worker has a daily Cron Trigger at 16:00 UTC. It attempts one fishing area per day, rotating through all eight areas over an eight-day cycle to honor MPI's 10-second `robots.txt` crawl delay. Successful pages are saved to D1 with their source, fetch time, review date, content hash, and original HTML. Failures are recorded at `GET https://fishing.ct518.online/v1/rules/status`; a failed attempt leaves any previous saved rules intact. The mobile app reads rules through the Pages frontend and the public `GET https://fishing.ct518.online/v1/rules?area=<area-id>` API.
+The Worker has a daily Cron Trigger at 16:00 UTC. It attempts one fishing area per day, rotating through all eight areas over an eight-day cycle to honor MPI's 10-second `robots.txt` crawl delay. Successful pages are saved to D1 with their source, fetch time, review date, content hash, and original HTML. Failures are recorded at `GET https://fishing.fishnz.space/v1/rules/status`; a failed attempt leaves any previous saved rules intact. The mobile app reads rules through the Pages frontend and the public `GET https://fishing.fishnz.space/v1/rules?area=<area-id>` API.
 
-For a manual import, install the crawler dependency with `python3 -m pip install -r tools/requirements.txt`, then run `python3 tools/crawl_mpi_rules.py --api-base-url https://fishing.ct518.online/v1/rules --source direct`. The crawler follows the 10-second delay, imports only complete page fetches, and keeps a local SQLite copy in `data/mpi_fishing_rules.sqlite3`. It needs the ignored token file. If MPI blocks the crawler's network, it stops without importing partial or challenge-page data.
+## Accounts, feedback, and feature access
+
+The Cloudflare Worker and its `catchcheck-rules` D1 database provide the account backend, email verification, and usage analytics. Confirm a sending domain with Resend, create an API key, then configure both email secrets, apply the account tables, and deploy:
+
+```sh
+cd server/fishial-proxy
+npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put ACCOUNT_EMAIL_FROM
+npx wrangler d1 migrations apply catchcheck-rules --remote
+npx wrangler secret put ACCOUNT_ADMIN_TOKEN
+npm run deploy
+```
+
+Set `ACCOUNT_EMAIL_FROM` to a sender on the domain verified with Resend, for example `CatchCheck NZ <accounts@your-domain.nz>`. Registration creates a pending account and sends a 24-hour confirmation link. Only confirmed users can sign in. The confirmation page asks the user to press a button, so automated email scanners do not activate accounts just by opening the link. Resend sends transactional messages using its authenticated email API ([Resend API example](https://resend.com/docs/api-reference/emails/send-email)).
+
+Keep the admin token private. It lets an administrator list accounts and feedback and set a user's plan using the admin endpoints below. New accounts start on `free`; only an administrator can set `paid`. Paid access currently has to be granted manually. Payment processing and automatic subscription renewal are not connected yet.
+
+The API provides `POST /v1/auth/register`, `/v1/auth/login`, `/v1/auth/resend-verification`, and `/v1/auth/logout`, `GET`/`PATCH /v1/me`, `GET /v1/me/permissions`, `POST /v1/feedback`, and `POST /v1/analytics/events`. Confirmed users receive bearer sessions; unconfirmed accounts cannot sign in. Profiles store email, display name, and a two-letter country code. Passwords are stored as PBKDF2 hashes, confirmation tokens and session tokens are stored as hashes, and sessions expire after 30 days.
+
+Admin endpoints use `x-account-admin-token: <ACCOUNT_ADMIN_TOKEN>`: `GET /v1/admin/analytics`, `GET /v1/admin/users`, `GET /v1/admin/feedback`, and `PATCH /v1/admin/users/<user-id>/plan` with `{"plan":"paid"}` or `{"plan":"free"}`. The `/admin` web CMS uses an HTTP-only admin session cookie and shows total/confirmed/pending users, plan counts, daily sign-ups, daily active users, feature usage by platform, user plans, and recent feedback. Feature analytics contain event type, feature, platform, and timestamp for signed-in users; fish-identification use and feedback are logged by the Worker. The fish-identification endpoint checks the account plan server-side: signed-out requests receive `401`, free accounts receive `403`, and paid accounts can continue. Other existing public functionality remains available.
+
+The website, Android app, and iOS app include email registration with confirmation, sign-in, profile editing, feedback submission, and plan-aware fish-identification controls. Mobile sessions are stored in Android Keystore-backed encrypted storage and the iOS Keychain; the website keeps its bearer token in an HTTP-only cookie through its server-side account proxy. Set `FISH_ID_API_BASE_URL=https://fishing.fishnz.space` in the web app’s server environment when deploying the Next.js app with Route Handler support. Password reset, account self-service deletion, and billing integration are not part of this first account release. Analytics are recorded for signed-in accounts only.
+
+For a manual import, install the crawler dependency with `python3 -m pip install -r tools/requirements.txt`, then run `python3 tools/crawl_mpi_rules.py --api-base-url https://fishing.fishnz.space/v1/rules --source direct`. The crawler follows the 10-second delay, imports only complete page fetches, and keeps a local SQLite copy in `data/mpi_fishing_rules.sqlite3`. It needs the ignored token file. If MPI blocks the crawler's network, it stops without importing partial or challenge-page data.
 
 The UI shows confidence as an AI suggestion only. It intentionally does not declare a catch legal: connect its species output to an authoritative, region-aware MPI rules source before presenting size or bag-limit advice.
 
-The Rules tab on Android and iOS opens the CatchCheck rules page at [catchcheck-nz-rules.pages.dev](https://catchcheck-nz-rules.pages.dev). That Pages frontend requests cached area data from the Cloudflare Worker API, which reads the `catchcheck-rules` D1 database. If no cached record is available, the page links to MPI's official area rules. The fish-photo result still uses a small offline Auckland/Kermadec lookup as a demonstration and should not be treated as a live legal check.
+The Rules tab on Android and iOS opens the CatchCheck rules page at [fishnz.space](https://fishnz.space). That Pages frontend requests cached area data from the Cloudflare Worker API at `https://fishing.fishnz.space`, which reads the `catchcheck-rules` D1 database. If no cached record is available, the page links to MPI's official area rules. The fish-photo result still uses a small offline Auckland/Kermadec lookup as a demonstration and should not be treated as a live legal check.
 
 Open the project in Android Studio and run the `app` configuration on an emulator or Android device.
 

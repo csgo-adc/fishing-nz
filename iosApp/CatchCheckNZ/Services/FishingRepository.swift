@@ -1,8 +1,79 @@
 import Foundation
 import UIKit
+import Security
 
 struct FishingRepository {
     private let decoder = JSONDecoder()
+    private var accountBaseURL: String { ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space").trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
+
+    func registerOrLogin(email: String, password: String) async throws -> AccountSnapshot {
+        let response: AccountAuthResponse = try await accountRequest("/v1/auth/login", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password])
+        KeychainSession.save(response.token)
+        return AccountSnapshot(user: response.user, permissions: response.permissions)
+    }
+
+    func createAccount(email: String, password: String, displayName: String) async throws -> String {
+        let response: AccountMessageResponse = try await accountRequest("/v1/auth/register", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password, "display_name": displayName.trimmingCharacters(in: .whitespacesAndNewlines)])
+        return response.message
+    }
+
+    func resendVerification(email: String) async throws -> String {
+        let response: AccountMessageResponse = try await accountRequest("/v1/auth/resend-verification", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines)])
+        return response.message
+    }
+
+    func trackEvent(_ eventName: String, feature: String?, platform: String) async {
+        guard KeychainSession.load() != nil else { return }
+        var body: [String: Any] = ["event_name": eventName, "platform": platform]
+        if let feature { body["feature"] = feature }
+        let _: EmptyResponse? = try? await accountRequest("/v1/analytics/events", method: "POST", body: body, token: KeychainSession.load())
+    }
+
+    func currentAccount() async throws -> AccountSnapshot? {
+        guard let token = KeychainSession.load() else { return nil }
+        do {
+            let profile: AccountProfileEnvelope = try await accountRequest("/v1/me", method: "GET", token: token)
+            let permissions: AccountPermissionsEnvelope = try await accountRequest("/v1/me/permissions", method: "GET", token: token)
+            return AccountSnapshot(user: profile.user, permissions: AccountPermissions(plan: permissions.plan, features: permissions.features))
+        } catch let error as AccountAPIError where error.status == 401 {
+            KeychainSession.clear()
+            return nil
+        }
+    }
+
+    func saveProfile(displayName: String, countryCode: String) async throws -> AccountSnapshot {
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to update your profile.", status: 401) }
+        let _: AccountProfileEnvelope = try await accountRequest("/v1/me", method: "PATCH", body: ["display_name": displayName, "country_code": countryCode.uppercased()], token: token)
+        if let snapshot = try await currentAccount() { return snapshot }
+        throw AccountAPIError(message: "Please sign in again.", status: 401)
+    }
+
+    func sendFeedback(category: String, message: String, rating: Int) async throws {
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to send feedback.", status: 401) }
+        let _: EmptyResponse = try await accountRequest("/v1/feedback", method: "POST", body: ["category": category, "message": message, "rating": rating], token: token, platform: "ios")
+    }
+
+    func signOut() async {
+        if let token = KeychainSession.load() { let _: EmptyResponse? = try? await accountRequest("/v1/auth/logout", method: "POST", body: [String: String](), token: token) }
+        KeychainSession.clear()
+    }
+
+    private func accountRequest<T: Decodable>(_ path: String, method: String, body: Any? = nil, token: String? = nil, platform: String? = nil) async throws -> T {
+        var request = URLRequest(url: URL(string: accountBaseURL + path)!)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let platform { request.setValue(platform, forHTTPHeaderField: "X-Client-Platform") }
+        if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 500
+        guard 200...299 ~= status else {
+            let payload = (try? JSONDecoder().decode(AccountErrorResponse.self, from: data))
+            throw AccountAPIError(message: payload?.error ?? "Account request failed.", status: status)
+        }
+        return try decoder.decode(T.self, from: data)
+    }
 
     func conditions(at point: GeoPoint) async throws -> (WeatherState, TideState) {
         let weatherURL = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(point.latitude)&longitude=\(point.longitude)&current=temperature_2m,wind_speed_10m,precipitation&timezone=auto")!
@@ -49,6 +120,8 @@ struct FishingRepository {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("\(point.latitude),\(point.longitude)", forHTTPHeaderField: "X-Location-Lat-Lon")
         request.setValue(hasDeviceLocation ? "device" : "fallback", forHTTPHeaderField: "X-Location-Source")
+        request.setValue("ios", forHTTPHeaderField: "X-Client-Platform")
+        if let token = KeychainSession.load() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.timeoutInterval = 30
         let (data, response) = try await URLSession.shared.data(for: request)
         let payload = try JSONDecoder().decode(FishIdentificationResponse.self, from: data)
@@ -70,6 +143,36 @@ private struct FishIdentificationResponse: Decodable {
     enum CodingKeys: String, CodingKey {
         case commonName, scientificName, confidence, error, areaName, areaIsEstimated, rulesReviewedAt, fishRules
         case rulesSourceURL = "rulesSourceUrl"
+    }
+}
+
+private struct AccountErrorResponse: Decodable { let error: String? }
+private struct AccountMessageResponse: Decodable { let message: String }
+private struct EmptyResponse: Decodable {}
+private struct AccountAPIError: LocalizedError { let message: String; let status: Int; var errorDescription: String? { message } }
+
+private enum KeychainSession {
+    private static let service = "nz.fishingnz.catchcheck.session"
+    private static let account = "bearer-token"
+
+    static func save(_ token: String) {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+        SecItemDelete(query as CFDictionary)
+        var item = query
+        item[kSecValueData as String] = Data(token.utf8)
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(item as CFDictionary, nil)
+    }
+
+    static func load() -> String? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func clear() {
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account] as CFDictionary)
     }
 }
 

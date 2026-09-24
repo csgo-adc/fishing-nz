@@ -12,6 +12,21 @@ struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: S
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
 struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let areaName: String; let areaIsEstimated: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?; let fishRules: [FishRuleMatch] }
 
+struct AccountProfile: Decodable, Equatable {
+    let id: String
+    let email: String
+    let displayName: String
+    let countryCode: String
+    let plan: String
+    enum CodingKeys: String, CodingKey { case id, email, plan; case displayName = "display_name"; case countryCode = "country_code" }
+}
+struct AccountFeatures: Decodable { let fishIdentity: Bool; enum CodingKeys: String, CodingKey { case fishIdentity = "fish_identity" } }
+struct AccountPermissions: Decodable { let plan: String; let features: AccountFeatures }
+struct AccountSnapshot: Decodable { let user: AccountProfile; let permissions: AccountPermissions? }
+struct AccountProfileEnvelope: Decodable { let user: AccountProfile }
+struct AccountPermissionsEnvelope: Decodable { let plan: String; let features: AccountFeatures }
+struct AccountAuthResponse: Decodable { let token: String; let user: AccountProfile; let permissions: AccountPermissions }
+
 let sampleRecommendations = [
     Recommendation(name: "Mission Bay", area: "Auckland", rating: 86, time: "6:10 – 8:40 AM", distance: "18 min away", reasons: ["Incoming tide", "Light SW wind", "17–20°C"], boat: false),
     Recommendation(name: "Rangitoto Channel", area: "Auckland", rating: 82, time: "7:00 – 10:00 AM", distance: "25 min to ramp", reasons: ["Sheltered water", "Gentle swell", "Good current movement"], boat: true),

@@ -14,6 +14,7 @@ export default function Home() {
         <nav aria-label="Main navigation">
           <a href="#features">Features</a>
           <a href="#conditions">Conditions</a>
+          <Link href="/account">Account</Link>
           <Link href="/admin">Admin</Link>
         </nav>
       </header>

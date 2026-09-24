@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -125,18 +126,73 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Take photo") }; OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(4.dp)); Text(if (s.fishPhoto == null) "Choose photo" else "Gallery") } }
         Button(enabled = s.fishPhoto != null && !s.fishChecking, onClick = {
-            s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { input ->
-                BitmapFactory.decodeStream(input)?.let { bitmap ->
-                    val output = java.io.ByteArrayOutputStream()
-                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, output)
-                    identifyAtCurrentLocation(output.toByteArray())
-                }
-            } }
-        }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text("Identify fish") }
+            if (s.account?.fishIdentity != true) vm.selectTab(5)
+            else s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { input ->
+                    BitmapFactory.decodeStream(input)?.let { bitmap ->
+                        val output = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, output)
+                        identifyAtCurrentLocation(output.toByteArray())
+                    }
+                } }
+        }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text(if (s.account?.fishIdentity == true) "Identify fish" else "Sign in for fish ID") }
+        if (s.account?.fishIdentity != true) Text(if (s.account == null) "Create an account or sign in, then choose the paid plan for fish identification." else "Fish identification is included with the paid plan.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
     } }
     if (showCamera) Dialog(onDismissRequest = { showCamera = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         FishCameraScreen(onClose = { showCamera = false }, onPhotoCaptured = { vm.setFishPhoto(it); showCamera = false })
+    }
+}
+
+@Composable fun AccountScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var countryCode by rememberSaveable { mutableStateOf("NZ") }
+    var createAccount by rememberSaveable { mutableStateOf(true) }
+    var category by rememberSaveable { mutableStateOf("general") }
+    var message by rememberSaveable { mutableStateOf("") }
+    var rating by rememberSaveable { mutableIntStateOf(5) }
+    LaunchedEffect(s.account) {
+        s.account?.let { displayName = it.user.displayName; countryCode = it.user.countryCode; email = it.user.email }
+    }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+        s.accountNotice?.let { Text(it, color = Navy) }
+        s.accountError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (s.account == null) {
+            if (s.verificationPending) Card(colors = CardDefaults.cardColors(Seafoam)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Check your inbox", color = Navy, fontWeight = FontWeight.Bold); Text("Open the confirmation email before signing in. The link expires after 24 hours.", color = Navy); OutlinedButton(enabled = !s.accountBusy, onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") } } }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = createAccount, onClick = { createAccount = true }, label = { Text("Create account") })
+                FilterChip(selected = !createAccount, onClick = { createAccount = false }, label = { Text("Sign in") })
+            }
+            if (createAccount) OutlinedTextField(displayName, { displayName = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it }, label = { Text("Password") }, supportingText = { Text(if (createAccount) "At least 10 characters" else "Enter your password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            Button(enabled = !s.accountBusy && email.isNotBlank() && password.isNotBlank(), onClick = { vm.signIn(email, password, displayName, createAccount); password = "" }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in") }
+            if (!createAccount || s.verificationPending || s.accountError != null) TextButton(enabled = !s.accountBusy && email.isNotBlank(), onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") }
+        } else {
+            Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("${s.account.user.plan.replaceFirstChar { it.uppercase() }} plan", color = Navy, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(if (s.account.fishIdentity) "Fish identification is included." else "Basic tools are available. Paid access is currently enabled by the CatchCheck team.", color = Navy)
+            } }
+            Text("Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
+            Text(s.account.user.email, color = Color.Gray)
+            OutlinedTextField(displayName, { displayName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(countryCode, { countryCode = it.take(2).uppercase() }, label = { Text("Country code") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedButton(enabled = !s.accountBusy, onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth()) { Text("Save profile") }
+            Text("Send feedback", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
+            var categoryExpanded by remember { mutableStateOf(false) }
+            Box {
+                OutlinedButton(onClick = { categoryExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Type: ${category.replaceFirstChar { it.uppercase() }}") }
+                DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                    listOf("general" to "General", "bug" to "Report a problem", "idea" to "Idea").forEach { (value, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { category = value; categoryExpanded = false }) }
+                }
+            }
+            OutlinedTextField(message, { message = it.take(4000) }, label = { Text("Message") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) { Text("Rating", color = Navy, modifier = Modifier.weight(1f)); (1..5).forEach { value -> FilterChip(selected = rating == value, onClick = { rating = value }, label = { Text(value.toString()) }, modifier = Modifier.padding(end = 3.dp)) } }
+            Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = { vm.sendFeedback(category, message, rating); message = "" }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else "Send feedback") }
+            OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+        }
     }
 }
 
@@ -239,14 +295,14 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
 }
 private data class FishingRulesArea(val name: String, val url: String)
 private val fishingRulesAreas = listOf(
-    FishingRulesArea("Auckland / Kermadec", "https://catchcheck-nz-rules.pages.dev/?area=auckland-kermadec"),
-    FishingRulesArea("Central", "https://catchcheck-nz-rules.pages.dev/?area=central"),
-    FishingRulesArea("Challenger", "https://catchcheck-nz-rules.pages.dev/?area=challenger"),
-    FishingRulesArea("South-East", "https://catchcheck-nz-rules.pages.dev/?area=south-east"),
-    FishingRulesArea("Southland", "https://catchcheck-nz-rules.pages.dev/?area=southland"),
-    FishingRulesArea("Kaikōura", "https://catchcheck-nz-rules.pages.dev/?area=kaikoura"),
-    FishingRulesArea("Chatham Rise", "https://catchcheck-nz-rules.pages.dev/?area=chatham-rise"),
-    FishingRulesArea("Fiordland", "https://catchcheck-nz-rules.pages.dev/?area=fiordland")
+    FishingRulesArea("Auckland / Kermadec", "https://fishnz.space/?area=auckland-kermadec"),
+    FishingRulesArea("Central", "https://fishnz.space/?area=central"),
+    FishingRulesArea("Challenger", "https://fishnz.space/?area=challenger"),
+    FishingRulesArea("South-East", "https://fishnz.space/?area=south-east"),
+    FishingRulesArea("Southland", "https://fishnz.space/?area=southland"),
+    FishingRulesArea("Kaikōura", "https://fishnz.space/?area=kaikoura"),
+    FishingRulesArea("Chatham Rise", "https://fishnz.space/?area=chatham-rise"),
+    FishingRulesArea("Fiordland", "https://fishnz.space/?area=fiordland")
 )
 
 @Composable fun RulesScreen(modifier: Modifier) {

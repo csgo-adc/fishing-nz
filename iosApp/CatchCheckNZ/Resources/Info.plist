@@ -12,6 +12,6 @@
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSCameraUsageDescription</key><string>CatchCheck uses the camera to identify a fish and check its rules.</string>
     <key>NSLocationWhenInUseUsageDescription</key><string>CatchCheck uses your location to show nearby conditions and choose a fishing rules area.</string>
-    <key>FishIdentificationAPIBaseURL</key><string>https://fishing.ct518.online</string>
+    <key>FishIdentificationAPIBaseURL</key><string>https://fishing.fishnz.space</string>
     <key>UILaunchScreen</key><dict><key>UIColorName</key><string></string></dict>
 </dict></plist>

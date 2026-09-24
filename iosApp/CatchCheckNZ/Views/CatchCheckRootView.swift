@@ -19,6 +19,7 @@ struct CatchCheckRootView: View {
             TideForecastView().tabItem { Label("Tide", systemImage: "water.waves") }.tag(2)
             TripsView().tabItem { Label("Trips", systemImage: "calendar") }.tag(3)
             RulesView().tabItem { Label("Rules", systemImage: "book.closed.fill") }.tag(4)
+            AccountView().tabItem { Label("Account", systemImage: "person.crop.circle") }.tag(5)
         }
         .tint(CatchCheckColor.navy)
         .sheet(isPresented: $vm.showingResults) { ResultsView() }
@@ -69,11 +70,72 @@ private struct FishIdentifierView: View {
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack { Button { showCamera = true } label: { Label("Take photo", systemImage: "camera") }.buttonStyle(.bordered).frame(maxWidth: .infinity); PhotosPicker(selection: $photoItem, matching: .images) { Label(galleryLabel, systemImage: "photo") }.buttonStyle(.bordered).frame(maxWidth: .infinity) }
-            Button { vm.identifyFish() } label: { Label("Identify fish", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.selectedPhoto == nil || vm.isCheckingFish)
+            Button { if vm.fishIdentityAvailable { vm.identifyFish() } else { vm.selectedTab = 5 } } label: { Label(vm.fishIdentityAvailable ? "Identify fish" : "Sign in for fish ID", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.selectedPhoto == nil || vm.isCheckingFish)
+            if !vm.fishIdentityAvailable { Text(vm.account == nil ? "Create an account or sign in, then choose the paid plan for fish identification." : "Fish identification is included with the paid plan.").font(.caption).foregroundStyle(.secondary) }
             Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
         }
         .onChange(of: photoItem) { _, item in Task { guard let data = try? await item?.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }; vm.selectedPhoto = image; vm.fishCheck = nil } }
         .sheet(isPresented: $showCamera) { CameraPicker(image: $vm.selectedPhoto) }
+    }
+}
+
+struct AccountView: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @State private var createAccount = true
+    @State private var email = ""
+    @State private var password = ""
+    @State private var displayName = ""
+    @State private var countryCode = "NZ"
+    @State private var category = "general"
+    @State private var message = ""
+    @State private var rating = 5
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Your CatchCheck account").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                    if let notice = vm.accountNotice { Text(notice).foregroundStyle(CatchCheckColor.navy).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 10)) }
+                    if let error = vm.accountError { Text(error).foregroundStyle(.red).font(.callout) }
+                    if let account = vm.account {
+                        Card(background: CatchCheckColor.seafoam) {
+                            Text("\(account.plan.capitalized) plan").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+                            Text(vm.fishIdentityAvailable ? "Fish identification is included." : "Basic tools are available. Paid access is currently enabled by the CatchCheck team.").font(.subheadline)
+                        }
+                        Text("Profile").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                        Text(account.email).foregroundStyle(.secondary)
+                        TextField("Name", text: $displayName).textFieldStyle(.roundedBorder).textContentType(.name)
+                        TextField("Country code", text: $countryCode).textFieldStyle(.roundedBorder).textInputAutocapitalization(.characters).onChange(of: countryCode) { _, value in countryCode = String(value.uppercased().prefix(2)) }
+                        Button("Save profile") { vm.saveAccountProfile(displayName: displayName, countryCode: countryCode) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.accountBusy)
+                        Divider().padding(.vertical, 4)
+                        Text("Send feedback").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                        Picker("Type", selection: $category) { Text("General").tag("general"); Text("Report a problem").tag("bug"); Text("Idea").tag("idea") }.pickerStyle(.menu)
+                        TextField("Tell us what you think", text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
+                        Picker("Rating", selection: $rating) { ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) } }.pickerStyle(.segmented)
+                        Button("Send feedback") { vm.sendFeedback(category: category, message: message, rating: rating); message = "" }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
+                        Button("Sign out", role: .destructive) { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity, alignment: .center).padding(.top, 6)
+                    } else {
+                        if vm.verificationPending {
+                            Card(background: CatchCheckColor.seafoam) {
+                                Text("Check your inbox").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                                Text("Open the confirmation email before signing in. The link expires after 24 hours.").font(.subheadline)
+                                Button("Resend confirmation email") { vm.resendVerification(email: email) }.disabled(vm.accountBusy)
+                            }
+                        }
+                        Picker("Account", selection: $createAccount) { Text("Create account").tag(true); Text("Sign in").tag(false) }.pickerStyle(.segmented)
+                        if createAccount { TextField("Name (optional)", text: $displayName).textContentType(.name).textFieldStyle(.roundedBorder) }
+                        TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+                        SecureField("Password · at least 10 characters", text: $password).textContentType(createAccount ? .newPassword : .password).textFieldStyle(.roundedBorder)
+                        Button(vm.accountBusy ? "Please wait…" : createAccount ? "Create account" : "Sign in") { vm.signIn(email: email, password: password, displayName: displayName, createAccount: createAccount); password = "" }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.accountBusy || email.isEmpty || password.isEmpty)
+                        if !createAccount || vm.verificationPending || vm.accountError != nil { Button("Resend confirmation email") { vm.resendVerification(email: email) }.disabled(vm.accountBusy || email.isEmpty) }
+                    }
+                }.padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: vm.account) { _, value in if let value { displayName = value.displayName; countryCode = value.countryCode; email = value.email } }
+        }
     }
 }
 

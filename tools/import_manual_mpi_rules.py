@@ -17,7 +17,7 @@ from crawl_mpi_rules import AREAS, DEFAULT_DB, SCHEMA, request_rules_api
 
 
 SNAPSHOT_DIR = Path("/tmp/catchcheck-manual-mpi")
-DEFAULT_API = "https://fishing.ct518.online/v1/rules"
+DEFAULT_API = "https://fishing.fishnz.space/v1/rules"
 TOKEN_FILE = Path(__file__).resolve().parents[1] / "server" / "fishial-proxy" / ".rules-ingest-token"
 
 

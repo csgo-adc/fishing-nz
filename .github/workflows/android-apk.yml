@@ -64,7 +64,7 @@ jobs:
 
           {
             printf 'MAPS_API_KEY=%s\n' "$MAPS_API_KEY"
-            printf 'FISH_ID_API_BASE_URL=https://fishing.ct518.online\n'
+            printf 'FISH_ID_API_BASE_URL=https://fishing.fishnz.space\n'
           } > secrets.properties
 
       - name: Build debug APK

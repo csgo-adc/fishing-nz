@@ -2,6 +2,10 @@ name = "catchcheck-fishial-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 
+[[routes]]
+pattern = "fishing.fishnz.space"
+custom_domain = true
+
 [[d1_databases]]
 binding = "RULES_DB"
 database_name = "catchcheck-rules"

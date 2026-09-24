@@ -15,3 +15,6 @@ server/fishial-proxy/.wrangler/
 .DS_Store
 xcuserdata/
 *.xcuserstate
+
+# Wrangler local state
+.wrangler/

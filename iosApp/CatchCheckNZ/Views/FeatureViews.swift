@@ -36,14 +36,14 @@ struct TripsView: View {
 
 private struct FishingRulesArea: Identifiable, Hashable { let name: String; let url: URL; var id: String { name } }
 private let fishingRulesAreas = [
-    FishingRulesArea(name: "Auckland / Kermadec", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=auckland-kermadec")!),
-    FishingRulesArea(name: "Central", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=central")!),
-    FishingRulesArea(name: "Challenger", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=challenger")!),
-    FishingRulesArea(name: "South-East", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=south-east")!),
-    FishingRulesArea(name: "Southland", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=southland")!),
-    FishingRulesArea(name: "Kaikōura", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=kaikoura")!),
-    FishingRulesArea(name: "Chatham Rise", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=chatham-rise")!),
-    FishingRulesArea(name: "Fiordland", url: URL(string: "https://catchcheck-nz-rules.pages.dev/?area=fiordland")!)
+    FishingRulesArea(name: "Auckland / Kermadec", url: URL(string: "https://fishnz.space/?area=auckland-kermadec")!),
+    FishingRulesArea(name: "Central", url: URL(string: "https://fishnz.space/?area=central")!),
+    FishingRulesArea(name: "Challenger", url: URL(string: "https://fishnz.space/?area=challenger")!),
+    FishingRulesArea(name: "South-East", url: URL(string: "https://fishnz.space/?area=south-east")!),
+    FishingRulesArea(name: "Southland", url: URL(string: "https://fishnz.space/?area=southland")!),
+    FishingRulesArea(name: "Kaikōura", url: URL(string: "https://fishnz.space/?area=kaikoura")!),
+    FishingRulesArea(name: "Chatham Rise", url: URL(string: "https://fishnz.space/?area=chatham-rise")!),
+    FishingRulesArea(name: "Fiordland", url: URL(string: "https://fishnz.space/?area=fiordland")!)
 ]
 
 struct RulesView: View {
