@@ -84,50 +84,160 @@ struct AccountView: View {
     @State private var createAccount = true
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
     @State private var displayName = ""
     @State private var countryCode = "NZ"
     @State private var category = "general"
     @State private var message = ""
     @State private var rating = 5
 
+    private var passwordsMatch: Bool { !confirmPassword.isEmpty && password == confirmPassword }
+    private var canSubmit: Bool {
+        guard !vm.accountBusy, !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        if createAccount { return password.count >= 10 && passwordsMatch }
+        return !password.isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Your CatchCheck account").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                    if let notice = vm.accountNotice { Text(notice).foregroundStyle(CatchCheckColor.navy).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 10)) }
-                    if let error = vm.accountError { Text(error).foregroundStyle(.red).font(.callout) }
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "person.crop.circle.fill.badge.checkmark")
+                            .font(.system(size: 34, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 62, height: 62)
+                            .background(CatchCheckColor.navy, in: RoundedRectangle(cornerRadius: 20))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("CATCHCHECK NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(CatchCheckColor.orange)
+                            Text(vm.account == nil ? "Your fishing account" : "Welcome back")
+                                .font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    if vm.account == nil {
+                        Text("Save your profile, share feedback, and manage your CatchCheck features in one place.")
+                            .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let notice = vm.accountNotice {
+                        Label(notice, systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
+                            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    if let error = vm.accountError {
+                        Label(error, systemImage: "exclamationmark.circle.fill")
+                            .font(.subheadline).foregroundStyle(.red)
+                            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    }
                     if let account = vm.account {
                         Card(background: CatchCheckColor.seafoam) {
-                            Text("\(account.plan.capitalized) plan").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
-                            Text(vm.fishIdentityAvailable ? "Fish identification is included." : "Basic tools are available. Paid access is currently enabled by the CatchCheck team.").font(.subheadline)
+                            Label("\(account.plan.capitalized) plan", systemImage: "checkmark.seal.fill").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+                            Text(vm.fishIdentityAvailable ? "Fish identification is included with your plan." : "Your core fishing tools are ready to use.").font(.subheadline).foregroundStyle(.secondary)
                         }
-                        Text("Profile").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                        Text(account.email).foregroundStyle(.secondary)
-                        TextField("Name", text: $displayName).textFieldStyle(.roundedBorder).textContentType(.name)
-                        TextField("Country code", text: $countryCode).textFieldStyle(.roundedBorder).textInputAutocapitalization(.characters).onChange(of: countryCode) { _, value in countryCode = String(value.uppercased().prefix(2)) }
-                        Button("Save profile") { vm.saveAccountProfile(displayName: displayName, countryCode: countryCode) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.accountBusy)
-                        Divider().padding(.vertical, 4)
-                        Text("Send feedback").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                        Picker("Type", selection: $category) { Text("General").tag("general"); Text("Report a problem").tag("bug"); Text("Idea").tag("idea") }.pickerStyle(.menu)
-                        TextField("Tell us what you think", text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
-                        Picker("Rating", selection: $rating) { ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) } }.pickerStyle(.segmented)
-                        Button("Send feedback") { vm.sendFeedback(category: category, message: message, rating: rating); message = "" }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
-                        Button("Sign out", role: .destructive) { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity, alignment: .center).padding(.top, 6)
+                        accountSection("Profile", subtitle: account.email, icon: "person.text.rectangle") {
+                            AccountInput(icon: "person") { TextField("Name", text: $displayName).textContentType(.name) }
+                            AccountInput(icon: "globe") {
+                                TextField("Country code", text: $countryCode).textInputAutocapitalization(.characters)
+                                    .onChange(of: countryCode) { _, value in countryCode = String(value.uppercased().prefix(2)) }
+                            }
+                            Button { vm.saveAccountProfile(displayName: displayName, countryCode: countryCode) } label: {
+                                Label(vm.accountBusy ? "Saving…" : "Save profile", systemImage: "checkmark")
+                                    .frame(maxWidth: .infinity)
+                            }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.accountBusy)
+                        }
+                        accountSection("Send feedback", subtitle: "Help us make fishing trips better.", icon: "bubble.left.and.bubble.right") {
+                            Picker("Type", selection: $category) { Text("General").tag("general"); Text("Report a problem").tag("bug"); Text("Idea").tag("idea") }.pickerStyle(.menu)
+                            TextField("Tell us what you think", text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
+                            Picker("Rating", selection: $rating) { ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) } }.pickerStyle(.segmented)
+                            Button { vm.sendFeedback(category: category, message: message, rating: rating); message = "" } label: {
+                                Label(vm.accountBusy ? "Sending…" : "Send feedback", systemImage: "paperplane.fill")
+                                    .frame(maxWidth: .infinity)
+                            }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
+                        }
+                        Button("Sign out", role: .destructive) { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
                     } else {
                         if vm.verificationPending {
                             Card(background: CatchCheckColor.seafoam) {
-                                Text("Check your inbox").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                                Text("Open the confirmation email before signing in. The link expires after 24 hours.").font(.subheadline)
+                                Label("Check your inbox", systemImage: "envelope.badge")
+                                    .font(.headline).foregroundStyle(CatchCheckColor.navy)
+                                Text("Open the confirmation email before signing in. The link expires after 24 hours.").font(.subheadline).foregroundStyle(.secondary)
                                 Button("Resend confirmation email") { vm.resendVerification(email: email) }.disabled(vm.accountBusy)
                             }
                         }
-                        Picker("Account", selection: $createAccount) { Text("Create account").tag(true); Text("Sign in").tag(false) }.pickerStyle(.segmented)
-                        if createAccount { TextField("Name (optional)", text: $displayName).textContentType(.name).textFieldStyle(.roundedBorder) }
-                        TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-                        SecureField("Password · at least 10 characters", text: $password).textContentType(createAccount ? .newPassword : .password).textFieldStyle(.roundedBorder)
-                        Button(vm.accountBusy ? "Please wait…" : createAccount ? "Create account" : "Sign in") { vm.signIn(email: email, password: password, displayName: displayName, createAccount: createAccount); password = "" }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.accountBusy || email.isEmpty || password.isEmpty)
-                        if !createAccount || vm.verificationPending || vm.accountError != nil { Button("Resend confirmation email") { vm.resendVerification(email: email) }.disabled(vm.accountBusy || email.isEmpty) }
+                        VStack(alignment: .leading, spacing: 18) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "lock.shield.fill").foregroundStyle(CatchCheckColor.orange)
+                                Text("Secure access").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                            }
+                            Text("Create an account or sign in to manage your CatchCheck profile.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Picker("Account", selection: $createAccount) {
+                                Text("Create account").tag(true)
+                                Text("Sign in").tag(false)
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: createAccount) { _, _ in password = ""; confirmPassword = "" }
+                            VStack(spacing: 12) {
+                                if createAccount {
+                                    AccountInput(icon: "person") { TextField("Name (optional)", text: $displayName).textContentType(.name) }
+                                }
+                                AccountInput(icon: "envelope") {
+                                    TextField("Email address", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress)
+                                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                }
+                                AccountInput(icon: "lock") {
+                                    SecureField(createAccount ? "Password · 10+ characters" : "Password", text: $password)
+                                        .textContentType(createAccount ? .newPassword : .password)
+                                }
+                                if createAccount {
+                                    AccountInput(icon: passwordsMatch ? "checkmark.lock" : "lock.rotation") {
+                                        SecureField("Confirm password", text: $confirmPassword).textContentType(.newPassword)
+                                    }
+                                    if !confirmPassword.isEmpty {
+                                        Label(passwordsMatch ? "Passwords match" : "Passwords don’t match",
+                                              systemImage: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(passwordsMatch ? CatchCheckColor.navy : .red)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    if !password.isEmpty && password.count < 10 {
+                                        Text("Use at least 10 characters for your password.")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                            Button {
+                                vm.signIn(email: email, password: password, displayName: displayName, createAccount: createAccount)
+                                password = ""
+                                confirmPassword = ""
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    if vm.accountBusy { ProgressView().tint(.white) }
+                                    Text(vm.accountBusy ? "Please wait…" : createAccount ? "Create my account" : "Sign in")
+                                    Image(systemName: "arrow.right")
+                                    Spacer()
+                                }.font(.headline).padding(.vertical, 5)
+                            }
+                            .buttonStyle(.borderedProminent).tint(CatchCheckColor.navy)
+                            .disabled(!canSubmit)
+                            if !createAccount || vm.verificationPending || vm.accountError != nil {
+                                Button("Resend confirmation email") { vm.resendVerification(email: email) }
+                                    .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy || email.isEmpty)
+                            }
+                        }
+                        .padding(20)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 24))
+                        .overlay(RoundedRectangle(cornerRadius: 24).stroke(CatchCheckColor.navy.opacity(0.07), lineWidth: 1))
+                        .shadow(color: CatchCheckColor.navy.opacity(0.06), radius: 18, y: 8)
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "lock.fill").foregroundStyle(CatchCheckColor.navy)
+                            Text("Your password is protected. We never store it as plain text.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.padding(.horizontal, 4)
                     }
                 }.padding(20)
             }
@@ -136,6 +246,38 @@ struct AccountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: vm.account) { _, value in if let value { displayName = value.displayName; countryCode = value.countryCode; email = value.email } }
         }
+    }
+
+    private func accountSection<Content: View>(_ title: String, subtitle: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: icon).foregroundStyle(CatchCheckColor.navy).frame(width: 38, height: 38).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            content()
+        }
+        .padding(18)
+        .background(.white, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(CatchCheckColor.navy.opacity(0.07), lineWidth: 1))
+    }
+}
+
+private struct AccountInput<Content: View>: View {
+    let icon: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(CatchCheckColor.navy.opacity(0.65)).frame(width: 22)
+            content
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .background(CatchCheckColor.cream, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).stroke(CatchCheckColor.navy.opacity(0.09), lineWidth: 1))
     }
 }
 
