@@ -36,7 +36,6 @@ jobs:
       - name: Prepare temporary app configuration
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
@@ -62,10 +61,7 @@ jobs:
           JSON
           fi
 
-          {
-            printf 'MAPS_API_KEY=%s\n' "$MAPS_API_KEY"
-            printf 'FISH_ID_API_BASE_URL=https://fishing.fishnz.space\n'
-          } > secrets.properties
+          printf 'FISH_ID_API_BASE_URL=https://fishing.fishnz.space\n' > secrets.properties
 
       - name: Build debug APK
         run: ./gradlew --no-daemon :app:assembleDebug
@@ -95,7 +91,7 @@ jobs:
             echo
             echo "[Download the APK from Releases]($RELEASE_URL)"
             echo
-            echo 'This is an automated debug build. Without the optional GitHub Actions secrets GOOGLE_SERVICES_JSON and MAPS_API_KEY, the APK uses CI-only Firebase configuration and Google Maps will not load.'
+            echo 'This is an automated debug build. Without GOOGLE_SERVICES_JSON, the APK uses CI-only Firebase configuration. The fishing map does not require a Google Maps API key.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove temporary app configuration

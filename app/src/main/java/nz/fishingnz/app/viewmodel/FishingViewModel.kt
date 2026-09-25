@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.FishingRepository
+import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.model.*
 import java.time.LocalDate
@@ -33,13 +34,15 @@ data class FishingUiState(
     val fishPhoto: Uri? = null, val fishCheck: FishCheck? = null, val fishChecking: Boolean = false, val fishError: String? = null, val savedSpots: Set<String> = emptySet(), val activeTrip: Recommendation? = null,
     val selectedSpot: Recommendation? = null, val showResults: Boolean = false, val recommendationSearch: RecommendationSearch? = null,
     val recommendationsLoading: Boolean = false, val recommendationsError: String? = null, val savedRecommendations: List<Recommendation> = emptyList(),
-    val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false
+    val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountLoading: Boolean = true,
+    val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false
 )
 
 class FishingViewModel(private val repository: FishingRepository = FishingRepository()) : ViewModel() {
     private val recommendationEngine = RecommendationEngine()
     private var recommendationJob: Job? = null
     private var tideJob: Job? = null
+    private var accountVersion = 0
     private val _state = MutableStateFlow(FishingUiState())
     val state: StateFlow<FishingUiState> = _state.asStateFlow()
     init { refreshStationTide(); refreshAccount() }
@@ -163,7 +166,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val query = _state.value
         if (query.originName == null) {
             _state.value = query.copy(locating = false, recommendationsLoading = false,
-                recommendationsError = "Device location is unavailable. Choose a city below to search nearby fishing areas.", recommendationSearch = null)
+                recommendationsError = "Choose a city below to search nearby fishing areas.", recommendationSearch = null)
             return
         }
         _state.value = query.copy(recommendationsLoading = true, recommendationsError = null, recommendationSearch = null)
@@ -184,20 +187,45 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         viewModelScope.launch { runCatching { repository.identifyFish(image, point, hasDeviceLocation) }.onSuccess { _state.value = _state.value.copy(fishCheck = it, fishChecking = false) }.onFailure { _state.value = _state.value.copy(fishChecking = false, fishError = it.message ?: "Could not identify this photo.") } }
     }
     fun refreshAccount() {
+        val version = accountVersion
+        _state.value = _state.value.copy(accountLoading = true, accountError = null)
         viewModelScope.launch {
-            val account = repository.currentAccount()
-            _state.value = _state.value.copy(account = account)
-            if (account != null) runCatching { repository.trackEvent("app_opened", null, "android") }
+            try {
+                val account = repository.currentAccount()
+                if (version != accountVersion) return@launch
+                _state.value = _state.value.copy(account = account, accountLoading = false)
+                if (account != null) runCatching { repository.trackEvent("app_opened", null, "android") }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountLoading = false,
+                    accountError = "Could not check your account. Check your connection and try again.")
+            }
         }
     }
     fun signIn(email: String, password: String, displayName: String, createAccount: Boolean) {
-        _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
-        if (createAccount) viewModelScope.launch { runCatching { repository.createAccount(email, password, displayName) }
-            .onSuccess { _state.value = _state.value.copy(accountBusy = false, verificationPending = true, accountError = null, accountNotice = it) }
-            .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not create account.") } }
-        else viewModelScope.launch { runCatching { repository.signIn(email, password, null, false) }
-            .onSuccess { _state.value = _state.value.copy(account = it, accountBusy = false, verificationPending = false, accountError = null, accountNotice = "You’re signed in.") }
-            .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not sign in.") } }
+        val version = ++accountVersion
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                if (createAccount) {
+                    val notice = repository.createAccount(email, password, displayName)
+                    if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                        verificationPending = true, accountNotice = notice)
+                } else {
+                    val account = repository.signIn(email, password)
+                    if (version == accountVersion) _state.value = _state.value.copy(account = account,
+                        accountBusy = false, verificationPending = false, accountError = null, accountNotice = "You’re signed in.")
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    verificationPending = _state.value.verificationPending || (error as? AccountRequestException)?.code in
+                        setOf("email_not_verified", "email_delivery_failed"),
+                    accountError = error.message ?: if (createAccount) "Could not create account." else "Could not sign in.")
+            }
+        }
     }
     fun resendVerification(email: String) {
         _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
@@ -206,8 +234,20 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not send the confirmation email.") } }
     }
     fun signOut() {
-        _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
-        viewModelScope.launch { repository.signOut(); _state.value = _state.value.copy(account = null, accountBusy = false, accountNotice = "You’re signed out.") }
+        val version = ++accountVersion
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                repository.signOut()
+                if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
+                    verificationPending = false, accountNotice = "You’re signed out.")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    accountError = error.message ?: "Could not sign out. Please try again.")
+            }
+        }
     }
     fun saveAccountProfile(displayName: String, countryCode: String) {
         _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)

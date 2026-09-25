@@ -41,7 +41,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var selectedTab = 0 {
         didSet {
             guard oldValue != selectedTab else { return }
-            let features = ["home", "map", "tide", "trip_planning", "fishing_rules", "account"]
+            let features = ["home", "map", "tide", "fishing_rules", "account"]
             guard features.indices.contains(selectedTab) else { return }
             Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
         }
@@ -85,6 +85,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var account: AccountProfile?
     @Published var fishIdentityAvailable = false
     @Published var accountBusy = false
+    @Published var accountLoading = true
+    @Published var accountLoadFailed = false
     @Published var accountError: String?
     @Published var accountNotice: String?
     @Published var verificationPending = false
@@ -98,6 +100,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private var locationRequestID = UUID()
     private var tideTask: Task<Void, Never>?
     private var tideRequestID = UUID()
+    private var accountRequestVersion = 0
 
     var latestSelectableDate: Date {
         Calendar.current.date(byAdding: .day, value: 15, to: Calendar.current.startOfDay(for: .now)) ?? .now
@@ -448,28 +451,49 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }
     func refreshAccount() {
+        let version = accountRequestVersion
+        accountLoading = true
+        accountLoadFailed = false
+        accountError = nil
         Task {
             do {
                 let snapshot = try await repository.currentAccount()
+                guard version == accountRequestVersion else { return }
                 account = snapshot?.user
                 fishIdentityAvailable = snapshot?.permissions?.features.fishIdentity ?? false
+                accountLoading = false
                 if snapshot != nil { await repository.trackEvent("app_opened", feature: nil, platform: "ios") }
-            } catch { account = nil; fishIdentityAvailable = false }
+            } catch {
+                guard version == accountRequestVersion else { return }
+                accountLoading = false
+                accountLoadFailed = true
+                accountError = "Could not check your account. Check your connection and try again."
+            }
         }
     }
-    func signIn(email: String, password: String, displayName: String, createAccount: Bool) {
+    func signIn(email: String, password: String, displayName: String, createAccount: Bool) async -> Bool {
+        accountRequestVersion += 1
+        accountLoading = false
+        accountLoadFailed = false
         accountBusy = true; accountError = nil; accountNotice = nil
-        Task {
-            do {
-                if createAccount {
-                    accountNotice = try await repository.createAccount(email: email, password: password, displayName: displayName)
-                    verificationPending = true
-                } else {
-                    let snapshot = try await repository.registerOrLogin(email: email, password: password)
-                    account = snapshot.user; fishIdentityAvailable = snapshot.permissions?.features.fishIdentity ?? false; accountNotice = "You’re signed in."; verificationPending = false
-                }
-            } catch { accountError = error.localizedDescription }
+        do {
+            if createAccount {
+                accountNotice = try await repository.createAccount(email: email, password: password, displayName: displayName)
+                verificationPending = true
+            } else {
+                let snapshot = try await repository.registerOrLogin(email: email, password: password)
+                account = snapshot.user; fishIdentityAvailable = snapshot.permissions?.features.fishIdentity ?? false; accountNotice = "You’re signed in."; verificationPending = false
+            }
             accountBusy = false
+            return true
+        } catch {
+            accountError = error.localizedDescription
+            if let apiError = error as? AccountAPIError,
+               apiError.code == "email_not_verified" || apiError.code == "email_delivery_failed" {
+                verificationPending = true
+            }
+            accountBusy = false
+            return false
         }
     }
     func resendVerification(email: String) {
@@ -488,15 +512,23 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             accountBusy = false
         }
     }
-    func sendFeedback(category: String, message: String, rating: Int) {
+    func sendFeedback(category: String, message: String, rating: Int) async -> Bool {
         accountBusy = true; accountError = nil; accountNotice = nil
-        Task {
-            do { try await repository.sendFeedback(category: category, message: message, rating: rating); accountNotice = "Thanks for your feedback." }
-            catch { accountError = error.localizedDescription }
+        do {
+            try await repository.sendFeedback(category: category, message: message, rating: rating)
+            accountNotice = "Thanks for your feedback."
             accountBusy = false
+            return true
+        } catch {
+            accountError = error.localizedDescription
+            accountBusy = false
+            return false
         }
     }
     func signOut() {
+        accountRequestVersion += 1
+        accountLoadFailed = false
+        accountLoading = false
         accountBusy = true; accountError = nil; accountNotice = nil
         Task { await repository.signOut(); account = nil; fishIdentityAvailable = false; verificationPending = false; accountBusy = false; accountNotice = "You’re signed out." }
     }

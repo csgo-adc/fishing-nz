@@ -17,9 +17,8 @@ struct CatchCheckRootView: View {
             HomeView().tabItem { Label("Home", systemImage: "location.north.fill") }.tag(0)
             FishingMapView().tabItem { Label("Map", systemImage: "map.fill") }.tag(1)
             TideForecastView().tabItem { Label("Tide", systemImage: "water.waves") }.tag(2)
-            TripsView().tabItem { Label("Trips", systemImage: "calendar") }.tag(3)
-            RulesView().tabItem { Label("Rules", systemImage: "book.closed.fill") }.tag(4)
-            AccountView().tabItem { Label("Account", systemImage: "person.crop.circle") }.tag(5)
+            RulesView().tabItem { Label("Rules", systemImage: "book.closed.fill") }.tag(3)
+            AccountView().tabItem { Label("Account", systemImage: "person.crop.circle") }.tag(4)
         }
         .tint(CatchCheckColor.navy)
         .sheet(isPresented: $vm.showingResults) { ResultsView() }
@@ -31,12 +30,22 @@ struct HomeView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
+    @State private var showingTrips = false
     private let radii = [10, 30, 50, 100, 200, 300, 400, 500]
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 3) { Text("Kia ora").foregroundStyle(.secondary); Text("Plan your next catch").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy) }
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Kia ora").foregroundStyle(.secondary)
+                            Text("Plan your next catch").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                        }
+                        Spacer(minLength: 0)
+                        Button { showingTrips = true } label: { Label("Trips", systemImage: "bookmark.fill") }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Open saved trips")
+                    }
                     Card(background: CatchCheckColor.navy) {
                         Text("What are you fishing for?").font(.title3.bold()).foregroundStyle(.white)
                         Picker("Fishing type", selection: $vm.isBoatFishing) { Text("Land fishing").tag(false); Text("Boat fishing").tag(true) }.pickerStyle(.segmented).padding(.top, 6)
@@ -111,6 +120,7 @@ struct HomeView: View {
                     }
                 }.padding(20)
             }.background(CatchCheckColor.cream)
+            .sheet(isPresented: $showingTrips) { TripsView() }
         }
     }
 }
@@ -128,8 +138,8 @@ private struct FishIdentifierView: View {
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack { Button { showCamera = true } label: { Label("Take photo", systemImage: "camera") }.buttonStyle(.bordered).frame(maxWidth: .infinity); PhotosPicker(selection: $photoItem, matching: .images) { Label(galleryLabel, systemImage: "photo") }.buttonStyle(.bordered).frame(maxWidth: .infinity) }
-            Button { if vm.fishIdentityAvailable { vm.identifyFish() } else { vm.selectedTab = 5 } } label: { Label(vm.fishIdentityAvailable ? "Identify fish" : "Sign in for fish ID", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.selectedPhoto == nil || vm.isCheckingFish)
-            if !vm.fishIdentityAvailable { Text(vm.account == nil ? "Create an account or sign in, then choose the paid plan for fish identification." : "Fish identification is included with the paid plan.").font(.caption).foregroundStyle(.secondary) }
+            Button { if vm.fishIdentityAvailable { vm.identifyFish() } else { vm.selectedTab = 4 } } label: { Label(vm.fishIdentityAvailable ? "Identify fish" : "Check fish ID access", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(vm.isCheckingFish || (vm.fishIdentityAvailable && vm.selectedPhoto == nil))
+            if !vm.fishIdentityAvailable { Text(vm.account == nil ? "Sign in to check whether your account has fish identification access." : "Fish identification requires paid access, currently enabled by the CatchCheck team.").font(.caption).foregroundStyle(.secondary) }
             Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
         }
         .onChange(of: photoItem) { _, item in Task { guard let data = try? await item?.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }; vm.selectedPhoto = image; vm.fishCheck = nil } }
@@ -139,7 +149,7 @@ private struct FishIdentifierView: View {
 
 struct AccountView: View {
     @EnvironmentObject private var vm: FishingViewModel
-    @State private var createAccount = true
+    @State private var createAccount = false
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -150,8 +160,12 @@ struct AccountView: View {
     @State private var rating = 5
 
     private var passwordsMatch: Bool { !confirmPassword.isEmpty && password == confirmPassword }
+    private var isEmailValid: Bool {
+        email.trimmingCharacters(in: .whitespacesAndNewlines)
+            .range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
+    }
     private var canSubmit: Bool {
-        guard !vm.accountBusy, !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard !vm.accountBusy, isEmailValid else { return false }
         if createAccount { return password.count >= 10 && passwordsMatch }
         return !password.isEmpty
     }
@@ -189,7 +203,13 @@ struct AccountView: View {
                             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
                     }
-                    if let account = vm.account {
+                    if vm.accountLoadFailed {
+                        Button("Check account again") { vm.refreshAccount() }
+                            .buttonStyle(.bordered)
+                    }
+                    if vm.accountLoading {
+                        Card { ProgressView("Checking your account…") }
+                    } else if let account = vm.account {
                         Card(background: CatchCheckColor.seafoam) {
                             Label("\(account.plan.capitalized) plan", systemImage: "checkmark.seal.fill").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
                             Text(vm.fishIdentityAvailable ? "Fish identification is included with your plan." : "Your core fishing tools are ready to use.").font(.subheadline).foregroundStyle(.secondary)
@@ -209,7 +229,14 @@ struct AccountView: View {
                             Picker("Type", selection: $category) { Text("General").tag("general"); Text("Report a problem").tag("bug"); Text("Idea").tag("idea") }.pickerStyle(.menu)
                             TextField("Tell us what you think", text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
                             Picker("Rating", selection: $rating) { ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) } }.pickerStyle(.segmented)
-                            Button { vm.sendFeedback(category: category, message: message, rating: rating); message = "" } label: {
+                            Button {
+                                let submittedMessage = message
+                                Task { @MainActor in
+                                    if await vm.sendFeedback(category: category, message: submittedMessage, rating: rating), message == submittedMessage {
+                                        message = ""
+                                    }
+                                }
+                            } label: {
                                 Label(vm.accountBusy ? "Sending…" : "Send feedback", systemImage: "paperplane.fill")
                                     .frame(maxWidth: .infinity)
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
@@ -221,7 +248,7 @@ struct AccountView: View {
                                 Label("Check your inbox", systemImage: "envelope.badge")
                                     .font(.headline).foregroundStyle(CatchCheckColor.navy)
                                 Text("Open the confirmation email before signing in. The link expires after 24 hours.").font(.subheadline).foregroundStyle(.secondary)
-                                Button("Resend confirmation email") { vm.resendVerification(email: email) }.disabled(vm.accountBusy)
+                                Button("Resend confirmation email") { vm.resendVerification(email: email) }.disabled(vm.accountBusy || !isEmailValid)
                             }
                         }
                         VStack(alignment: .leading, spacing: 18) {
@@ -268,9 +295,12 @@ struct AccountView: View {
                                 }
                             }
                             Button {
-                                vm.signIn(email: email, password: password, displayName: displayName, createAccount: createAccount)
-                                password = ""
-                                confirmPassword = ""
+                                Task { @MainActor in
+                                    if await vm.signIn(email: email, password: password, displayName: displayName, createAccount: createAccount) {
+                                        password = ""
+                                        confirmPassword = ""
+                                    }
+                                }
                             } label: {
                                 HStack {
                                     Spacer()
@@ -282,9 +312,9 @@ struct AccountView: View {
                             }
                             .buttonStyle(.borderedProminent).tint(CatchCheckColor.navy)
                             .disabled(!canSubmit)
-                            if !createAccount || vm.verificationPending || vm.accountError != nil {
+                            if !vm.verificationPending && vm.accountError != nil {
                                 Button("Resend confirmation email") { vm.resendVerification(email: email) }
-                                    .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy || email.isEmpty)
+                                    .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy || !isEmailValid)
                             }
                         }
                         .padding(20)
@@ -303,6 +333,7 @@ struct AccountView: View {
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: vm.account) { _, value in if let value { displayName = value.displayName; countryCode = value.countryCode; email = value.email } }
+            .onChange(of: vm.verificationPending) { _, pending in if pending { createAccount = false } }
         }
     }
 
@@ -435,6 +466,7 @@ private struct SearchPlaceMenu: View {
 
 struct SpotDetailView: View {
     @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
     let spot: Recommendation
     var body: some View {
         NavigationStack {
@@ -456,13 +488,13 @@ struct SpotDetailView: View {
                         Card { Text("Search from Home to see a live forecast score for this spot.").foregroundStyle(.secondary) }
                     }
                     Button(vm.savedSpotNames.contains(spot.id) ? "Remove saved spot" : "Save spot") { vm.toggleSaved(spot) }.buttonStyle(.bordered).frame(maxWidth: .infinity)
-                    Button("Start fishing trip") { vm.startTrip(spot) }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).frame(maxWidth: .infinity)
+                    Button("Start fishing trip") { vm.startTrip(spot); dismiss() }.buttonStyle(.borderedProminent).tint(CatchCheckColor.navy).frame(maxWidth: .infinity)
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
             .navigationTitle("Spot details")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.selectedSpot = nil } } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.selectedSpot = nil; dismiss() } } }
         }
     }
 }

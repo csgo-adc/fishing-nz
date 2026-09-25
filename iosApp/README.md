@@ -8,4 +8,4 @@ Before distribution, select an Apple Developer team in Xcode's Signing & Capabil
 
 ## Code-sharing boundary
 
-`Models`, the spot/rule catalogue, scoring logic, and API contracts should become a Kotlin Multiplatform `shared` module once both apps move beyond this first iOS release. The SwiftUI/Compose views and platform integrations (MapKit vs Google Maps, camera, location permissions and Firebase) should remain platform-native.
+`Models`, the spot/rule catalogue, scoring logic, and API contracts should become a Kotlin Multiplatform `shared` module once both apps move beyond this first iOS release. The SwiftUI/Compose views and platform integrations (MapKit vs MapLibre, camera, location permissions and Firebase) should remain platform-native.

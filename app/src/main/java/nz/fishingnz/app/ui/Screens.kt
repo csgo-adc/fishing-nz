@@ -46,6 +46,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -61,15 +63,6 @@ import androidx.camera.view.PreviewView
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
 import nz.fishingnz.app.model.*
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
@@ -96,10 +89,18 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
         else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { Spacer(Modifier.height(18.dp)); Text("Kia ora, Alex", color = Color.Gray); Text("Plan your next catch", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy) }
-        item { Card(colors = CardDefaults.cardColors(Navy), shape = RoundedCornerShape(24.dp)) { Column(Modifier.padding(20.dp)) { Text("What are you fishing for?", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land fishing") }); FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat fishing") }) }; Text(s.originName?.let { "Searching from $it" } ?: "Search with device location or choose a city", color = Color.White.copy(.8f), modifier = Modifier.padding(top = 12.dp)) } } }
+        item { Spacer(Modifier.height(18.dp)); Text(s.account?.user?.displayName?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }?.let { "Kia ora, $it" } ?: "Kia ora", color = Color.Gray); Text("Plan your next catch", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy) }
+        item { Card(colors = CardDefaults.cardColors(Navy), shape = RoundedCornerShape(24.dp)) { Column(Modifier.padding(20.dp)) { Text("What are you fishing for?", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val chipColors = FilterChipDefaults.filterChipColors(containerColor = Color.Transparent, labelColor = Color.White, selectedContainerColor = Seafoam, selectedLabelColor = Navy)
+            FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, colors = chipColors, label = { Text("Land fishing") })
+            FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, colors = chipColors, label = { Text("Boat fishing") })
+        }; Text(s.originName?.let { "Searching from $it" } ?: "Search with device location or choose a city", color = Color.White.copy(.8f), modifier = Modifier.padding(top = 12.dp))
+            TextButton(onClick = { vm.showResults() }, colors = ButtonDefaults.textButtonColors(contentColor = Seafoam)) {
+                Text(if (s.originName == null) "Choose a city →" else "Change city →")
+            }
+        } } }
         item { RecommendationFilters(s, vm) }
-        item { ActionCard("Find the best time", "See the best forecast window near you", { search() }); Spacer(Modifier.height(2.dp)); ActionCard("Find the best location", "Rank nearby spots by forecast and distance", { search() }, true) }
+        item { ActionCard("Find fishing windows", "Compare nearby spots and their best forecast times", { search() }) }
         item { FishIdentifierCard(s, picker, vm) }
         item { Text("Quick forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
         item { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -227,7 +228,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Take photo") }; OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(4.dp)); Text(if (s.fishPhoto == null) "Choose photo" else "Gallery") } }
-        Button(enabled = s.fishPhoto != null && !s.fishChecking, onClick = {
+        Button(enabled = !s.fishChecking && (s.account?.fishIdentity != true || s.fishPhoto != null), onClick = {
             if (s.account?.fishIdentity != true) vm.selectTab(5)
             else s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { input ->
                     BitmapFactory.decodeStream(input)?.let { bitmap ->
@@ -236,8 +237,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
                         identifyAtCurrentLocation(output.toByteArray())
                     }
                 } }
-        }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text(if (s.account?.fishIdentity == true) "Identify fish" else "Sign in for fish ID") }
-        if (s.account?.fishIdentity != true) Text(if (s.account == null) "Create an account or sign in, then choose the paid plan for fish identification." else "Fish identification is included with the paid plan.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text(if (s.account?.fishIdentity == true) "Identify fish" else "Check fish ID access") }
+        if (s.account?.fishIdentity != true) Text(if (s.account == null) "Sign in to check whether your account has fish identification access." else "Fish identification requires paid access, currently enabled by the CatchCheck team.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
     } }
     if (showCamera) Dialog(onDismissRequest = { showCamera = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -250,28 +251,59 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     var password by rememberSaveable { mutableStateOf("") }
     var displayName by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf("NZ") }
-    var createAccount by rememberSaveable { mutableStateOf(true) }
+    var createAccount by rememberSaveable { mutableStateOf(false) }
     var category by rememberSaveable { mutableStateOf("general") }
     var message by rememberSaveable { mutableStateOf("") }
     var rating by rememberSaveable { mutableIntStateOf(5) }
+    var submittedFeedback by remember { mutableStateOf<String?>(null) }
+    val validEmail = remember(email) { android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() }
+    val validPassword = password.isNotBlank() && (!createAccount || password.length >= 10)
     LaunchedEffect(s.account) {
         s.account?.let { displayName = it.user.displayName; countryCode = it.user.countryCode; email = it.user.email }
     }
+    LaunchedEffect(s.verificationPending, s.account) {
+        if (s.verificationPending || s.account != null) {
+            createAccount = false
+            password = ""
+        }
+    }
+    LaunchedEffect(s.accountBusy, s.accountNotice, s.accountError) {
+        if (!s.accountBusy && submittedFeedback != null) {
+            if (s.accountNotice == "Thanks for your feedback." && message == submittedFeedback) message = ""
+            submittedFeedback = null
+        }
+    }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-        s.accountNotice?.let { Text(it, color = Navy) }
-        s.accountError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (s.account == null) {
-            if (s.verificationPending) Card(colors = CardDefaults.cardColors(Seafoam)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Check your inbox", color = Navy, fontWeight = FontWeight.Bold); Text("Open the confirmation email before signing in. The link expires after 24 hours.", color = Navy); OutlinedButton(enabled = !s.accountBusy, onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") } } }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = createAccount, onClick = { createAccount = true }, label = { Text("Create account") })
-                FilterChip(selected = !createAccount, onClick = { createAccount = false }, label = { Text("Sign in") })
+        Text("Save your details, share feedback, and check your CatchCheck features.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+        s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
+        s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                Text(it, color = MaterialTheme.colorScheme.error)
+                if (s.account == null && it.startsWith("Could not check your account")) TextButton(onClick = vm::refreshAccount) { Text("Retry account check") }
             }
-            if (createAccount) OutlinedTextField(displayName, { displayName = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(password, { password = it }, label = { Text("Password") }, supportingText = { Text(if (createAccount) "At least 10 characters" else "Enter your password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-            Button(enabled = !s.accountBusy && email.isNotBlank() && password.isNotBlank(), onClick = { vm.signIn(email, password, displayName, createAccount); password = "" }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in") }
-            if (!createAccount || s.verificationPending || s.accountError != null) TextButton(enabled = !s.accountBusy && email.isNotBlank(), onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") }
+        } }
+        if (s.account == null && s.accountLoading) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(12.dp))
+                Text("Checking your account…", color = Navy)
+            }
+        } else if (s.account == null) {
+            if (s.verificationPending) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Check your inbox", color = Navy, fontWeight = FontWeight.Bold); Text("Open the confirmation email, then sign in. The link expires after 24 hours.", color = Navy); OutlinedButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") } } }
+            Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Secure access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                Text("Create an account or sign in to manage your profile.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = createAccount, onClick = { createAccount = true }, label = { Text("Create account") })
+                    FilterChip(selected = !createAccount, onClick = { createAccount = false }, label = { Text("Sign in") })
+                }
+                if (createAccount) OutlinedTextField(displayName, { displayName = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(password, { password = it }, label = { Text("Password") }, supportingText = { Text(if (createAccount) "At least 10 characters" else "Enter your password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                Button(enabled = !s.accountBusy && validEmail && validPassword, onClick = { vm.signIn(email.trim(), password, displayName, createAccount) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in") }
+                if (!createAccount && !s.verificationPending) TextButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email.trim()) }) { Text("Resend confirmation email") }
+            } }
         } else {
             Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("${s.account.user.plan.replaceFirstChar { it.uppercase() }} plan", color = Navy, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -291,8 +323,9 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
                 }
             }
             OutlinedTextField(message, { message = it.take(4000) }, label = { Text("Message") }, minLines = 4, modifier = Modifier.fillMaxWidth())
-            Row(verticalAlignment = Alignment.CenterVertically) { Text("Rating", color = Navy, modifier = Modifier.weight(1f)); (1..5).forEach { value -> FilterChip(selected = rating == value, onClick = { rating = value }, label = { Text(value.toString()) }, modifier = Modifier.padding(end = 3.dp)) } }
-            Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = { vm.sendFeedback(category, message, rating); message = "" }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else "Send feedback") }
+            Text("Rating", color = Navy, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { (1..5).forEach { value -> FilterChip(selected = rating == value, onClick = { rating = value }, label = { Text(value.toString()) }) } }
+            Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = { submittedFeedback = message; vm.sendFeedback(category, message, rating) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else "Send feedback") }
             OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
         }
     }
@@ -492,7 +525,33 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     }
 }
 
-@Composable fun TripsScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) { LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { item { Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy); Text("Saved spots and active plans", color = Color.Gray) }; s.activeTrip?.let { item { Card(colors = CardDefaults.cardColors(Seafoam)) { Column(Modifier.padding(16.dp)) { Text("Active trip", color = Navy, fontWeight = FontWeight.Bold); Text(it.name, style = MaterialTheme.typography.titleLarge, color = Navy); OutlinedButton({ vm.endTrip() }) { Text("End trip") } } } } }; item { Text("Saved spots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }; items(s.savedRecommendations) { RecommendationCard(it) { vm.openSpot(it) } } }
+@Composable fun TripsScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
+    LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+            Text("Saved spots and active plans", color = Color.Gray)
+        }
+        s.activeTrip?.let { trip -> item {
+            Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Active trip", color = Navy, fontWeight = FontWeight.Bold)
+                    Text(trip.name, style = MaterialTheme.typography.titleLarge, color = Navy)
+                    OutlinedButton(onClick = vm::endTrip) { Text("End trip") }
+                }
+            }
+        } }
+        item { Text("Saved spots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
+        if (s.savedRecommendations.isEmpty()) item {
+            Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("No saved spots yet", color = Navy, fontWeight = FontWeight.Bold)
+                    Text("Search for a fishing window, then save a spot to find it here.", color = Color.Gray)
+                    TextButton(onClick = { vm.selectTab(0) }) { Text("Find a spot") }
+                }
+            }
+        }
+        else items(s.savedRecommendations) { RecommendationCard(it) { vm.openSpot(it) } }
+    }
 }
 private data class FishingRulesArea(val name: String, val url: String)
 private val fishingRulesAreas = listOf(
@@ -531,56 +590,6 @@ private val fishingRulesAreas = listOf(
     }
 }
 @Composable private fun RuleCard(title: String, body: String) { Card(colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp)) { Text(title, color = Navy, fontWeight = FontWeight.Bold); Text(body, color = Color.DarkGray, modifier = Modifier.padding(top = 6.dp)) } } }
-@Composable fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
-    val context = LocalContext.current
-    var filter by remember { mutableStateOf("All") }
-    var mapLoaded by remember { mutableStateOf(false) }
-    var mapTimedOut by remember { mutableStateOf(false) }
-    var requestedPermission by rememberSaveable { mutableStateOf(false) }
-    val visibleSpots = fishingSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) }
-    val cameraState = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(LatLng(-41.2, 174.8), 5.1f) }
-    fun locate() { requestCurrentLocation(context, onLocation = { point -> vm.updateLocation(point); cameraState.move(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 13f)) }) }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true) locate()
-    }
-    LaunchedEffect(Unit) {
-        if (!requestedPermission) {
-            requestedPermission = true
-            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            if (fine || coarse) locate() else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-        }
-    }
-    LaunchedEffect(s.location, s.hasDeviceLocation) { if (s.hasDeviceLocation) cameraState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(s.location.latitude, s.location.longitude), 13f)) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(8_000)
-        if (!mapLoaded) mapTimedOut = true
-    }
-    Column(modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
-            Text("Fishing map", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-            Text("New Zealand spots · tap a marker to explore", color = Color.Gray)
-            Row(Modifier.padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("All", "Land", "Boat").forEach { option -> FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(if (option == "All") "All spots" else "$option fishing") }) }
-            }
-        }
-        Box(Modifier.fillMaxSize()) {
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(), cameraPositionState = cameraState,
-                properties = MapProperties(isBuildingEnabled = true), uiSettings = MapUiSettings(zoomControlsEnabled = true), onMapLoaded = { mapLoaded = true }
-            ) {
-                if (s.hasDeviceLocation) Marker(state = MarkerState(LatLng(s.location.latitude, s.location.longitude)), title = "Your location")
-                visibleSpots.forEach { spot -> Marker(state = MarkerState(LatLng(spot.latitude, spot.longitude)), title = spot.name, snippet = "${spot.area} · ${if (spot.boat) "Boat" else "Land"} area") }
-            }
-            IconButton(onClick = { locate() }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 112.dp).background(Color.White, CircleShape)) {
-                Icon(Icons.Default.NearMe, contentDescription = "Jump to my location", tint = Navy)
-            }
-            if (!mapLoaded) Card(Modifier.align(Alignment.Center).padding(18.dp), colors = CardDefaults.cardColors(Color.White)) {
-                Text(if (mapTimedOut) "Map tiles unavailable. Check the Google Maps Android API key and billing." else "Loading map…", Modifier.padding(16.dp), color = Navy)
-            }
-        }
-    }
-}
 @Composable fun TideScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
     val today = java.time.LocalDate.now(java.time.ZoneId.of("Pacific/Auckland"))
@@ -722,7 +731,7 @@ private val fishingRulesAreas = listOf(
     }
 }
 
-private fun requestCurrentLocation(context: android.content.Context, onLocation: (GeoPoint) -> Unit, onUnavailable: () -> Unit = {}) {
+internal fun requestCurrentLocation(context: android.content.Context, onLocation: (GeoPoint) -> Unit, onUnavailable: () -> Unit = {}) {
     try {
         val client = LocationServices.getFusedLocationProviderClient(context)
         fun useRecentCachedLocation() {

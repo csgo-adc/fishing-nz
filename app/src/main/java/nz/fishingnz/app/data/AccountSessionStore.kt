@@ -19,12 +19,15 @@ object AccountSessionStore {
     fun initialize(context: Context) { appContext = context.applicationContext }
 
     @Synchronized fun save(token: String) {
-        val context = appContext ?: return
+        require(token.isNotBlank()) { "Cannot save an empty account session." }
+        val context = appContext ?: error("Account storage is not ready. Please reopen the app and try again.")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val encrypted = cipher.iv + cipher.doFinal(token.toByteArray(Charsets.UTF_8))
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(TOKEN_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP)).apply()
+        check(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(TOKEN_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit()) {
+            "Could not save your account session. Please try again."
+        }
     }
 
     @Synchronized fun token(): String? {
@@ -32,6 +35,7 @@ object AccountSessionStore {
         val encoded = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(TOKEN_KEY, null) ?: return null
         return try {
             val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+            if (bytes.size <= 12) error("Invalid stored account session.")
             val iv = bytes.copyOfRange(0, 12)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
@@ -43,7 +47,7 @@ object AccountSessionStore {
     }
 
     @Synchronized fun clear() {
-        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.remove(TOKEN_KEY)?.apply()
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.remove(TOKEN_KEY)?.commit()
     }
 
     private fun secretKey(): SecretKey {

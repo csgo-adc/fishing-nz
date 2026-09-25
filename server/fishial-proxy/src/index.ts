@@ -55,24 +55,22 @@ async function register(request: Request, env: Env): Promise<Response> {
   const now = new Date().toISOString();
   const salt = randomHex(16);
   const passwordHash = await hashPassword(password, salt);
-  let createdAccount = true;
   try {
     await env.RULES_DB.prepare(
       `INSERT INTO account_users (id, email, password_hash, password_salt, display_name, country_code, plan, created_at, updated_at, email_verified)
        VALUES (?, ?, ?, ?, ?, 'NZ', 'free', ?, ?, 0)`
     ).bind(id, email, passwordHash, salt, displayName, now, now).run();
   } catch {
-    createdAccount = false;
-  }
-  let target = { id, email, email_verified: 0 };
-  if (!createdAccount) {
     const existing = await env.RULES_DB.prepare("SELECT id, email, email_verified FROM account_users WHERE email = ? COLLATE NOCASE")
-      .bind(email).first<{ id: string; email: string; email_verified: number }>();
-    if (!existing) return json({ error: "Account registration is temporarily unavailable." }, 500);
+      .bind(email).first<{ id: string; email: string; email_verified: number }>().catch(() => null);
+    if (!existing) return json({ error: "Account registration is temporarily unavailable." }, 503);
     if (existing.email_verified === 1) return json({ message: "If this email can be registered, a confirmation link will be sent." }, 202);
-    target = existing;
+    if (!await issueVerificationEmail(request, env, existing.id, existing.email)) {
+      return json({ error: "We could not send the confirmation email. Please try again shortly.", code: "email_delivery_failed" }, 503);
+    }
+    return json({ message: "Check your email for a link to confirm your account." }, 202);
   }
-  if (!await issueVerificationEmail(request, env, target.id, target.email)) {
+  if (!await issueVerificationEmail(request, env, id, email)) {
     return json({ error: "Your account is saved, but we could not send the confirmation email. Please try sending it again shortly.", code: "email_delivery_failed" }, 503);
   }
   return json({ message: "Check your email for a link to confirm your account." }, 202);
@@ -149,11 +147,9 @@ async function issueVerificationEmail(request: Request, env: Env, userId: string
   const token = randomHex(32);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-  await env.RULES_DB.batch([
-    env.RULES_DB.prepare("DELETE FROM account_email_verifications WHERE user_id = ?").bind(userId),
-    env.RULES_DB.prepare("INSERT INTO account_email_verifications (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
-      .bind(await sha256(token), userId, now.toISOString(), expiresAt),
-  ]);
+  const tokenHash = await sha256(token);
+  await env.RULES_DB.prepare("INSERT INTO account_email_verifications (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .bind(tokenHash, userId, now.toISOString(), expiresAt).run();
   const verifyUrl = `${new URL(request.url).origin}/v1/auth/verify-email?token=${token}`;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -167,9 +163,11 @@ async function issueVerificationEmail(request: Request, env: Env, userId: string
     }),
   }).catch(() => null);
   if (!response?.ok) {
-    await env.RULES_DB.prepare("DELETE FROM account_email_verifications WHERE token_hash = ?").bind(await sha256(token)).run();
+    await env.RULES_DB.prepare("DELETE FROM account_email_verifications WHERE token_hash = ?").bind(tokenHash).run();
     return false;
   }
+  await env.RULES_DB.prepare("DELETE FROM account_email_verifications WHERE user_id = ? AND token_hash != ?")
+    .bind(userId, tokenHash).run().catch(() => undefined);
   return true;
 }
 
@@ -307,22 +305,38 @@ async function recordAccountEvent(env: Env, userId: string | null, eventName: st
 
 async function listUsers(request: Request, env: Env): Promise<Response> {
   if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);
-  const limit = readLimit(new URL(request.url).searchParams.get("limit"), 100, 250);
-  const result = await env.RULES_DB.prepare(
-    "SELECT id, email, display_name, country_code, plan, created_at, email_verified FROM account_users ORDER BY created_at DESC LIMIT ?"
-  ).bind(limit).all<Account>();
-  return json({ users: result.results.map(publicAccount) });
+  const params = new URL(request.url).searchParams;
+  const limit = readLimit(params.get("limit"), 25, 100);
+  const offset = readOffset(params.get("offset"));
+  const search = (params.get("search") || "").trim();
+  if (search.length > 120) return json({ error: "Search must be 120 characters or fewer." }, 400);
+  const where = search ? " WHERE email LIKE ? ESCAPE '!' OR display_name LIKE ? ESCAPE '!'" : "";
+  const escapedSearch = `%${search.replace(/[!%_]/g, (character) => `!${character}`)}%`;
+  const filters = search ? [escapedSearch, escapedSearch] : [];
+  const [count, result] = await Promise.all([
+    env.RULES_DB.prepare(`SELECT COUNT(*) AS total FROM account_users${where}`).bind(...filters).first<{ total: number }>(),
+    env.RULES_DB.prepare(
+      `SELECT id, email, display_name, country_code, plan, created_at, email_verified
+       FROM account_users${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
+    ).bind(...filters, limit, offset).all<Account>(),
+  ]);
+  return json({ users: result.results.map(publicAccount), total: count?.total || 0, limit, offset });
 }
 
 async function listFeedback(request: Request, env: Env): Promise<Response> {
   if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);
-  const limit = readLimit(new URL(request.url).searchParams.get("limit"), 100, 250);
-  const result = await env.RULES_DB.prepare(
-    `SELECT f.id, f.user_id, u.email, f.category, f.message, f.rating, f.created_at
-     FROM account_feedback f JOIN account_users u ON u.id = f.user_id
-     ORDER BY f.created_at DESC LIMIT ?`
-  ).bind(limit).all();
-  return json({ feedback: result.results });
+  const params = new URL(request.url).searchParams;
+  const limit = readLimit(params.get("limit"), 20, 100);
+  const offset = readOffset(params.get("offset"));
+  const [count, result] = await Promise.all([
+    env.RULES_DB.prepare("SELECT COUNT(*) AS total FROM account_feedback").first<{ total: number }>(),
+    env.RULES_DB.prepare(
+      `SELECT f.id, f.user_id, u.email, f.category, f.message, f.rating, f.created_at
+       FROM account_feedback f JOIN account_users u ON u.id = f.user_id
+       ORDER BY f.created_at DESC, f.id DESC LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all(),
+  ]);
+  return json({ feedback: result.results, total: count?.total || 0, limit, offset });
 }
 
 async function updatePlan(request: Request, env: Env, userId: string): Promise<Response> {
@@ -436,6 +450,11 @@ function readLimit(value: string | null, fallback: number, maximum: number): num
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
 }
 
+function readOffset(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? Math.min(parsed, 1_000_000) : 0;
+}
+
 function isAdmin(request: Request, env: Env): boolean {
   const supplied = request.headers.get("x-account-admin-token") || "";
   return Boolean(env.ACCOUNT_ADMIN_TOKEN && supplied && constantTimeEqual(supplied, env.ACCOUNT_ADMIN_TOKEN));
@@ -547,7 +566,8 @@ export default {
       return json({ error: message }, message.startsWith("OpenAI API usage limit") ? 429 : 502);
     }
     } catch (error) {
-      return json({ error: "Internal Worker error.", detail: String(error) }, 500);
+      console.error("Worker request failed", error);
+      return json({ error: "Internal Worker error." }, 500);
     }
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {

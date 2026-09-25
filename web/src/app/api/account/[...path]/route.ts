@@ -44,19 +44,20 @@ async function proxy(request: Request): Promise<Response> {
     response.headers.append("set-cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
     return response;
   }
-  if (path === "/auth/register" || path === "/auth/login") {
-    if (upstream.ok && typeof result.token === "string") {
-      const responseBody = { ...result };
-      delete responseBody.token;
-      delete responseBody.token_type;
-      delete responseBody.expires_at;
-      const response = Response.json(responseBody, { status: upstream.status });
-      response.headers.append("set-cookie", `${COOKIE_NAME}=${result.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
-      return response;
+  if (path === "/auth/login" && upstream.ok) {
+    if (typeof result.token !== "string" || !/^[a-f0-9]{64}$/i.test(result.token)) {
+      return Response.json({ error: "Could not start your account session. Please try again." }, { status: 502 });
     }
+    const responseBody = { ...result };
+    delete responseBody.token;
+    delete responseBody.token_type;
+    delete responseBody.expires_at;
+    const response = Response.json(responseBody, { status: upstream.status });
+    response.headers.append("set-cookie", `${COOKIE_NAME}=${result.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+    return response;
   }
 
-  if (path === "/auth/logout") {
+  if (path === "/auth/logout" && (upstream.ok || upstream.status === 401)) {
     const response = Response.json(result, { status: upstream.status });
     response.headers.append("set-cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
     return response;

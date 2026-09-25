@@ -43,14 +43,14 @@ struct FishingRepository {
     }
 
     func saveProfile(displayName: String, countryCode: String) async throws -> AccountSnapshot {
-        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to update your profile.", status: 401) }
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to update your profile.", status: 401, code: nil) }
         let _: AccountProfileEnvelope = try await accountRequest("/v1/me", method: "PATCH", body: ["display_name": displayName, "country_code": countryCode.uppercased()], token: token)
         if let snapshot = try await currentAccount() { return snapshot }
-        throw AccountAPIError(message: "Please sign in again.", status: 401)
+        throw AccountAPIError(message: "Please sign in again.", status: 401, code: nil)
     }
 
     func sendFeedback(category: String, message: String, rating: Int) async throws {
-        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to send feedback.", status: 401) }
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to send feedback.", status: 401, code: nil) }
         let _: EmptyResponse = try await accountRequest("/v1/feedback", method: "POST", body: ["category": category, "message": message, "rating": rating], token: token, platform: "ios")
     }
 
@@ -71,7 +71,7 @@ struct FishingRepository {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 500
         guard 200...299 ~= status else {
             let payload = (try? JSONDecoder().decode(AccountErrorResponse.self, from: data))
-            throw AccountAPIError(message: payload?.error ?? "Account request failed.", status: status)
+            throw AccountAPIError(message: payload?.error ?? "Account request failed.", status: status, code: payload?.code)
         }
         return try decoder.decode(T.self, from: data)
     }
@@ -205,10 +205,10 @@ private struct FishIdentificationResponse: Decodable {
     }
 }
 
-private struct AccountErrorResponse: Decodable { let error: String? }
+private struct AccountErrorResponse: Decodable { let error: String?; let code: String? }
 private struct AccountMessageResponse: Decodable { let message: String }
 private struct EmptyResponse: Decodable {}
-private struct AccountAPIError: LocalizedError { let message: String; let status: Int; var errorDescription: String? { message } }
+struct AccountAPIError: LocalizedError { let message: String; let status: Int; let code: String?; var errorDescription: String? { message } }
 
 private enum KeychainSession {
     private static let service = "nz.fishingnz.catchcheck.session"

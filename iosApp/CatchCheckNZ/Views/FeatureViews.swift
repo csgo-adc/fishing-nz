@@ -300,8 +300,37 @@ private struct TideCurve: View {
 
 struct TripsView: View {
     @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedSavedSpot: Recommendation?
     private var saved: [Recommendation] { vm.savedRecommendations.values.sorted { $0.rating > $1.rating } }
-    var body: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 16) { Text("Your trips").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Saved spots and active plans").foregroundStyle(.secondary); if let active = vm.activeTrip { Card(background: CatchCheckColor.seafoam) { Text("Active trip").bold().foregroundStyle(CatchCheckColor.navy); Text(active.name).font(.title2).foregroundStyle(CatchCheckColor.navy); Button("End trip") { vm.activeTrip = nil }.buttonStyle(.bordered) } }; Text("Saved spots").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy); if saved.isEmpty { Text("Save a recommended spot to see it here.").foregroundStyle(.secondary) } else { ForEach(saved) { spot in RecommendationCard(spot: spot) { vm.selectedSpot = spot } } } }.padding(20) }.background(CatchCheckColor.cream).navigationTitle("Trips").navigationBarTitleDisplayMode(.inline) } }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Your trips").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text("Saved spots and active plans").foregroundStyle(.secondary)
+                    if let active = vm.activeTrip {
+                        Card(background: CatchCheckColor.seafoam) {
+                            Text("Active trip").bold().foregroundStyle(CatchCheckColor.navy)
+                            Text(active.name).font(.title2).foregroundStyle(CatchCheckColor.navy)
+                            Button("End trip") { vm.activeTrip = nil }.buttonStyle(.bordered)
+                        }
+                    }
+                    Text("Saved spots").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    if saved.isEmpty {
+                        Text("Save a recommended spot to see it here.").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(saved) { spot in RecommendationCard(spot: spot) { selectedSavedSpot = spot } }
+                    }
+                }.padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle("Trips")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+        .sheet(item: $selectedSavedSpot) { SpotDetailView(spot: $0) }
+    }
 }
 
 private struct FishingRulesArea: Identifiable, Hashable { let name: String; let url: URL; var id: String { name } }

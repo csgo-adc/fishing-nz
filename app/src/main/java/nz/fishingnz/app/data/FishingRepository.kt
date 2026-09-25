@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import nz.fishingnz.app.BuildConfig
 import nz.fishingnz.app.model.*
 import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -19,8 +20,8 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.cos
-import nz.fishingnz.app.model.AccountProfile
-import nz.fishingnz.app.model.AccountSnapshot
+
+class AccountRequestException(val statusCode: Int, val code: String?, message: String) : IOException(message)
 
 class FishingRepository {
     private val accountBaseUrl: String get() = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/').ifBlank { "https://fishing.fishnz.space" }
@@ -171,14 +172,13 @@ class FishingRepository {
         } finally { connection.disconnect() }
     }
 
-    suspend fun signIn(email: String, password: String, displayName: String?, createAccount: Boolean): AccountSnapshot = withContext(Dispatchers.IO) {
+    suspend fun signIn(email: String, password: String): AccountSnapshot = withContext(Dispatchers.IO) {
         val body = JSONObject().put("email", email.trim()).put("password", password)
-        if (createAccount) body.put("display_name", displayName.orEmpty().trim())
-        val route = if (createAccount) "register" else "login"
-        val response = accountRequest("/v1/auth/$route", "POST", body)
+        val response = accountRequest("/v1/auth/login", "POST", body)
         val token = response.getString("token")
+        val snapshot = parseAccountSnapshot(response.getJSONObject("user"), response.getJSONObject("permissions"))
         AccountSessionStore.save(token)
-        accountSnapshot(token)
+        snapshot
     }
 
     suspend fun createAccount(email: String, password: String, displayName: String): String = withContext(Dispatchers.IO) {
@@ -199,9 +199,14 @@ class FishingRepository {
 
     suspend fun currentAccount(): AccountSnapshot? = withContext(Dispatchers.IO) {
         val token = AccountSessionStore.token() ?: return@withContext null
-        try { accountSnapshot(token) } catch (error: Exception) {
-            if (error.message?.contains("401") == true) AccountSessionStore.clear()
-            null
+        try {
+            val snapshot = accountSnapshot(token)
+            if (AccountSessionStore.token() == token) snapshot else null
+        } catch (error: AccountRequestException) {
+            if (error.statusCode == 401) {
+                if (AccountSessionStore.token() == token) AccountSessionStore.clear()
+                null
+            } else throw error
         }
     }
 
@@ -224,6 +229,10 @@ class FishingRepository {
     private fun accountSnapshot(token: String): AccountSnapshot {
         val profile = accountRequest("/v1/me", "GET", token = token).getJSONObject("user")
         val permissions = accountRequest("/v1/me/permissions", "GET", token = token)
+        return parseAccountSnapshot(profile, permissions)
+    }
+
+    private fun parseAccountSnapshot(profile: JSONObject, permissions: JSONObject): AccountSnapshot {
         return AccountSnapshot(
             AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free")),
             permissions.optJSONObject("features")?.optBoolean("fish_identity") == true,
@@ -245,7 +254,11 @@ class FishingRepository {
             val status = connection.responseCode
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             val response = runCatching { JSONObject(text) }.getOrDefault(JSONObject())
-            if (status !in 200..299) error(response.optString("error").ifBlank { "Account request failed ($status)." } + " ($status)")
+            if (status !in 200..299) throw AccountRequestException(
+                status,
+                response.optString("code").takeIf { it.isNotBlank() },
+                response.optString("error").ifBlank { "Account request failed. Please try again." },
+            )
             return response
         } finally { connection.disconnect() }
     }

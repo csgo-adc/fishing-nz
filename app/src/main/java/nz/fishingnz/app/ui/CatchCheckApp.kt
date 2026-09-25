@@ -1,6 +1,7 @@
 package nz.fishingnz.app.ui
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.AccountCircle
@@ -18,7 +19,12 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
 @Composable
 fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
     val state by vm.state.collectAsState()
-    MaterialTheme(colorScheme = lightColorScheme(primary = Navy, secondary = Orange, background = Cream)) {
+    MaterialTheme(colorScheme = lightColorScheme(
+        primary = Navy, onPrimary = Color.White, primaryContainer = Seafoam, onPrimaryContainer = Navy,
+        secondary = Orange, onSecondary = Color.White, secondaryContainer = Seafoam, onSecondaryContainer = Navy,
+        background = Cream, onBackground = Navy, surface = Color.White, onSurface = Navy,
+        surfaceVariant = Seafoam, onSurfaceVariant = Navy, outline = Color(0xFF708881)
+    )) {
         Scaffold(containerColor = Cream, bottomBar = {
             NavigationBar(containerColor = androidx.compose.ui.graphics.Color.White) {
                 listOf(Icons.Default.NearMe to "Home", Icons.Default.Map to "Map", Icons.Default.Waves to "Tide", Icons.Default.CalendarMonth to "Trips", Icons.Default.MenuBook to "Rules", Icons.Default.AccountCircle to "Account").forEachIndexed { index, item ->
