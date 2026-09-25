@@ -1,8 +1,8 @@
 <resources>
     <style name="Theme.FishingNZ" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:statusBarColor">#F7F8F4</item>
-        <item name="android:navigationBarColor">#F7F8F4</item>
+        <item name="android:statusBarColor">#F6F8FC</item>
+        <item name="android:navigationBarColor">#F6F8FC</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

@@ -210,7 +210,7 @@ async function permissions(request: Request, env: Env): Promise<Response> {
   if (!auth) return json({ error: "Authentication required." }, 401);
   return json({
     plan: auth.account.plan,
-    features: { fishing_rules: true, trip_planning: true, fish_identity: auth.account.plan === "paid" },
+    features: { fishing_rules: true, trip_planning: true, fish_identity: true },
   });
 }
 
@@ -365,7 +365,7 @@ async function createSessionResponse(env: Env, account: Account, status: number)
     token_type: "Bearer",
     expires_at: expiresAt,
     user: publicAccount(account),
-    permissions: { plan: account.plan, features: { fishing_rules: true, trip_planning: true, fish_identity: account.plan === "paid" } },
+    permissions: { plan: account.plan, features: { fishing_rules: true, trip_planning: true, fish_identity: true } },
   }, status);
 }
 
@@ -524,7 +524,6 @@ export default {
     }
     const auth = await authenticate(request, env);
     if (!auth) return json({ error: "Sign in to use fish identification.", code: "authentication_required" }, 401);
-    if (auth.account.plan !== "paid") return json({ error: "Fish identification is available on the paid plan.", code: "plan_required" }, 403);
     const contentType = request.headers.get("content-type") || "";
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (!contentType.startsWith("image/") || contentLength > 20 * 1024 * 1024) {

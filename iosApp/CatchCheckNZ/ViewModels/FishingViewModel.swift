@@ -41,7 +41,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var selectedTab = 0 {
         didSet {
             guard oldValue != selectedTab else { return }
-            let features = ["home", "map", "tide", "fishing_rules", "account"]
+            let features = ["home", "map", "tide", "more"]
             guard features.indices.contains(selectedTab) else { return }
             Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
         }
@@ -83,7 +83,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var hasSearchedRecommendations = false
     @Published var recommendationError: String?
     @Published var account: AccountProfile?
-    @Published var fishIdentityAvailable = false
+    var fishIdentityAvailable: Bool { account != nil }
+    @Published var hasStoredSession = FishingRepository().hasStoredSession()
     @Published var accountBusy = false
     @Published var accountLoading = true
     @Published var accountLoadFailed = false
@@ -170,7 +171,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 distance: String(format: "%.0f km straight-line", window.distanceKm),
                 reasons: window.reasons,
                 boat: window.boat,
-                warnings: window.warnings
+                warnings: window.warnings,
+                startsAt: window.start,
+                endsAt: window.end
             )
         }
     }
@@ -460,13 +463,14 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 let snapshot = try await repository.currentAccount()
                 guard version == accountRequestVersion else { return }
                 account = snapshot?.user
-                fishIdentityAvailable = snapshot?.permissions?.features.fishIdentity ?? false
+                hasStoredSession = repository.hasStoredSession()
                 accountLoading = false
                 if snapshot != nil { await repository.trackEvent("app_opened", feature: nil, platform: "ios") }
             } catch {
                 guard version == accountRequestVersion else { return }
                 accountLoading = false
                 accountLoadFailed = true
+                hasStoredSession = repository.hasStoredSession()
                 accountError = "Could not check your account. Check your connection and try again."
             }
         }
@@ -482,7 +486,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 verificationPending = true
             } else {
                 let snapshot = try await repository.registerOrLogin(email: email, password: password)
-                account = snapshot.user; fishIdentityAvailable = snapshot.permissions?.features.fishIdentity ?? false; accountNotice = "You’re signed in."; verificationPending = false
+                account = snapshot.user; hasStoredSession = true; accountNotice = "You’re signed in."; verificationPending = false
             }
             accountBusy = false
             return true
@@ -507,7 +511,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     func saveAccountProfile(displayName: String, countryCode: String) {
         accountBusy = true; accountError = nil; accountNotice = nil
         Task {
-            do { let snapshot = try await repository.saveProfile(displayName: displayName, countryCode: countryCode); account = snapshot.user; fishIdentityAvailable = snapshot.permissions?.features.fishIdentity ?? false; accountNotice = "Profile saved." }
+            do { let snapshot = try await repository.saveProfile(displayName: displayName, countryCode: countryCode); account = snapshot.user; accountNotice = "Profile saved." }
             catch { accountError = error.localizedDescription }
             accountBusy = false
         }
@@ -530,7 +534,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         accountLoadFailed = false
         accountLoading = false
         accountBusy = true; accountError = nil; accountNotice = nil
-        Task { await repository.signOut(); account = nil; fishIdentityAvailable = false; verificationPending = false; accountBusy = false; accountNotice = "You’re signed out." }
+        Task { await repository.signOut(); account = nil; hasStoredSession = false; verificationPending = false; accountBusy = false; accountNotice = "You’re signed out." }
     }
     func identifyFish() {
         guard let photo = selectedPhoto else { return }

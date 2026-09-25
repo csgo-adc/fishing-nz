@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -65,6 +66,9 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var mapError by remember { mutableStateOf(false) }
     var locationNotice by remember { mutableStateOf<String?>(null) }
     var zoom by remember { mutableDoubleStateOf(5.0) }
+    BackHandler(enabled = showList || selectedSpot != null) {
+        if (showList) showList = false else selectedSpot = null
+    }
     val nativeMap = remember { mutableStateOf<MapLibreMap?>(null) }
     val visibleSpots = remember(filter) { fishingSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) } }
 
@@ -123,8 +127,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         val map = nativeMap.value ?: return@LaunchedEffect
         map.clear()
         val icons = IconFactory.getInstance(context)
-        val landIcon = icons.fromBitmap(mapPin(context, 0xFFE4784A.toInt()))
-        val boatIcon = icons.fromBitmap(mapPin(context, 0xFF123B43.toInt()))
+        val landIcon = icons.fromBitmap(mapPin(context, 0xFFF47C59.toInt()))
+        val boatIcon = icons.fromBitmap(mapPin(context, 0xFF315DE0.toInt()))
         val markerGroups = mutableMapOf<Long, List<FishingSpot>>()
         val cellSize = when { zoom < 7.0 -> 1.4; zoom < 9.0 -> 0.24; else -> 0.0 }
         val groups = if (cellSize > 0) visibleSpots.groupBy {
@@ -181,7 +185,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Fishing map", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
-                    Text("Tap a spot or cluster to explore", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text("Tap a spot or cluster to explore", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
                 TextButton(onClick = { showList = true }) { Icon(Icons.Default.List, null); Spacer(Modifier.width(4.dp)); Text("List") }
             }
@@ -194,25 +198,25 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
         Box(Modifier.fillMaxSize().background(Seafoam)) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-            Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = RoundedCornerShape(8.dp), color = Color.White.copy(alpha = 0.94f)) {
+            Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
                 Text("${visibleSpots.size} spots", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Navy, style = MaterialTheme.typography.labelMedium)
             }
             FloatingActionButton(onClick = ::requestLocation,
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(48.dp),
-                shape = CircleShape, containerColor = Color.White, contentColor = Navy) {
+                shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
                 Icon(Icons.Default.NearMe, contentDescription = "Jump to my location")
             }
-            if (!mapLoaded && !mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(Color.White)) {
+            if (!mapLoaded && !mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
                     Text("Loading fishing map…", color = Navy)
                 }
             }
-            if (mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(Color.White)) {
+            if (mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Map unavailable", color = Navy, fontWeight = FontWeight.Bold)
-                    Text("Check your connection, then try again. The fishing spots are available in the list.", color = Color.DarkGray)
+                    Text("Check your connection, then try again. The fishing spots are available in the list.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { mapError = false; mapLoaded = false; nativeMap.value = null; mapView.getMapAsync { map -> map.setStyle(MAP_STYLE) { nativeMap.value = map } } }) { Text("Retry map") }
                         TextButton(onClick = { showList = true }) { Text("Browse spots") }
@@ -220,16 +224,16 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 }
             }
             selectedSpot?.let { spot ->
-                Card(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(Color.White), elevation = CardDefaults.cardElevation(6.dp)) {
+                Card(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(6.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(spot.name, color = Navy, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("${spot.area} · ${if (spot.boat) "Boat" else "Land"} fishing", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                                Text("${spot.area} · ${if (spot.boat) "Boat" else "Land"} fishing", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             }
                             IconButton(onClick = { selectedSpot = null }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "Close spot details") }
                         }
-                        Text("Approximate fishing area. Confirm access and local rules before leaving.", color = Color.DarkGray, style = MaterialTheme.typography.bodySmall)
+                        Text("Approximate fishing area. Confirm access and local rules before leaving.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         Button(onClick = {
                             vm.setBoat(spot.boat)
                             vm.selectManualOrigin(SearchOrigin(spot.name, GeoPoint(spot.latitude, spot.longitude)))
@@ -239,7 +243,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 }
             }
             locationNotice?.let { notice ->
-                if (selectedSpot == null) Surface(Modifier.align(Alignment.BottomCenter).padding(12.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
+                if (selectedSpot == null) Surface(Modifier.align(Alignment.BottomCenter).padding(12.dp), shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
                     Text(notice, Modifier.padding(12.dp), color = Navy, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -252,7 +256,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     if (showList) ModalBottomSheet(onDismissRequest = { showList = false }) {
         Text("Fishing areas", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold)
         Text(if (mapError) "Choose an area to plan a fishing window" else "Tap an area to see it on the map",
-            Modifier.padding(horizontal = 20.dp), color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(0.8f), contentPadding = PaddingValues(12.dp)) {
             items(visibleSpots, key = { "${it.name}:${it.latitude}:${it.longitude}" }) { spot ->
                 Column(Modifier.fillMaxWidth().clickable {
@@ -261,7 +265,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     nativeMap.value?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(spot.latitude, spot.longitude), 11.0))
                 }.padding(horizontal = 10.dp, vertical = 12.dp)) {
                     Text(spot.name, color = Navy, fontWeight = FontWeight.SemiBold)
-                    Text("${spot.area} · ${if (spot.boat) "Boat" else "Land"} fishing", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                    Text("${spot.area} · ${if (spot.boat) "Boat" else "Land"} fishing", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
                 HorizontalDivider()
             }

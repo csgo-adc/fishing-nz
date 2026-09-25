@@ -153,7 +153,7 @@ export default function AccountPage() {
       <section className="account-panel">
         <p className="kicker">Your CatchCheck account</p>
         <h1>{user ? `Kia ora${user.display_name ? `, ${user.display_name}` : ""}` : "Sign in or create an account"}</h1>
-        <p className="account-lead">Save your basic details, send feedback, and see which features your plan includes.</p>
+        <p className="account-lead">Save your details, send feedback, and identify fish from a photo.</p>
         {notice && <p className="form-notice" role="status">{notice}</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {!accountLoading && !user && error.startsWith("Could not check your account") && <button type="button" className="signout-button" onClick={() => { setError(""); setAccountLoading(true); void refresh(); }}>Retry account check</button>}
@@ -171,13 +171,13 @@ export default function AccountPage() {
           </>
         ) : (
           <>
-            <div className="plan-card"><div><span>Your plan</span><strong>{user.plan === "paid" ? "Paid" : "Free"}</strong></div><p>{user.plan === "paid" ? "Fish identification is included." : "Basic fishing tools are available. Paid access is currently enabled by the CatchCheck team."}</p></div>
-            {user.plan === "paid" && <form className="account-form fish-form" onSubmit={identifyFish}>
+            <div className="plan-card"><div><span>Account</span><strong>Signed in</strong></div><p>Fish identification and your fishing tools are ready.</p></div>
+            <form className="account-form fish-form" onSubmit={identifyFish}>
               <h2>Identify a fish</h2><p>Choose a clear photo. The result is an AI suggestion; confirm the species and local rules before keeping a fish.</p>
               <label>Fish photo<input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0] || null; const problem = file && file.size > 20 * 1024 * 1024 ? "Choose an image smaller than 20 MB." : file && file.type && !file.type.startsWith("image/") ? "Choose an image file." : ""; setFishPhoto(problem ? null : file); setFishResult(null); setError(problem); }} /></label>
               <button className="button button-primary" disabled={fishBusy || !fishPhoto}>{fishBusy ? "Checking photo…" : "Identify fish"}</button>
               {fishResult && <div className="plan-card"><strong>{fishResult.commonName}</strong><p>{fishResult.scientificName} · {Math.round(fishResult.confidence * 100)}% confidence · {fishResult.areaName}</p>{fishResult.fishRules.map((rule, index) => <p key={`${rule.species}-${index}`}><b>{rule.species}</b>{rule.minimumSize ? ` · Minimum size: ${rule.minimumSize}` : ""}{rule.dailyLimit ? ` · Daily limit: ${rule.dailyLimit}` : ""}</p>)}</div>}
-            </form>}
+            </form>
             <form className="account-form" onSubmit={saveProfile}>
               <h2>Profile</h2><label>Email<input value={user.email} readOnly /></label><label>Name<input autoComplete="name" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><label>Country code<input maxLength={2} value={countryCode} onChange={(event) => setCountryCode(event.target.value.toUpperCase().slice(0, 2))} /></label><button className="button button-primary" disabled={busy}>Save profile</button>
             </form>

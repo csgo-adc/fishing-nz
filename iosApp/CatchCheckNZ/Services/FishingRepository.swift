@@ -7,9 +7,11 @@ struct FishingRepository {
     private let decoder = JSONDecoder()
     private var accountBaseURL: String { ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space").trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
 
+    func hasStoredSession() -> Bool { KeychainSession.load() != nil }
+
     func registerOrLogin(email: String, password: String) async throws -> AccountSnapshot {
         let response: AccountAuthResponse = try await accountRequest("/v1/auth/login", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password])
-        KeychainSession.save(response.token)
+        try KeychainSession.save(response.token)
         return AccountSnapshot(user: response.user, permissions: response.permissions)
     }
 
@@ -126,7 +128,8 @@ struct FishingRepository {
         var sample = dayStart
         while sample < dayEnd {
             if let height = Self.interpolatedHeight(at: sample, predictions: predictions) {
-                points.append(TidePoint(time: Self.time.string(from: sample), level: height))
+                points.append(TidePoint(time: Self.time.string(from: sample), level: height,
+                                        minuteOfDay: calendar.dateComponents([.minute], from: dayStart, to: sample).minute ?? 0))
             }
             sample.addTimeInterval(10 * 60)
         }
@@ -214,13 +217,15 @@ private enum KeychainSession {
     private static let service = "nz.fishingnz.catchcheck.session"
     private static let account = "bearer-token"
 
-    static func save(_ token: String) {
+    static func save(_ token: String) throws {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
         SecItemDelete(query as CFDictionary)
         var item = query
         item[kSecValueData as String] = Data(token.utf8)
         item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(item as CFDictionary, nil)
+        guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else {
+            throw AccountAPIError(message: "Could not save your account session. Please try again.", status: 0, code: "session_storage_failed")
+        }
     }
 
     static func load() -> String? {

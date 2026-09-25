@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.FishingRepository
 import nz.fishingnz.app.data.AccountRequestException
+import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.model.*
 import java.time.LocalDate
@@ -35,6 +36,7 @@ data class FishingUiState(
     val selectedSpot: Recommendation? = null, val showResults: Boolean = false, val recommendationSearch: RecommendationSearch? = null,
     val recommendationsLoading: Boolean = false, val recommendationsError: String? = null, val savedRecommendations: List<Recommendation> = emptyList(),
     val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountLoading: Boolean = true,
+    val hasStoredSession: Boolean = false,
     val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false
 )
 
@@ -43,14 +45,25 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     private var recommendationJob: Job? = null
     private var tideJob: Job? = null
     private var accountVersion = 0
-    private val _state = MutableStateFlow(FishingUiState())
+    private val _state = MutableStateFlow(FishingUiState(hasStoredSession = AccountSessionStore.token() != null))
     val state: StateFlow<FishingUiState> = _state.asStateFlow()
     init { refreshStationTide(); refreshAccount() }
     fun selectTab(value: Int) {
         val old = _state.value
+        if (value !in 0..6 || old.tab == value) return
         _state.value = old.copy(tab = value)
-        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account")
-        if (old.tab != value && old.account != null && value in features.indices) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
+        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more")
+        if (old.account != null) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
+    }
+    fun canGoBack(): Boolean = _state.value.let { it.selectedSpot != null || it.showResults || it.tab != 0 }
+    fun goBack() {
+        val current = _state.value
+        when {
+            current.selectedSpot != null -> closeSpot()
+            current.showResults -> closeResults()
+            current.tab in 3..5 -> selectTab(6)
+            current.tab != 0 -> selectTab(0)
+        }
     }
     fun setBoat(value: Boolean) { _state.value = _state.value.copy(boat = value, recommendationSearch = null); if (_state.value.showResults) refreshRecommendations() }
     fun setDate(value: String) {
@@ -193,12 +206,14 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             try {
                 val account = repository.currentAccount()
                 if (version != accountVersion) return@launch
-                _state.value = _state.value.copy(account = account, accountLoading = false)
+                _state.value = _state.value.copy(account = account, accountLoading = false,
+                    hasStoredSession = AccountSessionStore.token() != null)
                 if (account != null) runCatching { repository.trackEvent("app_opened", null, "android") }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
                 if (version == accountVersion) _state.value = _state.value.copy(accountLoading = false,
+                    hasStoredSession = AccountSessionStore.token() != null,
                     accountError = "Could not check your account. Check your connection and try again.")
             }
         }
@@ -215,6 +230,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                 } else {
                     val account = repository.signIn(email, password)
                     if (version == accountVersion) _state.value = _state.value.copy(account = account,
+                        hasStoredSession = true,
                         accountBusy = false, verificationPending = false, accountError = null, accountNotice = "You’re signed in.")
                 }
             } catch (cancelled: CancellationException) {
@@ -240,6 +256,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             try {
                 repository.signOut()
                 if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
+                    hasStoredSession = false,
                     verificationPending = false, accountNotice = "You’re signed out.")
             } catch (cancelled: CancellationException) {
                 throw cancelled

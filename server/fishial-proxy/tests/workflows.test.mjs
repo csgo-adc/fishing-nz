@@ -110,8 +110,15 @@ migrations_dir = "migrations"
     const signedIn = await call("/v1/auth/login", "POST", { email, password });
     assert.equal(signedIn.status, 200);
     assert.equal(signedIn.data.user.email_verified, true);
+    assert.equal(signedIn.data.user.plan, "free");
+    assert.equal(signedIn.data.permissions.features.fish_identity, true);
     const auth = { authorization: `Bearer ${signedIn.data.token}` };
     assert.equal((await call("/v1/me", "GET", undefined, auth)).status, 200);
+    assert.equal((await call("/v1/me/permissions", "GET", undefined, auth)).data.features.fish_identity, true);
+    assert.equal((await call("/v1/fish/identify", "POST", { image: "invalid" })).status, 401);
+    const freeFishRequest = await call("/v1/fish/identify", "POST", { image: "invalid" }, auth);
+    assert.equal(freeFishRequest.status, 400);
+    assert.match(freeFishRequest.data.error, /Upload a JPEG/);
     assert.equal((await call("/v1/feedback", "POST", { category: "bug", message: "Workflow feedback", rating: 4 }, auth)).status, 201);
     assert.equal((await call("/v1/analytics/events", "POST", { event_name: "feature_used", feature: "map", platform: "web" }, auth)).status, 202);
     assert.equal((await call(`/v1/admin/users/${userId}/plan`, "PATCH", { plan: "paid" }, adminHeaders)).status, 200);

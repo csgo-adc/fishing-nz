@@ -22,7 +22,7 @@ The Tide page selects the nearest supported tide station from your location. You
 - **Trips:** Keep a shortlist of spots and an active plan while you are planning.
 - **Fishing rules:** Choose an area to review catch limits, size rules, closures, and gear restrictions, with links to [Fisheries New Zealand](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/).
 - **Account:** Confirm your email to manage your profile and send feedback.
-- **Fish photo identification:** If your account has access, take or choose a photo to get a suggested species and related rule information. This feature currently requires paid access granted by the CatchCheck team.
+- **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information.
 
 ## Good to know
 

@@ -113,7 +113,7 @@ export default function AdminPage() {
           <div className="cms-stat-grid">
             <Stat title="Total users" value={dashboard.analytics.users.total_users} detail={`${dashboard.analytics.users.verified_users} confirmed`} />
             <Stat title="Waiting for email confirmation" value={dashboard.analytics.users.pending_users} detail="Must confirm to sign in" />
-            <Stat title="Paid users" value={dashboard.analytics.plans.find((row) => row.plan === "paid")?.users || 0} detail="Fish identification access" />
+            <Stat title="Paid users" value={dashboard.analytics.plans.find((row) => row.plan === "paid")?.users || 0} detail="Current account plans" />
             <Stat title="Active accounts · latest day" value={dashboard.analytics.events_by_day.at(-1)?.users || 0} detail={dashboard.analytics.events_by_day.at(-1)?.day || "No activity yet"} />
           </div>
           <div className={`cms-chart-grid ${styles.charts}`}>
