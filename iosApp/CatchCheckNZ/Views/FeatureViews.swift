@@ -619,11 +619,17 @@ struct RulesView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }.buttonStyle(.borderedProminent)
                         if let selectedArea { Text(selectedArea.scope).font(.subheadline).foregroundStyle(.secondary) }
+                        Button {
+                            vm.useCurrentRulesArea()
+                        } label: {
+                            Label("Use my current location", systemImage: "location.fill")
+                        }
+                        .buttonStyle(.bordered)
                         if vm.hasDeviceLocation {
                             Label("Near \(vm.devicePlaceName ?? "your current location")", systemImage: "location.fill")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
-                        Text("MPI areas follow coastlines and have local exceptions. Confirm the exact fishing spot on the official map.")
+                        Text("The suggested area uses your current position and the nearest catalogued coast. MPI areas have local exceptions; confirm the exact fishing spot on the official map.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if selectedArea != nil {
@@ -696,7 +702,7 @@ struct RulesView: View {
                         ForEach(fishingRulesAreas) { area in
                             Button {
                                 selectedArea = area
-                                vm.selectedRulesAreaID = area.id
+                                vm.selectRulesArea(area.id)
                                 query = ""
                                 showAreas = false
                             } label: {
@@ -719,6 +725,9 @@ struct RulesView: View {
         .onAppear {
             selectedArea = fishingRulesAreas.first(where: { $0.id == vm.selectedRulesAreaID })
             vm.requestLocation()
+        }
+        .onChange(of: vm.selectedRulesAreaID) { _, areaID in
+            selectedArea = fishingRulesAreas.first(where: { $0.id == areaID })
         }
         .task(id: selectedArea?.id) { await loadRules() }
     }

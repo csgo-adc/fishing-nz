@@ -107,8 +107,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 map.addOnCameraIdleListener { zoom = map.cameraPosition.zoom }
                 map.addOnCameraMoveListener { bearing = map.cameraPosition.bearing }
                 map.cameraPosition = CameraPosition.Builder()
-                    .target(if (s.hasDeviceLocation) LatLng(s.location.latitude, s.location.longitude) else LatLng(-41.0, 173.5))
-                    .zoom(if (s.hasDeviceLocation) 11.0 else 4.7)
+                    .target(s.deviceLocation?.let { LatLng(it.latitude, it.longitude) } ?: LatLng(-41.0, 173.5))
+                    .zoom(if (s.deviceLocation != null) 11.0 else 4.7)
                     .build()
                 map.setStyle(baseMap.styleUrl) { nativeMap.value = map; styleRevision++ }
             }
@@ -147,7 +147,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
 
-    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.hasDeviceLocation, s.location) {
+    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.deviceLocation) {
         val map = nativeMap.value ?: return@LaunchedEffect
         map.clear()
         val icons = IconFactory.getInstance(context)
@@ -168,10 +168,10 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     else if (first.boat) boatIcon else landIcon))
             markerGroups[marker.id] = group
         }
-        if (s.hasDeviceLocation) map.addMarker(MarkerOptions()
-            .position(LatLng(s.location.latitude, s.location.longitude))
+        s.deviceLocation?.let { point -> map.addMarker(MarkerOptions()
+            .position(LatLng(point.latitude, point.longitude))
             .title("Your location")
-            .icon(icons.fromBitmap(mapPin(context, 0xFF2B8ACB.toInt()))))
+            .icon(icons.fromBitmap(mapPin(context, 0xFF2B8ACB.toInt())))) }
         map.setOnMarkerClickListener { marker ->
             val group = markerGroups[marker.id]
             if (group != null && group.size > 1) {
@@ -182,10 +182,10 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
 
-    LaunchedEffect(s.location, s.hasDeviceLocation) {
-        if (s.hasDeviceLocation) {
+    LaunchedEffect(s.deviceLocation) {
+        s.deviceLocation?.let { point ->
             val map = snapshotFlow { nativeMap.value }.filterNotNull().first()
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(s.location.latitude, s.location.longitude), 12.0))
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 12.0))
         }
     }
 

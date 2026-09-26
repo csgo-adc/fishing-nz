@@ -13,6 +13,7 @@ import nz.fishingnz.app.data.FishingRepository
 import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.RecommendationEngine
+import nz.fishingnz.app.data.SearchPreferencesStore
 import nz.fishingnz.app.model.*
 import java.time.LocalDate
 import java.time.DayOfWeek
@@ -22,12 +23,16 @@ import java.time.ZoneId
 private val nzZone = ZoneId.of("Pacific/Auckland")
 private val suggestedHours = PreferredTimeRange(LocalTime.of(7, 0), LocalTime.of(21, 0))
 
+enum class SearchLocationMode { NEAR_ME, SPECIFIC_LOCATION }
+
 data class FishingUiState(
     val tab: Int = 0, val boat: Boolean = false, val dateLabel: String = "In 3 days", val dateStart: LocalDate = LocalDate.now(nzZone).plusDays(3), val dateEnd: LocalDate = LocalDate.now(nzZone).plusDays(3),
     val radiusKm: Int = 100, val preferredTime: PreferredTimeRange? = suggestedHours, val preferredTimeIsSuggested: Boolean = true,
-    val location: GeoPoint = GeoPoint(-36.85, 174.76), val hasDeviceLocation: Boolean = false,
+    val searchLocationMode: SearchLocationMode = SearchLocationMode.NEAR_ME, val selectedSearchStation: TideStation? = null,
+    val manualOriginSelected: Boolean = false,
+    val location: GeoPoint = GeoPoint(-36.85, 174.76), val deviceLocation: GeoPoint? = null, val hasDeviceLocation: Boolean = false,
     val originName: String? = null, val locating: Boolean = false, val locationNotice: String? = null,
-    val fishRulesAreaId: String? = null,
+    val fishRulesAreaId: String? = null, val fishRulesAreaIsSuggested: Boolean = false,
     val weather: WeatherState? = null, val tide: TideState? = null,
     val selectedStation: TideStation = tideStations.first { it.name == "Auckland" }, val tideDate: LocalDate = LocalDate.now(nzZone),
     val stationTide: TideState? = null, val tideLoading: Boolean = false, val tideError: String? = null,
@@ -45,10 +50,29 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     private val recommendationEngine = RecommendationEngine()
     private var recommendationJob: Job? = null
     private var tideJob: Job? = null
+    private var fishRulesAreaManuallySelected = false
     private var accountVersion = 0
-    private val _state = MutableStateFlow(FishingUiState(hasStoredSession = AccountSessionStore.token() != null))
+    private val savedSearchStation = tideStations.firstOrNull { it.id == SearchPreferencesStore.savedStationId() }
+    private val savedSearchMode = if (SearchPreferencesStore.savedMode() == SearchLocationMode.SPECIFIC_LOCATION.name && savedSearchStation != null)
+        SearchLocationMode.SPECIFIC_LOCATION else SearchLocationMode.NEAR_ME
+    private val savedManualOrigin = searchOrigins.firstOrNull { it.name == SearchPreferencesStore.savedManualOriginName() }
+    private val _state = MutableStateFlow(FishingUiState(
+        hasStoredSession = AccountSessionStore.token() != null,
+        radiusKm = SearchPreferencesStore.savedRadiusKm() ?: 100,
+        searchLocationMode = savedSearchMode,
+        selectedSearchStation = savedSearchStation,
+        manualOriginSelected = savedSearchMode == SearchLocationMode.NEAR_ME && savedManualOrigin != null,
+        location = savedSearchStation?.takeIf { savedSearchMode == SearchLocationMode.SPECIFIC_LOCATION }
+            ?.let { GeoPoint(it.latitude, it.longitude) } ?: savedManualOrigin?.point ?: GeoPoint(-36.85, 174.76),
+        originName = savedSearchStation?.takeIf { savedSearchMode == SearchLocationMode.SPECIFIC_LOCATION }?.name
+            ?: savedManualOrigin?.takeIf { savedSearchMode == SearchLocationMode.NEAR_ME }?.name
+    ))
     val state: StateFlow<FishingUiState> = _state.asStateFlow()
-    init { refreshStationTide(); refreshAccount() }
+    init {
+        refreshStationTide()
+        if (_state.value.originName != null) refreshConditions()
+        refreshAccount()
+    }
     fun selectTab(value: Int) {
         val old = _state.value
         if (value !in 0..10 || old.tab == value) return
@@ -73,7 +97,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val range = when (value) {
             "Today" -> today to today
             "In 3 days" -> today.plusDays(3) to today.plusDays(3)
-            "This week" -> today to today.plusDays((DayOfWeek.SUNDAY.value - today.dayOfWeek.value).toLong())
+            "In 7 days" -> today.plusDays(7) to today.plusDays(7)
             "This weekend" -> {
                 val saturday = if (today.dayOfWeek == DayOfWeek.SUNDAY) today.minusDays(1)
                     else today.plusDays((DayOfWeek.SATURDAY.value - today.dayOfWeek.value + 7L) % 7)
@@ -93,6 +117,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun setRadius(km: Int) {
         if (km !in listOf(10, 30, 50, 100, 200, 300, 400, 500)) return
         _state.value = _state.value.copy(radiusKm = km, recommendationSearch = null)
+        SearchPreferencesStore.saveRadiusKm(km)
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setSuggestedHours() {
@@ -108,30 +133,99 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         _state.value = _state.value.copy(preferredTime = null, preferredTimeIsSuggested = false, recommendationSearch = null)
         if (_state.value.showResults) refreshRecommendations()
     }
+    fun setSearchLocationMode(mode: SearchLocationMode) {
+        val old = _state.value
+        if (old.searchLocationMode == mode) return
+        val station = old.selectedSearchStation
+        val nearbyOrigin = searchOrigins.firstOrNull { it.name == SearchPreferencesStore.savedManualOriginName() }
+        val point = when (mode) {
+            SearchLocationMode.SPECIFIC_LOCATION -> station?.let { GeoPoint(it.latitude, it.longitude) }
+            SearchLocationMode.NEAR_ME -> nearbyOrigin?.point ?: old.deviceLocation
+        }
+        val name = when (mode) {
+            SearchLocationMode.SPECIFIC_LOCATION -> station?.name
+            SearchLocationMode.NEAR_ME -> nearbyOrigin?.name ?: old.deviceLocation?.let(::nearestCityName)
+        }
+        _state.value = old.copy(searchLocationMode = mode,
+            manualOriginSelected = mode == SearchLocationMode.NEAR_ME && nearbyOrigin != null,
+            location = point ?: old.location, originName = name,
+            weather = null, tide = null, recommendationSearch = null, locationNotice = null)
+        SearchPreferencesStore.save(mode.name, station?.id)
+        if (name != null) refreshConditions()
+        if (_state.value.showResults) refreshRecommendations()
+    }
+    fun selectSearchStation(station: TideStation) {
+        val old = _state.value
+        _state.value = old.copy(searchLocationMode = SearchLocationMode.SPECIFIC_LOCATION, selectedSearchStation = station,
+            location = GeoPoint(station.latitude, station.longitude), originName = station.name,
+            weather = null, tide = null, recommendationSearch = null, locationNotice = null)
+        SearchPreferencesStore.save(SearchLocationMode.SPECIFIC_LOCATION.name, station.id)
+        refreshConditions()
+        if (_state.value.showResults) refreshRecommendations()
+    }
+    fun useDeviceSearchOrigin() {
+        val old = _state.value
+        val point = old.deviceLocation
+        _state.value = old.copy(searchLocationMode = SearchLocationMode.NEAR_ME, manualOriginSelected = false,
+            location = point ?: old.location, originName = point?.let(::nearestCityName), locating = false,
+            weather = null, tide = null, recommendationSearch = null, locationNotice = null)
+        SearchPreferencesStore.save(SearchLocationMode.NEAR_ME.name, old.selectedSearchStation?.id)
+        SearchPreferencesStore.saveManualOrigin(null)
+        if (point != null) refreshConditions()
+        if (_state.value.showResults && point != null) refreshRecommendations()
+    }
     fun updateLocation(value: GeoPoint, placeName: String? = null) {
         val old = _state.value
         val nearest = if (old.tideStationManual) old.selectedStation else nearestTideStation(value)
-        _state.value = old.copy(location = value, hasDeviceLocation = true, originName = placeName ?: nearestCityName(value), locating = false,
-            locationNotice = null, weather = null, tide = null, recommendationSearch = null,
+        val useDeviceOrigin = old.searchLocationMode == SearchLocationMode.NEAR_ME && !old.manualOriginSelected
+        val newOriginName = if (useDeviceOrigin) placeName ?: nearestCityName(value) else old.originName
+        val originChanged = useDeviceOrigin && (old.location != value || old.originName != newOriginName)
+        _state.value = old.copy(location = if (useDeviceOrigin) value else old.location, deviceLocation = value,
+            hasDeviceLocation = true, originName = newOriginName, locating = false,
+            locationNotice = null, weather = if (originChanged) null else old.weather,
+            tide = if (originChanged) null else old.tide,
+            recommendationSearch = if (originChanged) null else old.recommendationSearch,
             tideDeviceLocation = value, tidePlaceName = placeName ?: nearestCityName(value), tideLocationAttempted = true, tideLocationNotice = null, selectedStation = nearest)
+        syncRulesAreaFromDeviceLocation(value)
         if (nearest != old.selectedStation) refreshStationTide()
-        refreshConditions()
-        if (_state.value.showResults) refreshRecommendations()
+        if (originChanged) refreshConditions()
+        if (_state.value.showResults && (originChanged || old.locating)) refreshRecommendations()
     }
     fun completeLocationSearch(value: GeoPoint, placeName: String? = null) {
         if (_state.value.locating) updateLocation(value, placeName)
     }
     fun setResolvedCity(value: String) {
-        if (_state.value.hasDeviceLocation && value.isNotBlank()) _state.value = _state.value.copy(originName = value)
+        val old = _state.value
+        if (old.deviceLocation != null && old.searchLocationMode == SearchLocationMode.NEAR_ME && !old.manualOriginSelected && value.isNotBlank())
+            _state.value = old.copy(originName = value, tidePlaceName = value)
     }
     fun chooseFishRulesArea(id: String?) {
-        _state.value = _state.value.copy(fishRulesAreaId = id, fishCheck = null)
+        fishRulesAreaManuallySelected = id != null
+        _state.value = _state.value.copy(fishRulesAreaId = id, fishRulesAreaIsSuggested = false, fishCheck = null)
+    }
+    fun syncRulesAreaFromDeviceLocation(point: GeoPoint) {
+        if (fishRulesAreaManuallySelected) return
+        val suggestion = suggestedRulesAreaId(point)
+        if (_state.value.fishRulesAreaId != suggestion || _state.value.fishRulesAreaIsSuggested != (suggestion != null)) {
+            _state.value = _state.value.copy(fishRulesAreaId = suggestion,
+                fishRulesAreaIsSuggested = suggestion != null, fishCheck = null)
+        }
+    }
+    fun resetFishRulesAreaToCurrentLocation() {
+        fishRulesAreaManuallySelected = false
+        val point = _state.value.deviceLocation ?: _state.value.tideDeviceLocation
+        val suggestion = point?.let(::suggestedRulesAreaId)
+        _state.value = _state.value.copy(fishRulesAreaId = suggestion,
+            fishRulesAreaIsSuggested = suggestion != null, fishCheck = null)
     }
     fun selectManualOrigin(origin: SearchOrigin) {
         val old = _state.value
         val nearest = if (old.tideStationManual || old.tideDeviceLocation != null) old.selectedStation else nearestTideStation(origin.point)
-        _state.value = old.copy(location = origin.point, hasDeviceLocation = false, originName = origin.name, locating = false,
+        _state.value = old.copy(searchLocationMode = SearchLocationMode.NEAR_ME, manualOriginSelected = true,
+            location = origin.point, originName = origin.name, locating = false,
             locationNotice = null, weather = null, tide = null, recommendationSearch = null, selectedStation = nearest)
+        SearchPreferencesStore.save(SearchLocationMode.NEAR_ME.name, old.selectedSearchStation?.id)
+        SearchPreferencesStore.saveManualOrigin(origin.name)
         if (nearest != old.selectedStation) refreshStationTide()
         refreshConditions()
         if (_state.value.showResults) refreshRecommendations()
@@ -157,11 +251,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         _state.value = _state.value.copy(tideLocationAttempted = true, tideStationManual = false, tideLocationNotice = null)
     }
     fun updateTideLocation(point: GeoPoint) {
-        val old = _state.value
-        val nearest = if (old.tideStationManual) old.selectedStation else nearestTideStation(point)
-        _state.value = old.copy(tideDeviceLocation = point, tidePlaceName = nearestCityName(point), tideLocationAttempted = true,
-            tideLocationNotice = null, selectedStation = nearest)
-        if (nearest != old.selectedStation) refreshStationTide()
+        updateLocation(point)
     }
     fun setResolvedTidePlace(value: String) {
         if (_state.value.tideDeviceLocation != null && value.isNotBlank()) _state.value = _state.value.copy(tidePlaceName = value)
@@ -188,6 +278,11 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun refreshRecommendations() {
         recommendationJob?.cancel()
         val query = _state.value
+        if (query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && query.selectedSearchStation == null) {
+            _state.value = query.copy(locating = false, recommendationsLoading = false,
+                recommendationsError = "Choose a tide location in your plan before searching.", recommendationSearch = null)
+            return
+        }
         if (query.originName == null) {
             _state.value = query.copy(locating = false, recommendationsLoading = false,
                 recommendationsError = "Go back to Home to choose a city for the search.", recommendationSearch = null)
@@ -196,7 +291,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         _state.value = query.copy(recommendationsLoading = true, recommendationsError = null, recommendationSearch = null)
         recommendationJob = viewModelScope.launch {
             try {
-                val result = recommendationEngine.search(query.location, query.radiusKm, query.dateStart, query.dateEnd, query.boat, query.preferredTime)
+                val result = recommendationEngine.search(query.location, query.radiusKm, query.dateStart, query.dateEnd, query.boat,
+                    query.preferredTime, query.selectedSearchStation.takeIf { query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION })
                 _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false)
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -207,7 +303,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
     fun setFishPhoto(uri: Uri?) { _state.value = _state.value.copy(fishPhoto = uri, fishCheck = null, fishError = null) }
     fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean) {
-        _state.value = _state.value.copy(location = point, hasDeviceLocation = hasDeviceLocation, fishChecking = true, fishError = null)
+        if (hasDeviceLocation) updateLocation(point)
+        _state.value = _state.value.copy(fishChecking = true, fishError = null)
         val selectedArea = _state.value.fishRulesAreaId
         viewModelScope.launch { runCatching { repository.identifyFish(image, point, hasDeviceLocation, selectedArea) }.onSuccess { _state.value = _state.value.copy(fishCheck = it, fishChecking = false) }.onFailure { _state.value = _state.value.copy(fishChecking = false, fishError = it.message ?: "Could not identify this photo.") } }
     }

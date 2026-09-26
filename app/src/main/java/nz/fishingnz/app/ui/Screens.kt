@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -73,6 +75,7 @@ import nz.fishingnz.app.data.FishingRulesPage
 import nz.fishingnz.app.data.RulesRepository
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
+import nz.fishingnz.app.viewmodel.SearchLocationMode
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -86,22 +89,70 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
 @Composable fun HomeScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { vm.setFishPhoto(it) }
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     var showPlan by rememberSaveable { mutableStateOf(false) }
     var showCities by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(s.location, s.hasDeviceLocation) {
-        if (s.hasDeviceLocation) resolvedCity(context, s.location)?.let(vm::setResolvedCity)
+    var showSearchStations by rememberSaveable { mutableStateOf(false) }
+    var homeLocationLoading by remember { mutableStateOf(false) }
+    var switchToDeviceOriginOnGrant by remember { mutableStateOf(false) }
+    val locationOnboarding = remember(context) { context.getSharedPreferences("location_onboarding", android.content.Context.MODE_PRIVATE) }
+    LaunchedEffect(s.deviceLocation, s.searchLocationMode, s.manualOriginSelected) {
+        if (s.deviceLocation != null && s.searchLocationMode == SearchLocationMode.NEAR_ME && !s.manualOriginSelected)
+            resolvedCity(context, s.deviceLocation)?.let(vm::setResolvedCity)
     }
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
-            requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
-        else vm.locationUnavailable()
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+            if (switchToDeviceOriginOnGrant) vm.useDeviceSearchOrigin()
+            requestCurrentLocation(context, { point -> homeLocationLoading = false; vm.updateLocation(point) }, { homeLocationLoading = false; vm.locationUnavailable() })
+        } else { homeLocationLoading = false; vm.locationUnavailable() }
+        switchToDeviceOriginOnGrant = false
+    }
+    fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    fun useCurrentLocation() {
+        homeLocationLoading = true
+        if (hasLocationPermission()) {
+            vm.useDeviceSearchOrigin()
+            requestCurrentLocation(context, { point -> homeLocationLoading = false; vm.updateLocation(point) }, { homeLocationLoading = false })
+        } else {
+            switchToDeviceOriginOnGrant = true
+            locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (hasLocationPermission()) {
+            homeLocationLoading = true
+            requestCurrentLocation(context, { point -> homeLocationLoading = false; vm.updateLocation(point) }, { homeLocationLoading = false })
+        } else if (!locationOnboarding.getBoolean("requested", false)) {
+            locationOnboarding.edit().putBoolean("requested", true).apply()
+            homeLocationLoading = true
+            locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+    DisposableEffect(lifecycle) {
+        var initialResumeSeen = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (initialResumeSeen && hasLocationPermission() && !homeLocationLoading) {
+                    homeLocationLoading = true
+                    requestCurrentLocation(context, { point -> homeLocationLoading = false; vm.updateLocation(point) },
+                        { homeLocationLoading = false })
+                }
+                initialResumeSeen = true
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
     fun search() {
+        if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.selectedSearchStation == null) {
+            showPlan = true
+            return
+        }
         if (s.originName != null) { vm.showResults(); return }
         vm.startLocationSearch()
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
+        if (hasLocationPermission()) requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
         else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -130,10 +181,25 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                         if (s.dateStart == s.dateEnd) s.dateStart.format(dateFormat)
                         else "${s.dateStart.format(dateFormat)}–${s.dateEnd.format(dateFormat)}"
                     } else s.dateLabel
-                    Text("$dateSummary  ·  $time  ·  ${s.radiusKm} km", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
-                    Text(s.originName?.let { "From $it" } ?: "From your location or a chosen city", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .8f), style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) { Text("Find fishing windows") }
-                    TextButton(onClick = { showCities = true }) { Text(s.originName ?: "Choose a city") }
+                    val searchScope = if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION)
+                        s.selectedSearchStation?.name ?: "Choose location" else "${s.radiusKm} km"
+                    Text("$dateSummary  ·  $time  ·  $searchScope", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                    Text(s.originName?.let { "From $it" } ?: if (homeLocationLoading && s.searchLocationMode == SearchLocationMode.NEAR_ME) "Finding your location…" else "Choose a location to start", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .8f), style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.selectedSearchStation == null)
+                            "Choose a fishing location" else "Find fishing windows")
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .16f))
+                    Row(Modifier.fillMaxWidth().clickable {
+                        if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) showSearchStations = true
+                        else showCities = true
+                    }.padding(horizontal = 12.dp, vertical = 13.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(s.originName ?: if (homeLocationLoading && s.searchLocationMode == SearchLocationMode.NEAR_ME) "Finding your location…" else "Choose location",
+                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
         }
@@ -159,24 +225,35 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                 FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat") })
             }
             RecommendationFilters(s, vm)
-            Button(onClick = { showPlan = false; search() }, modifier = Modifier.fillMaxWidth()) { Text("Find fishing windows") }
+            Button(onClick = { showPlan = false; search() },
+                enabled = s.searchLocationMode != SearchLocationMode.SPECIFIC_LOCATION || s.selectedSearchStation != null,
+                modifier = Modifier.fillMaxWidth()) { Text("Find fishing windows") }
             Spacer(Modifier.height(16.dp))
         }
     }
-    if (showCities) OriginPickerSheet(onDismiss = { showCities = false }, onChoose = {
+    if (showCities) OriginPickerSheet(onDismiss = { showCities = false }, onUseCurrentLocation = {
+        showCities = false
+        useCurrentLocation()
+    }, onChoose = {
         vm.selectManualOrigin(it)
         showCities = false
     })
+    if (showSearchStations) SearchStationPickerSheet(s.selectedSearchStation?.id,
+        onDismiss = { showSearchStations = false },
+        onUseCurrentLocation = { showSearchStations = false; useCurrentLocation() },
+        onChoose = { vm.selectSearchStation(it); showSearchStations = false })
 }
 
 @Composable private fun RecommendationFilters(s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
+    var showSearchStations by rememberSaveable { mutableStateOf(false) }
+    var searchStationQuery by rememberSaveable { mutableStateOf("") }
     val pickerTheme = if (MaterialTheme.colorScheme.background.luminance() < .5f)
         android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text("When are you going?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today", "In 3 days", "This week", "This weekend").forEach { choice ->
+            listOf("Today", "In 3 days", "In 7 days", "This weekend").forEach { choice ->
                 FilterChip(selected = s.dateLabel == choice, onClick = { vm.setDate(choice) }, label = { Text(choice) })
             }
             FilterChip(selected = s.dateLabel == "Custom", onClick = {
@@ -199,10 +276,52 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
         }
         Text("Only full 2–3 hour windows within these hours are shown. Each selected day is a window's start day.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        Text("Search radius", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(10, 30, 50, 100, 200, 300, 400, 500).forEach { radius ->
-                FilterChip(selected = s.radiusKm == radius, onClick = { vm.setRadius(radius) }, label = { Text("$radius km") })
+        Text("Find windows by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = s.searchLocationMode == SearchLocationMode.NEAR_ME,
+                onClick = { vm.setSearchLocationMode(SearchLocationMode.NEAR_ME); showSearchStations = false },
+                label = { Text("Search radius") })
+            FilterChip(selected = s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION,
+                onClick = {
+                    vm.setSearchLocationMode(SearchLocationMode.SPECIFIC_LOCATION)
+                    showSearchStations = s.selectedSearchStation == null
+                }, label = { Text("Choose location") })
+        }
+        if (s.searchLocationMode == SearchLocationMode.NEAR_ME) {
+            Text("Search radius", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(10, 30, 50, 100, 200, 300, 400, 500).forEach { radius ->
+                    FilterChip(selected = s.radiusKm == radius, onClick = { vm.setRadius(radius) }, label = { Text("$radius km") })
+                }
+            }
+        } else {
+            OutlinedButton(onClick = { showSearchStations = !showSearchStations }, modifier = Modifier.fillMaxWidth()) {
+                Text(s.selectedSearchStation?.name ?: "Choose a tide location", modifier = Modifier.weight(1f))
+                Text(if (showSearchStations) "⌃" else "⌄")
+            }
+            if (showSearchStations) {
+                OutlinedTextField(searchStationQuery, onValueChange = { searchStationQuery = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Search tide locations") }, singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, null) })
+                val matches = remember(searchStationQuery) {
+                    tideStations.filter { station -> station.name.contains(searchStationQuery.trim(), ignoreCase = true) ||
+                        station.region.contains(searchStationQuery.trim(), ignoreCase = true) }
+                }
+                Column(Modifier.fillMaxWidth().height(240.dp).verticalScroll(rememberScrollState())) {
+                    matches.forEach { station ->
+                        ListItem(headlineContent = { Text(station.name) },
+                            supportingContent = { if (station.region != "New Zealand") Text(station.region) },
+                            trailingContent = { if (station.id == s.selectedSearchStation?.id) Icon(Icons.Default.CheckCircle, null) },
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                vm.selectSearchStation(station)
+                                showSearchStations = false
+                                searchStationQuery = ""
+                            })
+                        HorizontalDivider()
+                    }
+                    if (matches.isEmpty()) Text("No tide locations found", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp))
+                }
             }
         }
     }
@@ -255,13 +374,15 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         val image = s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }?.let { bitmap -> java.io.ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }.toByteArray() } }
-        if (image != null && granted) requestCurrentLocation(context, { vm.identifyFish(image, it, true) }, { vm.identifyFish(image, s.location, false) })
-        else if (image != null) vm.identifyFish(image, s.location, false)
+        if (image != null && granted) requestCurrentLocation(context, { vm.identifyFish(image, it, true) },
+            { vm.identifyFish(image, s.deviceLocation ?: s.location, s.deviceLocation != null) })
+        else if (image != null) vm.identifyFish(image, s.deviceLocation ?: s.location, false)
     }
     fun identifyAtCurrentLocation(image: ByteArray) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) requestCurrentLocation(context, { vm.identifyFish(image, it, true) }, { vm.identifyFish(image, s.location, s.hasDeviceLocation) })
+        if (fine || coarse) requestCurrentLocation(context, { vm.identifyFish(image, it, true) },
+            { vm.identifyFish(image, s.deviceLocation ?: s.location, s.deviceLocation != null) })
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -298,6 +419,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Text(fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.name ?: "Choose MPI rules area", modifier = Modifier.weight(1f))
             Text("⌄")
         }
+        if (s.fishRulesAreaIsSuggested) Text("Suggested from your current location. Choose the MPI area where the fish was caught.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f).height(48.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
                 Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Camera")
@@ -330,9 +453,15 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     } }
     if (showRuleAreas) ModalBottomSheet(onDismissRequest = { showRuleAreas = false }) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.85f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Where was the fish caught?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("Choose the MPI area for this fishing spot.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (s.deviceLocation != null || s.tideDeviceLocation != null) TextButton(onClick = {
+                vm.resetFishRulesAreaToCurrentLocation(); showRuleAreas = false
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.NearMe, null); Spacer(Modifier.width(8.dp))
+                Text("Use my current location", modifier = Modifier.weight(1f))
+            }
             fishingRulesAreas.forEach { area ->
                 TextButton(onClick = { vm.chooseFishRulesArea(area.id); showRuleAreas = false }, modifier = Modifier.fillMaxWidth()) {
                     Text(area.name, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
@@ -580,12 +709,16 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun OriginPickerSheet(onDismiss: () -> Unit, onChoose: (SearchOrigin) -> Unit) {
+@Composable private fun OriginPickerSheet(onDismiss: () -> Unit, onUseCurrentLocation: () -> Unit, onChoose: (SearchOrigin) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     val matches = remember(query) { searchOrigins.filter { it.name.contains(query.trim(), ignoreCase = true) }.sortedBy { it.name } }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Choose a city", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Choose a location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            ListItem(headlineContent = { Text("Use current location") },
+                leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onUseCurrentLocation))
+            HorizontalDivider()
             OutlinedTextField(query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
                 label = { Text("Search cities") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
             LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.72f)) {
@@ -593,6 +726,38 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     ListItem(headlineContent = { Text(origin.name) }, modifier = Modifier.fillMaxWidth().clickable { onChoose(origin) })
                     HorizontalDivider()
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun SearchStationPickerSheet(selectedId: String?, onDismiss: () -> Unit,
+    onUseCurrentLocation: () -> Unit, onChoose: (TideStation) -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val matches = remember(query) {
+        tideStations.filter { it.name.contains(query.trim(), ignoreCase = true) || it.region.contains(query.trim(), ignoreCase = true) }
+            .sortedBy { it.name }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Choose a tide location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            ListItem(headlineContent = { Text("Use current location") },
+                leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onUseCurrentLocation))
+            HorizontalDivider()
+            OutlinedTextField(query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search tide locations") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
+            LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.72f)) {
+                items(matches, key = { it.id }) { station ->
+                    ListItem(headlineContent = { Text(station.name) },
+                        supportingContent = { if (station.region != "New Zealand") Text(station.region) },
+                        trailingContent = { if (station.id == selectedId) Icon(Icons.Default.CheckCircle, null) },
+                        modifier = Modifier.fillMaxWidth().clickable { onChoose(station) })
+                    HorizontalDivider()
+                }
+                if (matches.isEmpty()) item { Text("No tide locations found", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)) }
             }
         }
     }
@@ -607,8 +772,11 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             } }
             item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(s.originName?.let { "Near $it" } ?: "Finding your location", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-                    Text("${if (s.boat) "Boat" else "Land"} fishing · ${s.dateLabel} · ${s.radiusKm} km radius", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(s.originName?.let { if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) "At $it" else "Near $it" }
+                        ?: "Finding your location", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("${if (s.boat) "Boat" else "Land"} fishing · ${s.dateLabel}" +
+                        if (s.searchLocationMode == SearchLocationMode.NEAR_ME) " · ${s.radiusKm} km radius" else " · selected location",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val hours = when {
                         s.preferredTime == null -> "Anytime"
                         s.preferredTimeIsSuggested -> "7 AM–9 PM"
@@ -752,20 +920,29 @@ private val fishingRulesAreas = listOf(
     val area = fishingRulesAreas.firstOrNull { it.id == selectedAreaId }
 
     LaunchedEffect(selectedAreaId, reloadToken) {
-        val id = selectedAreaId ?: return@LaunchedEffect
-        loading = true
         page = null
         error = null
+        loading = false
+        val id = selectedAreaId ?: return@LaunchedEffect
+        loading = true
         try { page = repository.load(id) }
         catch (exception: Exception) { error = exception.message ?: "Saved rules are unavailable right now." }
         finally { loading = false }
     }
 
     if (showAreas) ModalBottomSheet(onDismissRequest = { showAreas = false }) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.85f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Choose fishing area", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("MPI divides the coast into these fishing areas. Choose where you will fish.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
+            if (s.deviceLocation != null || s.tideDeviceLocation != null) TextButton(onClick = {
+                vm.resetFishRulesAreaToCurrentLocation()
+                query = ""
+                showAreas = false
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.NearMe, null); Spacer(Modifier.width(8.dp))
+                Text("Use my current location", modifier = Modifier.weight(1f))
+            }
             fishingRulesAreas.forEach { option ->
                 TextButton(onClick = {
                     vm.chooseFishRulesArea(option.id)
@@ -810,6 +987,8 @@ private val fishingRulesAreas = listOf(
                         Text(area?.name ?: "Choose an area", modifier = Modifier.weight(1f))
                         Text("⌄")
                     }
+                    if (s.fishRulesAreaIsSuggested) Text("Suggested from your current location", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     area?.let { Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Text("GPS on land cannot safely identify the exact marine rule boundary. Select the MPI area for your fishing spot.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1134,18 +1313,21 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
 internal fun requestCurrentLocation(context: android.content.Context, onLocation: (GeoPoint) -> Unit, onUnavailable: () -> Unit = {}) {
     try {
         val client = LocationServices.getFusedLocationProviderClient(context)
-        fun useRecentCachedLocation() {
-            client.lastLocation.addOnSuccessListener { cached ->
-                if (cached != null && System.currentTimeMillis() - cached.time in 0L..300_000L)
-                    onLocation(GeoPoint(cached.latitude, cached.longitude))
-                else onUnavailable()
-            }.addOnFailureListener { onUnavailable() }
+        fun requestFresh(cached: android.location.Location?) {
+            val token = CancellationTokenSource()
+            client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token)
+                .addOnSuccessListener { location ->
+                    val usable = location ?: cached?.takeIf { System.currentTimeMillis() - it.time in 0L..300_000L }
+                    if (usable != null) onLocation(GeoPoint(usable.latitude, usable.longitude)) else onUnavailable()
+                }.addOnFailureListener {
+                    val usable = cached?.takeIf { System.currentTimeMillis() - it.time in 0L..300_000L }
+                    if (usable != null) onLocation(GeoPoint(usable.latitude, usable.longitude)) else onUnavailable()
+                }
         }
-        val token = CancellationTokenSource()
-        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token)
-            .addOnSuccessListener { location ->
-                if (location != null) onLocation(GeoPoint(location.latitude, location.longitude))
-                else useRecentCachedLocation()
-            }.addOnFailureListener { useRecentCachedLocation() }
+        client.lastLocation.addOnSuccessListener { cached ->
+            if (cached != null && System.currentTimeMillis() - cached.time in 0L..60_000L)
+                onLocation(GeoPoint(cached.latitude, cached.longitude))
+            else requestFresh(cached)
+        }.addOnFailureListener { requestFresh(null) }
     } catch (_: SecurityException) { onUnavailable() }
 }

@@ -60,6 +60,7 @@ struct CatchCheckRootView: View {
             case .settings: SettingsView()
             }
         }
+        .task { vm.requestLocation() }
     }
 }
 
@@ -300,37 +301,42 @@ struct HomeView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                         Text("Plan your next catch")
                             .font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                        SearchPlaceMenu()
                     }
-                    Button { showingPlan = true } label: {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.title3).foregroundStyle(CatchCheckColor.accent)
-                                    .frame(width: 42, height: 42)
-                                    .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Your fishing plan").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                                    Text("Tap to change your options").font(.caption).foregroundStyle(.secondary)
+                    Card(background: CatchCheckColor.seafoam) {
+                        Button { showingPlan = true } label: {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.title3).foregroundStyle(CatchCheckColor.accent)
+                                        .frame(width: 42, height: 42)
+                                        .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Your fishing plan").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                                        Text("Tap to change your options").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
+                                Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary)\(vm.selectedSearchStationID == nil ? " · \(vm.radiusKm) km" : "")")
+                                    .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
+                                    .lineLimit(2)
                             }
-                            Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary) · \(vm.radiusKm) km")
-                                .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
-                                .lineLimit(2)
-                            Label(vm.locationSummary, systemImage: "location")
-                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .padding(17)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Edit fishing plan: \(vm.isBoatFishing ? "boat" : "land"), \(vm.dateSummary), \(vm.timeSummary), \(vm.locationSummary)")
+                        Button { vm.showRecommendations() } label: {
+                            Text("Find fishing windows")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 5)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(CatchCheckColor.accent)
+                        Divider().padding(.top, 8)
+                        SearchPlaceMenu()
+                            .padding(.top, 8)
+                            .padding(.bottom, 10)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Edit fishing plan: \(vm.isBoatFishing ? "boat" : "land"), \(vm.dateSummary), \(vm.timeSummary), \(vm.radiusKm) kilometres")
-                    ActionCard(title: "Find fishing windows", detail: vm.isBoatFishing
-                               ? "Rank nearby areas by wind, waves, weather and time"
-                               : "Rank nearby areas by tide, wind, weather and time") { vm.showRecommendations() }
                     Text("Quick forecast").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Card { HStack { Metric(label: "Wind", value: vm.weather?.wind ?? "—"); Spacer(); Metric(label: "Tide", value: vm.currentTide?.nextEvent ?? "—"); Spacer(); Metric(label: "Temp", value: vm.weather?.temperature ?? "—") } }
                     if let conditionsError = vm.conditionsError { Text(conditionsError).font(.caption).foregroundStyle(.secondary) }
@@ -369,8 +375,6 @@ private struct PlanningSheet: View {
                             Text("Land").tag(false)
                             Text("Boat").tag(true)
                         }.pickerStyle(.segmented)
-                        Text(vm.locationSummary).font(.caption).foregroundStyle(.secondary)
-                        SearchPlaceMenu()
                     }
                     Card {
                         Text("When").font(.headline).foregroundStyle(CatchCheckColor.navy)
@@ -425,12 +429,22 @@ private struct PlanningSheet: View {
                         }
                     }
                     Card {
-                        Text("Search radius").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(radii, id: \.self) { radius in
-                                    Button("\(radius) km") { vm.radiusKm = radius }
-                                        .buttonStyle(ChoiceButton(selected: vm.radiusKm == radius))
+                        Text("Search from").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                        SearchPlaceMenu()
+                        Text(vm.selectedSearchStationID == nil
+                             ? "Choose your current location to search for fishing windows within a radius, or select one tide location."
+                             : "Fishing windows are calculated at this tide location. The search radius does not apply.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if vm.selectedSearchStationID == nil {
+                        Card {
+                            Text("Search radius").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(radii, id: \.self) { radius in
+                                        Button("\(radius) km") { vm.radiusKm = radius }
+                                            .buttonStyle(ChoiceButton(selected: vm.radiusKm == radius))
+                                    }
                                 }
                             }
                         }
@@ -477,8 +491,14 @@ private struct FishIdentifierView: View {
                 .frame(maxWidth: .infinity)
             }
             Menu {
+                Button {
+                    vm.useCurrentRulesArea()
+                } label: {
+                    Label("Use current location", systemImage: "location.fill")
+                }
+                Divider()
                 ForEach(fishingRulesAreas) { area in
-                    Button(area.name) { vm.selectedRulesAreaID = area.id }
+                    Button(area.name) { vm.selectRulesArea(area.id) }
                 }
             } label: {
                 HStack {
@@ -488,7 +508,9 @@ private struct FishIdentifierView: View {
                     Image(systemName: "chevron.down")
                 }.font(.subheadline).foregroundStyle(CatchCheckColor.navy)
             }
-            Text("Choose the area where you caught the fish for local size and daily limits.")
+            Text(vm.hasDeviceLocation
+                 ? "Suggested from your current location. Choose the area where you caught the fish for local size and daily limits."
+                 : "Choose the area where you caught the fish for local size and daily limits.")
                 .font(.caption).foregroundStyle(.secondary)
             Button {
                 if vm.fishIdentityAvailable { vm.identifyFish() }
@@ -734,7 +756,9 @@ struct ResultsView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("\(vm.isBoatFishing ? "Boat" : "Land") fishing · \(vm.dateSummary)").font(.headline)
-                        Text("\(vm.timeSummary) · within \(vm.radiusKm) km")
+                        Text(vm.selectedSearchStationID == nil
+                             ? "\(vm.timeSummary) · within \(vm.radiusKm) km"
+                             : vm.timeSummary)
                         Text(vm.locationSummary)
                     }.font(.subheadline).foregroundStyle(.secondary)
                     if vm.isResolvingRecommendationLocation {
@@ -742,7 +766,7 @@ struct ResultsView: View {
                     } else if let locationError = vm.recommendationLocationError {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(locationError).foregroundStyle(.red)
-                            Text("Choose a city in your fishing plan on Home, then search again.")
+                            Text("Choose a tide location in your fishing plan on Home, then search again.")
                                 .foregroundStyle(.secondary)
                         }.padding(.vertical, 14)
                     } else if vm.isLoadingRecommendations {
@@ -796,19 +820,76 @@ struct ResultsView: View {
 
 private struct SearchPlaceMenu: View {
     @EnvironmentObject private var vm: FishingViewModel
-    var dark = false
+    @State private var showingPicker = false
 
     var body: some View {
-        Menu {
-            Button { vm.selectSearchPlace(nil) } label: { Label("Use current location", systemImage: "location.fill") }
-            Divider()
-            ForEach(fishingSearchPlaces) { place in
-                Button(place.name) { vm.selectSearchPlace(place.name) }
+        Button { showingPicker = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "location.fill")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Search from").font(.caption).foregroundStyle(.secondary)
+                    Text(vm.homeCityLabel).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                }
+                Spacer()
+                Image(systemName: "chevron.down").font(.caption.bold())
             }
-        } label: {
-            Label(vm.homeCityLabel, systemImage: "location.circle")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(dark ? .white : CatchCheckColor.navy)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Search location: \(vm.homeCityLabel). Change location")
+        .sheet(isPresented: $showingPicker) { SearchStationPicker() }
+    }
+}
+
+private struct SearchStationPicker: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var matchingStations: [TideStation] {
+        let sorted = tideStations.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        guard !query.isEmpty else { return sorted }
+        return sorted.filter { $0.name.localizedStandardContains(query) || $0.region.localizedStandardContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        vm.selectSearchStation(nil)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Label(vm.hasDeviceLocation ? "Current location · \(vm.devicePlaceName ?? "near me")" : "Use current location", systemImage: "location.fill")
+                            Spacer()
+                            if vm.selectedSearchStationID == nil { Image(systemName: "checkmark") }
+                        }
+                    }
+                } footer: {
+                    Text("A tide station provides the centre for your fishing window search. You can change it any time.")
+                }
+                Section("Tide locations") {
+                    ForEach(matchingStations) { station in
+                        Button {
+                            vm.selectSearchStation(station)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(station.name)
+                                    Text(station.region).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if vm.selectedSearchStationID == station.id { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: "Search tide locations")
+            .navigationTitle("Search location")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }
 }
@@ -863,36 +944,6 @@ struct SpotDetailView: View {
     }
 }
 
-private struct ActionCard: View {
-    let title: String
-    let detail: String
-    var outlined = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: "location.fill")
-                    .foregroundStyle(CatchCheckColor.accent)
-                    .frame(width: 44, height: 44)
-                    .background(CatchCheckColor.surface, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).bold()
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(CatchCheckColor.navy)
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(outlined ? CatchCheckColor.surface : CatchCheckColor.seafoam,
-                        in: RoundedRectangle(cornerRadius: 18))
-        }
-    }
-}
 struct RecommendationCard: View {
     let spot: Recommendation
     let action: () -> Void
@@ -944,7 +995,7 @@ private struct FishCheckCard: View {
                     Menu("Choose MPI fishing area") {
                         ForEach(fishingRulesAreas) { area in
                             Button(area.name) {
-                                vm.selectedRulesAreaID = area.id
+                                vm.selectRulesArea(area.id)
                                 vm.identifyFish()
                             }
                         }

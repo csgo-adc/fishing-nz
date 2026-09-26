@@ -131,8 +131,10 @@ struct FishingScoringService: Sendable {
     private static let timeZone = TimeZone(identifier: "Pacific/Auckland")!
     private static let maximumConcurrentSpots = 5
 
-    func rank(origin: GeoPoint, radiusKm: Double, days: [Date], boat: Bool, preferredHours: PreferredFishingHours?) async throws -> [ScoredFishingWindow] {
-        guard radiusKm.isFinite, radiusKm > 0 else { throw ScoringError.invalidRadius }
+    func rank(origin: GeoPoint, radiusKm: Double, selectedStation: TideStation? = nil, days: [Date], boat: Bool, preferredHours: PreferredFishingHours?) async throws -> [ScoredFishingWindow] {
+        if selectedStation == nil {
+            guard radiusKm.isFinite, radiusKm > 0 else { throw ScoringError.invalidRadius }
+        }
         var configuredCalendar = Calendar(identifier: .gregorian)
         configuredCalendar.timeZone = Self.timeZone
         let calendar = configuredCalendar
@@ -145,11 +147,18 @@ struct FishingScoringService: Sendable {
         let mayCrossMidnight = preferredHours.map { $0.startMinute >= $0.endMinute } ?? true
         let forecastDays = min(16, 1 + selectedDays.compactMap { calendar.dateComponents([.day], from: today, to: $0).day }.max()! + (mayCrossMidnight ? 1 : 0))
 
-        let candidates = fishingSpots.compactMap { spot -> Candidate? in
-            guard spot.boat == boat else { return nil }
-            let distance = Self.distanceKm(from: origin, to: spot.coordinate)
-            guard distance.isFinite, distance <= radiusKm else { return nil }
-            return Candidate(spot: spot, distanceKm: distance)
+        let candidates: [Candidate]
+        if let selectedStation {
+            let stationSpot = FishingSpot(name: selectedStation.name, area: selectedStation.region,
+                                          coordinate: GeoPoint(latitude: selectedStation.latitude, longitude: selectedStation.longitude), boat: boat)
+            candidates = [Candidate(spot: stationSpot, distanceKm: 0, isTideStation: true)]
+        } else {
+            candidates = fishingSpots.compactMap { spot -> Candidate? in
+                guard spot.boat == boat else { return nil }
+                let distance = Self.distanceKm(from: origin, to: spot.coordinate)
+                guard distance.isFinite, distance <= radiusKm else { return nil }
+                return Candidate(spot: spot, distanceKm: distance, isTideStation: false)
+            }
         }
         guard !candidates.isEmpty else { return [] }
 
@@ -235,7 +244,8 @@ struct FishingScoringService: Sendable {
                       let daySolar = solar[calendar.startOfDay(for: samples[0].time)] else { continue }
                 let end = samples[0].time.addingTimeInterval(TimeInterval(length * 3_600))
                 if let preferredHours, !preferredHours.contains(start: samples[0].time, end: end, calendar: calendar) { continue }
-                guard let candidateWindow = evaluate(samples: samples, end: end, spot: candidate.spot, distanceKm: candidate.distanceKm, solar: daySolar, marineHours: marineHours, now: now) else { continue }
+                guard let candidateWindow = evaluate(samples: samples, end: end, spot: candidate.spot, distanceKm: candidate.distanceKm,
+                                                     isTideStation: candidate.isTideStation, solar: daySolar, marineHours: marineHours, now: now) else { continue }
                 if let current = best {
                     if candidateWindow.score > current.score ||
                         (candidateWindow.score == current.score && candidateWindow.end.timeIntervalSince(candidateWindow.start) > current.end.timeIntervalSince(current.start)) ||
@@ -250,7 +260,8 @@ struct FishingScoringService: Sendable {
         return (best, hasUsableWeather)
     }
 
-    private static func evaluate(samples: [WeatherHour], end: Date, spot: FishingSpot, distanceKm: Double, solar: SolarDay, marineHours: [Int: MarineHour], now: Date) -> ScoredFishingWindow? {
+    private static func evaluate(samples: [WeatherHour], end: Date, spot: FishingSpot, distanceKm: Double,
+                                 isTideStation: Bool, solar: SolarDay, marineHours: [Int: MarineHour], now: Date) -> ScoredFishingWindow? {
         let maximumWind = samples.map(\.wind).max()!
         let maximumGust = samples.map(\.gust).max()!
         guard !samples.contains(where: { (95...99).contains($0.code) }) else { return nil }
@@ -336,6 +347,7 @@ struct FishingScoringService: Sendable {
         if samples.contains(where: { $0.code == 45 || $0.code == 48 }) { warnings.append("Fog may reduce visibility") }
         if samples[0].time.timeIntervalSince(now) > 7 * 86_400 { warnings.append("Long-range forecast; check again closer to the day") }
         if tide != nil { warnings.append("Coastal tide model is approximate; check local tide tables") }
+        if isTideStation { warnings.append("Tide station is a forecast reference point; check local access and conditions before fishing") }
 
         return .init(
             id: "\(spot.name)|\(spot.boat)|\(Int(samples[0].time.timeIntervalSince1970))",
@@ -462,7 +474,7 @@ struct FishingScoringService: Sendable {
     }
 }
 
-private struct Candidate: Sendable { let spot: FishingSpot; let distanceKm: Double }
+private struct Candidate: Sendable { let spot: FishingSpot; let distanceKm: Double; let isTideStation: Bool }
 private enum SpotOutcome: Sendable {
     case forecastAvailable(ScoredFishingWindow?, Bool)
     case forecastFailed

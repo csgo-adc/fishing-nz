@@ -5,7 +5,7 @@ import UIKit
 enum FishingDatePreset: String, CaseIterable, Hashable {
     case today = "Today"
     case inThreeDays = "In 3 days"
-    case thisWeek = "This week"
+    case inSevenDays = "In 7 days"
     case thisWeekend = "This weekend"
     case custom = "Choose dates"
 }
@@ -15,42 +15,6 @@ enum FishingTimeMode: String, CaseIterable, Hashable {
     case custom = "Choose hours"
     case anytime = "Anytime"
 }
-
-struct FishingSearchPlace: Identifiable {
-    let name: String
-    let coordinate: GeoPoint
-    var id: String { name }
-}
-
-let fishingSearchPlaces: [FishingSearchPlace] = [
-    .init(name: "Hamilton", coordinate: .init(latitude: -37.787, longitude: 175.279)),
-    .init(name: "Auckland", coordinate: .init(latitude: -36.848, longitude: 174.763)),
-    .init(name: "Raglan", coordinate: .init(latitude: -37.800, longitude: 174.870)),
-    .init(name: "Thames", coordinate: .init(latitude: -37.136, longitude: 175.526)),
-    .init(name: "Tauranga", coordinate: .init(latitude: -37.687, longitude: 176.165)),
-    .init(name: "Whangārei", coordinate: .init(latitude: -35.725, longitude: 174.324)),
-    .init(name: "Opua", coordinate: .init(latitude: -35.317, longitude: 174.117)),
-    .init(name: "Opononi", coordinate: .init(latitude: -35.500, longitude: 173.400)),
-    .init(name: "Whangaroa", coordinate: .init(latitude: -35.050, longitude: 173.750)),
-    .init(name: "Whitianga", coordinate: .init(latitude: -36.833, longitude: 175.700)),
-    .init(name: "Rotorua", coordinate: .init(latitude: -38.137, longitude: 176.251)),
-    .init(name: "Whakatāne", coordinate: .init(latitude: -37.950, longitude: 177.000)),
-    .init(name: "Gisborne", coordinate: .init(latitude: -38.667, longitude: 178.017)),
-    .init(name: "Napier", coordinate: .init(latitude: -39.483, longitude: 176.917)),
-    .init(name: "New Plymouth", coordinate: .init(latitude: -39.050, longitude: 174.033)),
-    .init(name: "Whanganui", coordinate: .init(latitude: -39.950, longitude: 174.983)),
-    .init(name: "Wellington", coordinate: .init(latitude: -41.286, longitude: 174.777)),
-    .init(name: "Nelson", coordinate: .init(latitude: -41.271, longitude: 173.284)),
-    .init(name: "Picton", coordinate: .init(latitude: -41.283, longitude: 174.000)),
-    .init(name: "Westport", coordinate: .init(latitude: -41.750, longitude: 171.600)),
-    .init(name: "Greymouth", coordinate: .init(latitude: -42.450, longitude: 171.200)),
-    .init(name: "Kaikōura", coordinate: .init(latitude: -42.417, longitude: 173.700)),
-    .init(name: "Christchurch", coordinate: .init(latitude: -43.533, longitude: 172.636)),
-    .init(name: "Timaru", coordinate: .init(latitude: -44.383, longitude: 171.250)),
-    .init(name: "Oamaru", coordinate: .init(latitude: -45.100, longitude: 170.983)),
-    .init(name: "Dunedin", coordinate: .init(latitude: -45.878, longitude: 170.503)),
-    .init(name: "Bluff", coordinate: .init(latitude: -46.600, longitude: 168.333))
-]
 
 @MainActor
 final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
@@ -69,12 +33,18 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var timeMode: FishingTimeMode = .comfortable { didSet { if oldValue != timeMode { invalidateRecommendations() } } }
     @Published var preferredStartMinute = 8 * 60 { didSet { if oldValue != preferredStartMinute { invalidateRecommendations() } } }
     @Published var preferredEndMinute = 18 * 60 { didSet { if oldValue != preferredEndMinute { invalidateRecommendations() } } }
-    @Published var radiusKm = 100 { didSet { if oldValue != radiusKm { invalidateRecommendations() } } }
+    @Published var radiusKm = 100 {
+        didSet {
+            guard oldValue != radiusKm else { return }
+            UserDefaults.standard.set(radiusKm, forKey: Self.searchRadiusKey)
+            invalidateRecommendations()
+        }
+    }
     @Published var location = GeoPoint(latitude: -36.85, longitude: 174.76)
     @Published var hasDeviceLocation = false
     @Published private(set) var tideLocationIssue: String?
     @Published var devicePlaceName: String?
-    @Published var selectedSearchPlaceName: String?
+    @Published private(set) var selectedSearchStationID: String?
     @Published var isResolvingRecommendationLocation = false
     @Published var recommendationLocationError: String?
     @Published var weather: WeatherState?
@@ -88,7 +58,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var error: String?
     @Published var selectedPhoto: UIImage?
     @Published var fishCheck: FishCheck?
-    @Published var selectedRulesAreaID: String? { didSet { if oldValue != selectedRulesAreaID { fishCheck = nil } } }
+    @Published private(set) var selectedRulesAreaID: String? { didSet { if oldValue != selectedRulesAreaID { fishCheck = nil } } }
     @Published var isCheckingFish = false
     @Published var savedSpotNames = Set<String>()
     @Published var savedRecommendations: [String: Recommendation] = [:]
@@ -119,6 +89,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private var tideTask: Task<Void, Never>?
     private var tideRequestID = UUID()
     private var accountRequestVersion = 0
+    private var rulesAreaSelectionIsManual = false
+    private static let searchStationKey = "fishingSearchStationID"
+    private static let searchRadiusKey = "fishingSearchRadiusKm"
 
     private var nzCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -162,13 +135,18 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     var locationSummary: String {
-        if let selectedSearchPlaceName { return "Near \(selectedSearchPlaceName) (chosen town)" }
-        if hasDeviceLocation { return "Near \(devicePlaceName ?? "your current location")" }
-        return "Current location needed"
+        if let selectedSearchStation { return "From \(selectedSearchStation.name)" }
+        if hasDeviceLocation { return "From \(devicePlaceName ?? "your current location")" }
+        if tideLocationIssue != nil { return "Choose a search location" }
+        return "Finding your current location…"
     }
 
     var homeCityLabel: String {
-        selectedSearchPlaceName ?? (hasDeviceLocation ? devicePlaceName ?? "Current location" : "Choose a city")
+        selectedSearchStation?.name ?? (hasDeviceLocation ? devicePlaceName ?? "Current location" : tideLocationIssue == nil ? "Finding location…" : "Choose location")
+    }
+
+    var selectedSearchStation: TideStation? {
+        tideStations.first(where: { $0.id == selectedSearchStationID })
     }
 
     var tideLocationSummary: String {
@@ -179,7 +157,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     private var recommendationOrigin: GeoPoint? {
-        if let selectedSearchPlaceName { return fishingSearchPlaces.first(where: { $0.name == selectedSearchPlaceName })?.coordinate }
+        if let selectedSearchStation {
+            return GeoPoint(latitude: selectedSearchStation.latitude, longitude: selectedSearchStation.longitude)
+        }
         return hasDeviceLocation ? location : nil
     }
 
@@ -197,7 +177,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 area: window.area,
                 rating: window.score,
                 time: "\(day) · \(startTime)–\(endLabel)",
-                distance: String(format: "%.0f km straight-line", window.distanceKm),
+                distance: selectedSearchStationID == nil
+                    ? String(format: "%.0f km straight-line", window.distanceKm)
+                    : "At selected tide location",
                 reasons: window.reasons,
                 boat: window.boat,
                 warnings: window.warnings,
@@ -224,6 +206,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     var nearbySpotCount: Int {
+        if selectedSearchStationID != nil { return 1 }
         guard let recommendationOrigin else { return 0 }
         let origin = CLLocation(latitude: recommendationOrigin.latitude, longitude: recommendationOrigin.longitude)
         return fishingSpots.filter { spot in
@@ -232,6 +215,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     var nearestSpotHint: String? {
+        if selectedSearchStationID != nil { return nil }
         guard let recommendationOrigin else { return nil }
         let origin = CLLocation(latitude: recommendationOrigin.latitude, longitude: recommendationOrigin.longitude)
         guard let nearest = fishingSpots.filter({ $0.boat == isBoatFishing }).map({ spot in
@@ -243,6 +227,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     var suggestedRadiusKm: Int? {
+        if selectedSearchStationID != nil { return nil }
         guard let recommendationOrigin else { return nil }
         let origin = CLLocation(latitude: recommendationOrigin.latitude, longitude: recommendationOrigin.longitude)
         let nearestDistance = fishingSpots.filter { $0.boat == isBoatFishing }.map {
@@ -252,6 +237,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     var nearbyPlacesWithoutWindows: [String] {
+        if selectedSearchStationID != nil { return [] }
         guard let recommendationOrigin else { return [] }
         let origin = CLLocation(latitude: recommendationOrigin.latitude, longitude: recommendationOrigin.longitude)
         let scored = Set(recommendations.map(\.name))
@@ -277,9 +263,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             return [today]
         case .inThreeDays:
             return [calendar.date(byAdding: .day, value: 3, to: today)].compactMap { $0 }
-        case .thisWeek:
-            let weekday = calendar.component(.weekday, from: today)
-            return days(from: today, count: weekday == 1 ? 1 : 9 - weekday)
+        case .inSevenDays:
+            return [calendar.date(byAdding: .day, value: 7, to: today)].compactMap { $0 }
         case .thisWeekend:
             let weekday = calendar.component(.weekday, from: today)
             if weekday == 1 { return [today] }
@@ -296,18 +281,70 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     func showRecommendations() {
         showingResults = true
         searchRecommendations()
-        if selectedSearchPlaceName == nil && hasDeviceLocation { requestLocation() }
+        if selectedSearchStationID == nil && hasDeviceLocation { requestLocation() }
     }
 
-    func selectSearchPlace(_ placeName: String?) {
-        selectedSearchPlaceName = placeName
+    func selectSearchStation(_ station: TideStation?) {
+        selectedSearchStationID = station?.id
+        if let station {
+            UserDefaults.standard.set(station.id, forKey: Self.searchStationKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.searchStationKey)
+        }
         isResolvingRecommendationLocation = false
         recommendationLocationError = nil
         locationRequestID = UUID()
         if showingResults { searchRecommendations() }
         else { invalidateRecommendations() }
         refreshConditions()
-        if placeName == nil { requestLocation() }
+        if station == nil { requestLocation() }
+    }
+
+    func selectRulesArea(_ areaID: String) {
+        guard fishingRulesAreas.contains(where: { $0.id == areaID }) else { return }
+        rulesAreaSelectionIsManual = true
+        selectedRulesAreaID = areaID
+    }
+
+    func useCurrentRulesArea() {
+        rulesAreaSelectionIsManual = false
+        selectedRulesAreaID = hasDeviceLocation ? suggestedRulesAreaID(for: location) : nil
+        requestLocation()
+    }
+
+    private func suggestedRulesAreaID(for point: GeoPoint) -> String? {
+        guard (-48 ... -34).contains(point.latitude) else { return nil }
+        if point.longitude < -170 { return "chatham-rise" }
+        guard (165 ... 180).contains(point.longitude) else { return nil }
+
+        let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        let kaikoura = CLLocation(latitude: -42.4167, longitude: 173.7)
+        if origin.distance(from: kaikoura) < 35_000 { return "kaikoura" }
+        if point.latitude < -43.8 && point.latitude > -46.5 && point.longitude < 168.5 {
+            return "fiordland"
+        }
+
+        // Inland locations use the closest catalogued coast as a starting point.
+        // MPI coast boundaries and special areas still need checking at the fishing spot.
+        guard let nearest = fishingSpots.min(by: {
+            origin.distance(from: CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)) <
+            origin.distance(from: CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude))
+        }) else { return nil }
+        switch nearest.area {
+        case "Northland", "Bay of Islands", "Far North", "Hokianga", "Auckland", "Auckland West Coast",
+             "Waiheke Island", "Coromandel", "Firth of Thames", "Waikato", "Bay of Plenty":
+            return "auckland-kermadec"
+        case "Gisborne", "Hawke's Bay", "Taranaki", "Whanganui", "Wellington", "Wairarapa":
+            return "central"
+        case "Marlborough", "Marlborough Sounds", "Tasman", "Golden Bay", "Nelson", "West Coast":
+            return "challenger"
+        case "Canterbury", "Otago", "Dunedin":
+            return "south-east"
+        case "Southland":
+            return "southland"
+        default:
+            return nil
+        }
     }
 
     private func invalidateRecommendations() {
@@ -337,7 +374,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 try? await Task.sleep(for: .seconds(10))
                 guard locationRequestID == requestID, isResolvingRecommendationLocation else { return }
                 isResolvingRecommendationLocation = false
-                recommendationLocationError = "Couldn’t get your current location. Choose a city on Home or enable Location Services, then try again."
+                recommendationLocationError = "Couldn’t get your current location. Choose a tide location on Home or enable Location Services, then try again."
             }
             return
         }
@@ -345,6 +382,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         recommendationLocationError = nil
         locationRequestID = UUID()
         let radius = Double(radiusKm)
+        let station = selectedSearchStation
         let days = recommendationDays()
         let boat = isBoatFishing
         let hours = preferredHours
@@ -354,7 +392,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         isLoadingRecommendations = true
         recommendationTask = Task {
             do {
-                let windows = try await scoringService.rank(origin: origin, radiusKm: radius, days: days, boat: boat, preferredHours: hours)
+                let windows = try await scoringService.rank(origin: origin, radiusKm: radius, selectedStation: station,
+                                                            days: days, boat: boat, preferredHours: hours)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
                 scoredWindows = windows
             } catch is CancellationError {
@@ -370,9 +409,16 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     override init() {
         super.init()
+        let storedRadius = UserDefaults.standard.integer(forKey: Self.searchRadiusKey)
+        if [10, 30, 50, 100, 200, 300, 400, 500].contains(storedRadius) { radiusKm = storedRadius }
+        if let stationID = UserDefaults.standard.string(forKey: Self.searchStationKey),
+           tideStations.contains(where: { $0.id == stationID }) {
+            selectedSearchStationID = stationID
+        }
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         refreshStationTide()
+        if selectedSearchStationID != nil { refreshConditions() }
         refreshAccount()
     }
     func requestLocation() {
@@ -387,7 +433,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             hasDeviceLocation = false
             if isResolvingRecommendationLocation {
                 isResolvingRecommendationLocation = false
-                recommendationLocationError = "Location access is off. Choose a city on Home or enable location access in Settings."
+                recommendationLocationError = "Location access is off. Choose a tide location on Home or enable location access in Settings."
             }
         @unknown default:
             break
@@ -402,7 +448,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             hasDeviceLocation = false
             if isResolvingRecommendationLocation {
                 isResolvingRecommendationLocation = false
-                recommendationLocationError = "Location access is off. Choose a city on Home or enable location access in Settings."
+                recommendationLocationError = "Location access is off. Choose a tide location on Home or enable location access in Settings."
             }
         }
         if pendingFishPhoto != nil {
@@ -414,13 +460,14 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         location = GeoPoint(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude)
         hasDeviceLocation = true
         tideLocationIssue = nil
-        let nearestTown = fishingSearchPlaces.min {
-            point.distance(from: CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)) <
-            point.distance(from: CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude))
+        let nearestStation = tideStations.min {
+            point.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <
+            point.distance(from: CLLocation(latitude: $1.latitude, longitude: $1.longitude))
         }
-        devicePlaceName = nearestTown.flatMap {
-            point.distance(from: CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)) < 50_000 ? $0.name : nil
+        devicePlaceName = nearestStation.flatMap {
+            point.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) < 15_000 ? $0.name : nil
         }
+        if !rulesAreaSelectionIsManual { selectedRulesAreaID = suggestedRulesAreaID(for: location) }
         if usesNearbyTideStation { selectNearestTideStation() }
         let coordinate = point.coordinate
         Task {
@@ -430,7 +477,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             }
         }
         refreshConditions()
-        if showingResults && selectedSearchPlaceName == nil { searchRecommendations() }
+        if showingResults && selectedSearchStationID == nil { searchRecommendations() }
         else if !showingResults { invalidateRecommendations() }
         if pendingFishPhoto != nil { identifyPendingFish(at: location) }
     }
@@ -440,7 +487,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         }
         if isResolvingRecommendationLocation {
             isResolvingRecommendationLocation = false
-            recommendationLocationError = "Couldn’t get your current location. Choose a city on Home or try again."
+            recommendationLocationError = "Couldn’t get your current location. Choose a tide location on Home or try again."
         }
         if pendingFishPhoto != nil { identifyPendingFish(at: location) }
     }

@@ -13,6 +13,7 @@ import nz.fishingnz.app.model.PreferredTimeRange
 import nz.fishingnz.app.model.Recommendation
 import nz.fishingnz.app.model.RecommendationSearch
 import nz.fishingnz.app.model.ScoreFactor
+import nz.fishingnz.app.model.TideStation
 import nz.fishingnz.app.model.fishingSpots
 import org.json.JSONArray
 import org.json.JSONObject
@@ -41,7 +42,7 @@ class RecommendationEngine {
     private val timeFormat = DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", Locale.US)
     private val endFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
-    suspend fun search(origin: GeoPoint, radiusKm: Int, start: LocalDate, end: LocalDate, boat: Boolean, preferredTime: PreferredTimeRange?): RecommendationSearch = coroutineScope {
+    suspend fun search(origin: GeoPoint, radiusKm: Int, start: LocalDate, end: LocalDate, boat: Boolean, preferredTime: PreferredTimeRange?, specificStation: TideStation? = null): RecommendationSearch = coroutineScope {
         val today = LocalDate.now(zone)
         require(!start.isBefore(today) && !end.isBefore(start) && !end.isAfter(today.plusDays(15))) {
             "Choose dates within the next 16 days."
@@ -49,11 +50,15 @@ class RecommendationEngine {
         val now = Instant.now()
         val mayCrossMidnight = preferredTime == null || preferredTime.end.isBefore(preferredTime.start)
         val forecastDays = min(16, ChronoUnit.DAYS.between(today, end).toInt() + 1 + if (mayCrossMidnight) 1 else 0)
-        val candidates = fishingSpots.asSequence()
-            .filter { it.boat == boat }
-            .map { it to distanceKm(origin, GeoPoint(it.latitude, it.longitude)) }
-            .toList()
-        val nearby = candidates.filter { it.second <= radiusKm }
+        val candidates = if (specificStation != null) {
+            listOf(FishingSpot(specificStation.name, specificStation.region, specificStation.latitude, specificStation.longitude, boat) to 0.0)
+        } else {
+            fishingSpots.asSequence()
+                .filter { it.boat == boat }
+                .map { it to distanceKm(origin, GeoPoint(it.latitude, it.longitude)) }
+                .toList()
+        }
+        val nearby = if (specificStation != null) candidates else candidates.filter { it.second <= radiusKm }
         if (nearby.isEmpty()) {
             val closest = candidates.minByOrNull { it.second }
             return@coroutineScope RecommendationSearch(
@@ -76,6 +81,12 @@ class RecommendationEngine {
         if (succeeded.none { it.usableWeather }) error("No usable hourly weather forecast was available for the selected days.")
         RecommendationSearch(
             succeeded.mapNotNull { it.window }
+                .map { window ->
+                    if (specificStation == null) window else window.copy(
+                        distance = "Selected location",
+                        warnings = window.warnings + "Confirm fishing access and local rules at this location"
+                    )
+                }
                 .sortedWith(compareByDescending<Recommendation> { it.rating }.thenBy { it.distanceKm }.thenBy { it.name }),
             nearby.size,
             outcomes.count { it.isFailure }

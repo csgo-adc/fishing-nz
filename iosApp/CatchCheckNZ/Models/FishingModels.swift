@@ -5,7 +5,7 @@ struct WeatherState { let temperature: String; let wind: String; let rain: Strin
 struct TideEvent: Identifiable { let time: String; let height: String; let type: String; var id: String { "\(time)-\(type)" } }
 struct TidePoint: Identifiable { let time: String; let level: Double; let minuteOfDay: Int; var id: Int { minuteOfDay } }
 struct TideState { let currentLevel: String; let nextEvent: String; let eventTime: String; let events: [TideEvent]; let points: [TidePoint]; let stationName: String }
-struct TideStation: Identifiable, Equatable { let id: String; let name: String; let csvName: String; let region: String; let latitude: Double; let longitude: Double }
+struct TideStation: Identifiable, Equatable, Sendable { let id: String; let name: String; let csvName: String; let region: String; let latitude: Double; let longitude: Double }
 struct Recommendation: Identifiable, Equatable { let name: String; let area: String; let rating: Int; let time: String; let distance: String; let reasons: [String]; let boat: Bool; var warnings: [String] = []; var startsAt: Date? = nil; var endsAt: Date? = nil; var id: String { "\(boat ? "boat" : "land"):\(name)" } }
 struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let minimumSizeLabel: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
