@@ -54,7 +54,7 @@
     <section id="cached" class="card rules" hidden></section>
     <section id="empty" class="card" hidden>
       <h2>Rules are not cached yet</h2>
-      <p id="crawl-status">The backend will show the latest saved rules after a successful scheduled refresh.</p>
+      <p id="crawl-status">The saved summary is unavailable. Check the current rules on MPI.</p>
       <p><a id="official" target="_blank" rel="noopener noreferrer">Open the official MPI rules for this area</a></p>
     </section>
     <p class="small">Source: Fisheries New Zealand (MPI). Always confirm local closures and temporary restrictions at the fishing location.</p>
@@ -74,6 +74,7 @@
     const empty = document.getElementById("empty");
     const officialLink = document.getElementById("official");
     const crawlStatus = document.getElementById("crawl-status");
+    const emptyTitle = empty.querySelector("h2");
     const fishFocus = document.getElementById("fish-focus");
     const params = new URLSearchParams(location.search);
     const fish = (params.get("fish") || params.get("species") || "").trim();
@@ -183,6 +184,8 @@
       const url = officialUrl(id);
       officialLink.href = url;
       cached.hidden = true; empty.hidden = true;
+      fishFocus.hidden = true;
+      emptyTitle.textContent = "Rules are not cached yet";
       statusLine.className = "meta";
       statusLine.textContent = `Loading ${areaName} rules…`;
       try {
@@ -191,6 +194,13 @@
           const payload = await response.json();
           const rule = payload.rules?.[0];
           if (rule) {
+            if (rule.needsReview) {
+              emptyTitle.textContent = "MPI has updated this area";
+              crawlStatus.textContent = "Open the official MPI page for current limits and closures while the saved summary is reviewed.";
+              empty.hidden = false;
+              statusLine.textContent = `${areaName} · check current MPI rules`;
+              return;
+            }
             addRulesContent(cached, rule);
             focusFishRules(cached);
             statusLine.textContent = fish ? `${fish} · ${areaName} · cached official MPI data` : `${areaName} · cached official MPI data`;
@@ -202,7 +212,7 @@
           const state = await stateResponse.json();
           const areaState = state.areas?.find(item => item.area_id === id);
           if (areaState?.status === "failed") crawlStatus.textContent = `Last refresh attempt failed (${areaState.http_status || "network"}). The previous saved rules, if any, are retained.`;
-          else crawlStatus.textContent = "No successful scheduled refresh has been saved for this area yet.";
+          else crawlStatus.textContent = "No reviewed rules summary is available for this area yet.";
         }
         empty.hidden = false;
         statusLine.textContent = `${areaName} · no cached data`;

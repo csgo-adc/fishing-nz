@@ -95,7 +95,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
     MaterialTheme(colorScheme = palette) {
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
         Scaffold(containerColor = palette.background, bottomBar = {
-            NavigationBar(containerColor = palette.surface) {
+            if (!state.showResults && state.selectedSpot == null) NavigationBar(containerColor = palette.surface) {
                 val destinations = listOf(
                     Triple(Icons.Default.Home, "Home", 0),
                     Triple(Icons.Default.Map, "Map", 1),
@@ -118,7 +118,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                 1 -> MapScreen(modifier, state, vm)
                 2 -> TideScreen(modifier, state, vm)
                 3 -> MoreDetail("Trips", { vm.selectTab(6) }, modifier) { TripsScreen(Modifier, state, vm) }
-                4 -> MoreDetail("Rules", { vm.selectTab(6) }, modifier) { RulesScreen(Modifier) }
+                4 -> MoreDetail("Rules", { vm.selectTab(6) }, modifier) { RulesScreen(Modifier, state, vm) }
                 5 -> MoreDetail("Account", { vm.selectTab(6) }, modifier) { AccountScreen(Modifier, state, vm) }
                 else -> MoreScreen(modifier, state.account?.user?.displayName, appearance, vm::selectTab) { choice ->
                     appearance = choice

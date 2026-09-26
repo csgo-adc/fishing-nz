@@ -50,7 +50,7 @@ struct CatchCheckRootView: View {
         }
         .tint(CatchCheckColor.accent)
         .preferredColorScheme(preferredAppearance)
-        .sheet(isPresented: $vm.showingResults) { ResultsView() }
+        .fullScreenCover(isPresented: $vm.showingResults) { ResultsView() }
         .sheet(item: $vm.selectedSpot) { SpotDetailView(spot: $0) }
         .sheet(item: $moreDestination) { destination in
             switch destination {
@@ -133,6 +133,7 @@ struct HomeView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                         Text("Plan your next catch")
                             .font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                        SearchPlaceMenu()
                     }
                     Button { showingPlan = true } label: {
                         VStack(alignment: .leading, spacing: 12) {
@@ -216,14 +217,16 @@ private struct PlanningSheet: View {
                         }
                         if vm.datePreset == .custom {
                             DatePicker("From", selection: $vm.customStartDate,
-                                       in: Calendar.current.startOfDay(for: .now)...vm.latestSelectableDate,
+                                       in: vm.firstSelectableDate...vm.latestSelectableDate,
                                        displayedComponents: .date)
+                                .environment(\.timeZone, TimeZone(identifier: "Pacific/Auckland")!)
                                 .onChange(of: vm.customStartDate) { _, start in
                                     if vm.customEndDate < start { vm.customEndDate = start }
                                 }
                             DatePicker("To", selection: $vm.customEndDate,
                                        in: vm.customStartDate...vm.latestSelectableDate,
                                        displayedComponents: .date)
+                                .environment(\.timeZone, TimeZone(identifier: "Pacific/Auckland")!)
                         }
                         Text("Choose dates within the next 16 days.").font(.caption).foregroundStyle(.secondary)
                     }
@@ -288,7 +291,34 @@ private struct FishIdentifierView: View {
             if let result = vm.fishCheck { FishCheckCard(result: result) }
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
-            HStack { Button { showCamera = true } label: { Label("Take photo", systemImage: "camera") }.buttonStyle(.bordered).frame(maxWidth: .infinity); PhotosPicker(selection: $photoItem, matching: .images) { Label(galleryLabel, systemImage: "photo") }.buttonStyle(.bordered).frame(maxWidth: .infinity) }
+            HStack(spacing: 10) {
+                Button { showCamera = true } label: {
+                    Label("Take photo", systemImage: "camera")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity)
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Label(galleryLabel, systemImage: "photo")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity)
+            }
+            Menu {
+                ForEach(fishingRulesAreas) { area in
+                    Button(area.name) { vm.selectedRulesAreaID = area.id }
+                }
+            } label: {
+                HStack {
+                    Label("MPI rules area", systemImage: "map")
+                    Spacer()
+                    Text(fishingRulesAreas.first(where: { $0.id == vm.selectedRulesAreaID })?.name ?? "Choose for local limits")
+                    Image(systemName: "chevron.down")
+                }.font(.subheadline).foregroundStyle(CatchCheckColor.navy)
+            }
+            Text("Choose the area where you caught the fish for local size and daily limits.")
+                .font(.caption).foregroundStyle(.secondary)
             Button {
                 if vm.fishIdentityAvailable { vm.identifyFish() }
                 else if vm.hasStoredSession { vm.refreshAccount() }
@@ -550,16 +580,18 @@ struct ResultsView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("\(vm.dateSummary) · \(vm.timeSummary) · within \(vm.radiusKm) km · \(vm.locationSummary)")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(vm.isBoatFishing ? "Boat" : "Land") fishing · \(vm.dateSummary)").font(.headline)
+                        Text("\(vm.timeSummary) · within \(vm.radiusKm) km")
+                        Text(vm.locationSummary)
+                    }.font(.subheadline).foregroundStyle(.secondary)
                     if vm.isResolvingRecommendationLocation {
                         ProgressView("Getting your current location…").frame(maxWidth: .infinity).padding(.vertical, 28)
-                        SearchPlaceMenu()
                     } else if let locationError = vm.recommendationLocationError {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(locationError).foregroundStyle(.red)
-                            Button("Try current location again") { vm.selectSearchPlace(nil) }.buttonStyle(.bordered)
-                            SearchPlaceMenu()
+                            Text("Choose a city in your fishing plan on Home, then search again.")
+                                .foregroundStyle(.secondary)
                         }.padding(.vertical, 14)
                     } else if vm.isLoadingRecommendations {
                         ProgressView("Comparing hourly forecasts…").frame(maxWidth: .infinity).padding(.vertical, 28)
@@ -576,19 +608,10 @@ struct ResultsView: View {
                                 .foregroundStyle(.secondary)
                             if vm.nearbySpotCount == 0, let hint = vm.nearestSpotHint {
                                 Text(hint).font(.subheadline).foregroundStyle(.secondary)
-                                if let radius = vm.suggestedRadiusKm {
-                                    Button("Search within \(radius) km") { vm.radiusKm = radius; vm.searchRecommendations() }.buttonStyle(.borderedProminent)
-                                }
-                            } else if vm.timeMode != .anytime {
-                                Button(vm.timeMode == .custom ? "Clear preferred time and search again" : "Search anytime") {
-                                    vm.timeMode = .anytime
-                                    vm.searchRecommendations()
-                                }.buttonStyle(.bordered)
                             }
                             if vm.nearbySpotCount > 0, vm.datePreset == .today {
-                                Text("Today may have too little time left for a 2–3 hour window. Try the next three days.")
+                                Text("Today may have too little time left for a 2–3 hour window. Try another date in your fishing plan.")
                                     .font(.subheadline).foregroundStyle(.secondary)
-                                Button("Search next 3 days") { vm.datePreset = .nextThreeDays; vm.searchRecommendations() }.buttonStyle(.bordered)
                             }
                             if !vm.nearbyPlacesWithoutWindows.isEmpty {
                                 Text("Nearby areas checked: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
@@ -613,7 +636,7 @@ struct ResultsView: View {
                 }
             }
             .listStyle(.plain)
-            .navigationTitle("Best options")
+            .navigationTitle("Fishing windows")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.showingResults = false } } }
         }
     }
@@ -631,7 +654,7 @@ private struct SearchPlaceMenu: View {
                 Button(place.name) { vm.selectSearchPlace(place.name) }
             }
         } label: {
-            Label("Choose search town", systemImage: "location.circle")
+            Label(vm.homeCityLabel, systemImage: "location.circle")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(dark ? .white : CatchCheckColor.navy)
         }
@@ -650,6 +673,8 @@ struct SpotDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text(spot.area).foregroundStyle(.secondary)
+                    Text("Area marker only. Check public access, safe conditions and any local fishing closures before going.")
+                        .font(.subheadline).foregroundStyle(.secondary)
                     if spot.rating > 0 {
                         Text("\(spot.rating)/100 · \(spot.time)").font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
                         Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
@@ -749,33 +774,50 @@ struct RecommendationCard: View {
     }
 }
 private struct FishCheckCard: View {
+    @EnvironmentObject private var vm: FishingViewModel
     let result: FishCheck
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { Text(result.commonName).bold(); Spacer(); Text("\(result.confidence)% match").bold().foregroundStyle(CatchCheckColor.orange) }
             Text(result.scientificName).foregroundStyle(.secondary)
-            HStack {
-                Text("MPI rules · \(result.areaName)").font(.subheadline.bold())
-                Spacer()
-                if let reviewed = result.rulesReviewedAt { Text("Reviewed \(reviewed)").font(.caption).foregroundStyle(.secondary) }
-            }
+            Text("MPI rules · \(result.areaName)").font(.subheadline.bold())
             if result.fishRules.isEmpty {
-                Text("No species-specific size or catch-limit entry was found in the saved rules for this area. Check local closures and restrictions before keeping this fish.")
+                Text(result.rulesNeedsReview
+                     ? "MPI has changed this area's rules. Open the official page for current limits."
+                     : vm.selectedRulesAreaID == nil
+                       ? "Choose the MPI rules area above, then identify again to check local limits."
+                       : "No saved size or daily limit matched this species here. Check the official rules before keeping it.")
                     .font(.subheadline).foregroundStyle(.secondary).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 10))
+                if vm.selectedRulesAreaID == nil {
+                    Menu("Choose MPI fishing area") {
+                        ForEach(fishingRulesAreas) { area in
+                            Button(area.name) {
+                                vm.selectedRulesAreaID = area.id
+                                vm.identifyFish()
+                            }
+                        }
+                    }.buttonStyle(.borderedProminent)
+                }
             } else {
                 ForEach(result.fishRules) { rule in
                     VStack(alignment: .leading, spacing: 5) {
                         Text(rule.species).font(.subheadline.bold())
-                        if let minimumSize = rule.minimumSize { Text("Minimum size: \(minimumSize)") }
-                        if let dailyLimit = rule.dailyLimit { Text("Daily limit: \(dailyLimit)") }
-                        ForEach(rule.details) { detail in Text("\(detail.label): \(detail.value)") }
+                        if rule.details.contains(where: { $0.label.localizedCaseInsensitiveContains("daily limit") || $0.label.localizedCaseInsensitiveContains("bag limit") }) {
+                            Text("Limits differ within this area. Check the exact subarea on MPI.")
+                        } else {
+                            if let minimumSize = rule.minimumSize { Text("\(rule.minimumSizeLabel ?? "Minimum size"): \(minimumSize)") }
+                            if let dailyLimit = rule.dailyLimit { Text("Daily limit: \(dailyLimit)") }
+                        }
                     }
                     .font(.subheadline).foregroundStyle(CatchCheckColor.navy).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 10))
                 }
             }
-            Text(result.areaIsEstimated ? "Fishing area is estimated because device location was unavailable. Confirm the area where you are fishing." : "Area selected from current device location. Confirm the exact fishing location.")
+            if let url = result.rulesSourceURL ?? fishingRulesAreas.first(where: { $0.id == vm.selectedRulesAreaID })?.officialURL {
+                Link("See full official MPI rules", destination: url).font(.subheadline.weight(.semibold))
+            }
+            Text("Confirm the species, exact location, closures and current MPI rules before keeping a fish.")
                 .font(.caption).foregroundStyle(.secondary)
-            Text("Check local closures and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
+            if let reviewed = result.rulesReviewedAt { Text("MPI page reviewed: \(reviewed)").font(.caption).foregroundStyle(.secondary) }
         }.foregroundStyle(CatchCheckColor.navy).padding(14).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14))
     }
 }

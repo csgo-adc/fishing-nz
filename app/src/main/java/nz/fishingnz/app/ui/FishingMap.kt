@@ -179,6 +179,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         if (fine || coarse) locate()
         else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
+    // Resolve the position when the map opens, including after a fresh permission grant.
+    LaunchedEffect(Unit) { requestLocation() }
 
     Column(modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {

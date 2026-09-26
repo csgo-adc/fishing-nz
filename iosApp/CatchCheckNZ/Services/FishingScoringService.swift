@@ -37,8 +37,8 @@ struct PreferredFishingHours: Sendable {
     }
 }
 
-// The original six map spots are retained. These are approximate fishing-area
-// coordinates, not access points or launch locations; distance is straight-line.
+// Curated named coastal areas. Coordinates are approximate area markers, not access
+// points or launch sites; distance is straight-line and local access must be checked.
 let fishingSpots: [FishingSpot] = [
     .init(name: "Whangārei Harbour", area: "Northland", coordinate: .init(latitude: -35.72, longitude: 174.32), boat: false),
     .init(name: "Mission Bay", area: "Auckland", coordinate: .init(latitude: -36.8485, longitude: 174.7633), boat: false),
@@ -90,7 +90,41 @@ let fishingSpots: [FishingSpot] = [
     .init(name: "Stewart Island / Rakiura", area: "Southland", coordinate: .init(latitude: -46.895, longitude: 168.13), boat: true),
     .init(name: "Greymouth Coast", area: "West Coast", coordinate: .init(latitude: -42.45, longitude: 171.2), boat: false),
     .init(name: "Hokitika Coast", area: "West Coast", coordinate: .init(latitude: -42.715, longitude: 170.96), boat: false),
-    .init(name: "Westport Coast", area: "West Coast", coordinate: .init(latitude: -41.75, longitude: 171.60), boat: false)
+    .init(name: "Westport Coast", area: "West Coast", coordinate: .init(latitude: -41.75, longitude: 171.60), boat: false),
+    // Additional named coastal reference points use coordinates published in LINZ daily tide CSV headers.
+    // https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view
+    // Markers indicate areas to explore, not verified public fishing access or permitted fishing.
+    .init(name: "Ōpōtiki Wharf", area: "Bay of Plenty", coordinate: .init(latitude: -38.033333, longitude: 177.233333), boat: false),
+    .init(name: "Port Ōhope Wharf", area: "Bay of Plenty", coordinate: .init(latitude: -37.983333, longitude: 177.1), boat: false),
+    .init(name: "Opua Foreshore", area: "Bay of Islands", coordinate: .init(latitude: -35.316667, longitude: 174.116667), boat: false),
+    .init(name: "Opononi Foreshore", area: "Hokianga", coordinate: .init(latitude: -35.5, longitude: 173.4), boat: false),
+    .init(name: "Whangaroa Harbour", area: "Northland", coordinate: .init(latitude: -35.05, longitude: 173.75), boat: false),
+    .init(name: "Anawhata Coast", area: "Auckland West Coast", coordinate: .init(latitude: -36.933333, longitude: 174.45), boat: false),
+    .init(name: "Mātiatia Bay", area: "Waiheke Island", coordinate: .init(latitude: -36.783333, longitude: 174.983333), boat: false),
+    .init(name: "Kaituna River Mouth", area: "Bay of Plenty", coordinate: .init(latitude: -37.75, longitude: 176.416667), boat: false),
+    .init(name: "Whakatāne Coast", area: "Bay of Plenty", coordinate: .init(latitude: -37.95, longitude: 177.0), boat: false),
+    .init(name: "Port Taranaki Coast", area: "Taranaki", coordinate: .init(latitude: -39.05, longitude: 174.033333), boat: false),
+    .init(name: "Castlepoint Coast", area: "Wairarapa", coordinate: .init(latitude: -40.916667, longitude: 176.216667), boat: false),
+    .init(name: "Havelock Foreshore", area: "Marlborough", coordinate: .init(latitude: -41.283333, longitude: 173.766667), boat: false),
+    .init(name: "Kaiteriteri Coast", area: "Tasman", coordinate: .init(latitude: -41.05, longitude: 173.016667), boat: false),
+    .init(name: "Māpua Coast", area: "Tasman", coordinate: .init(latitude: -41.25, longitude: 173.1), boat: false),
+    .init(name: "Tarakohe Coast", area: "Golden Bay", coordinate: .init(latitude: -40.816667, longitude: 172.9), boat: false),
+    .init(name: "Jackson Bay Coast", area: "West Coast", coordinate: .init(latitude: -43.983333, longitude: 168.633333), boat: false),
+    .init(name: "Oamaru Coast", area: "Otago", coordinate: .init(latitude: -45.1, longitude: 170.983333), boat: false),
+    .init(name: "Timaru Harbour", area: "Canterbury", coordinate: .init(latitude: -44.383333, longitude: 171.25), boat: false),
+    .init(name: "Manu Bay Coast", area: "Waikato", coordinate: .init(latitude: -37.816667, longitude: 174.816667), boat: false),
+    .init(name: "Ōmokoroa Foreshore", area: "Bay of Plenty", coordinate: .init(latitude: -37.666667, longitude: 176.05), boat: false),
+    .init(name: "Sumner Head Coast", area: "Canterbury", coordinate: .init(latitude: -43.566667, longitude: 172.766667), boat: false),
+    .init(name: "Riverton / Aparima Foreshore", area: "Southland", coordinate: .init(latitude: -46.366667, longitude: 168.016667), boat: false),
+    .init(name: "Opua Waters", area: "Bay of Islands", coordinate: .init(latitude: -35.316667, longitude: 174.116667), boat: true),
+    .init(name: "Whangaroa Waters", area: "Northland", coordinate: .init(latitude: -35.05, longitude: 173.75), boat: true),
+    .init(name: "Havelock Waters", area: "Marlborough Sounds", coordinate: .init(latitude: -41.283333, longitude: 173.766667), boat: true),
+    .init(name: "Golden Bay / Tarakohe", area: "Golden Bay", coordinate: .init(latitude: -40.816667, longitude: 172.9), boat: true),
+    .init(name: "Port Taranaki Waters", area: "Taranaki", coordinate: .init(latitude: -39.05, longitude: 174.033333), boat: true),
+    .init(name: "Castlepoint Waters", area: "Wairarapa", coordinate: .init(latitude: -40.916667, longitude: 176.216667), boat: true),
+    .init(name: "Westport Waters", area: "West Coast", coordinate: .init(latitude: -41.75, longitude: 171.6), boat: true),
+    .init(name: "Kaikōura Waters", area: "Canterbury", coordinate: .init(latitude: -42.416667, longitude: 173.7), boat: true),
+    .init(name: "Riverton / Aparima Waters", area: "Southland", coordinate: .init(latitude: -46.366667, longitude: 168.016667), boat: true)
 ]
 
 struct FishingScoringService: Sendable {

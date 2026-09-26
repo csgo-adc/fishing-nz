@@ -1,0 +1,616 @@
+{
+  "source": "https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view",
+  "coordinate_source": "first row of each linked LINZ 2026 daily-prediction CSV; coordinate precision is as published by LINZ",
+  "count": 87,
+  "stations": [
+    {
+      "name": "Akaroa",
+      "csv_name": "Akaroa",
+      "latitude": -43.8,
+      "longitude": 172.966667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Akaroa 2026.csv"
+    },
+    {
+      "name": "Anakakata Bay",
+      "csv_name": "Anakakata Bay",
+      "latitude": -41.05,
+      "longitude": 174.283333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Anakakata Bay 2026.csv"
+    },
+    {
+      "name": "Anawhata",
+      "csv_name": "Anawhata",
+      "latitude": -36.933333,
+      "longitude": 174.45,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Anawhata 2026.csv"
+    },
+    {
+      "name": "Auckland",
+      "csv_name": "Auckland",
+      "latitude": -36.85,
+      "longitude": 174.766667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland 2026.csv"
+    },
+    {
+      "name": "Ben Gunn Wharf",
+      "csv_name": "Ben Gunn Wharf",
+      "latitude": -35.0,
+      "longitude": 173.266667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ben Gunn Wharf 2026.csv"
+    },
+    {
+      "name": "Bluff",
+      "csv_name": "Bluff",
+      "latitude": -46.6,
+      "longitude": 168.35,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Bluff 2026.csv"
+    },
+    {
+      "name": "Castlepoint",
+      "csv_name": "Castlepoint",
+      "latitude": -40.916667,
+      "longitude": 176.216667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Castlepoint 2026.csv"
+    },
+    {
+      "name": "Charleston",
+      "csv_name": "Charleston",
+      "latitude": -41.908333,
+      "longitude": 171.433333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Charleston 2026.csv"
+    },
+    {
+      "name": "Dargaville",
+      "csv_name": "Dargaville",
+      "latitude": -35.933333,
+      "longitude": 173.866667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Dargaville 2026.csv"
+    },
+    {
+      "name": "Deep Cove",
+      "csv_name": "Deep Cove",
+      "latitude": -45.466667,
+      "longitude": 167.15,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Deep Cove 2026.csv"
+    },
+    {
+      "name": "Dog Island",
+      "csv_name": "Dog Island",
+      "latitude": -46.65,
+      "longitude": 168.416667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Dog Island 2026.csv"
+    },
+    {
+      "name": "Dunedin",
+      "csv_name": "Dunedin",
+      "latitude": -45.883333,
+      "longitude": 170.5,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Dunedin 2026.csv"
+    },
+    {
+      "name": "Elaine Bay",
+      "csv_name": "Elaine Bay",
+      "latitude": -41.05,
+      "longitude": 173.766667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Elaine Bay 2026.csv"
+    },
+    {
+      "name": "Elie Bay",
+      "csv_name": "Elie Bay",
+      "latitude": -41.131667,
+      "longitude": 173.991667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Elie Bay 2026.csv"
+    },
+    {
+      "name": "Fishing Rock - Raoul Island",
+      "csv_name": "Fishing Rock - Raoul Island",
+      "latitude": -29.25,
+      "longitude": -177.916667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Fishing Rock - Raoul Island 2026.csv"
+    },
+    {
+      "name": "Flour Cask Bay",
+      "csv_name": "Flour Cask Bay",
+      "latitude": -47.283333,
+      "longitude": 167.483333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Flour Cask Bay 2026.csv"
+    },
+    {
+      "name": "Fresh Water Basin",
+      "csv_name": "Fresh Water Basin",
+      "latitude": -44.666667,
+      "longitude": 167.933333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Fresh Water Basin 2026.csv"
+    },
+    {
+      "name": "Gisborne",
+      "csv_name": "Gisborne",
+      "latitude": -38.666667,
+      "longitude": 178.033333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Gisborne 2026.csv"
+    },
+    {
+      "name": "Green Island",
+      "csv_name": "Green Island",
+      "latitude": -45.95,
+      "longitude": 170.383333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Green Island 2026.csv"
+    },
+    {
+      "name": "Halfmoon Bay / Oban",
+      "csv_name": "Halfmoon Bay - Oban",
+      "latitude": -46.9,
+      "longitude": 168.133333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Halfmoon Bay - Oban 2026.csv"
+    },
+    {
+      "name": "Havelock",
+      "csv_name": "Havelock",
+      "latitude": -41.283333,
+      "longitude": 173.766667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Havelock 2026.csv"
+    },
+    {
+      "name": "Helensville",
+      "csv_name": "Helensville",
+      "latitude": -36.666667,
+      "longitude": 174.45,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Helensville 2026.csv"
+    },
+    {
+      "name": "Huruhi Harbour",
+      "csv_name": "Huruhi Harbour",
+      "latitude": -36.6,
+      "longitude": 175.766667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Huruhi Harbour 2026.csv"
+    },
+    {
+      "name": "Jackson Bay",
+      "csv_name": "Jackson Bay",
+      "latitude": -43.983333,
+      "longitude": 168.633333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Jackson Bay 2026.csv"
+    },
+    {
+      "name": "Kaikōura",
+      "csv_name": "Kaikōura",
+      "latitude": -42.416667,
+      "longitude": 173.7,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaikōura 2026.csv"
+    },
+    {
+      "name": "Kaingaroa - Chatham Island",
+      "csv_name": "Kaingaroa - Chatham Island",
+      "latitude": -43.733333,
+      "longitude": -176.266667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaingaroa - Chatham Island 2026.csv"
+    },
+    {
+      "name": "Kaiteriteri",
+      "csv_name": "Kaiteriteri",
+      "latitude": -41.05,
+      "longitude": 173.016667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaiteriteri 2026.csv"
+    },
+    {
+      "name": "Kaituna River Entrance",
+      "csv_name": "Kaituna River Entrance",
+      "latitude": -37.75,
+      "longitude": 176.416667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaituna River Entrance 2026.csv"
+    },
+    {
+      "name": "Kawhia",
+      "csv_name": "Kawhia",
+      "latitude": -38.066667,
+      "longitude": 174.816667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kawhia 2026.csv"
+    },
+    {
+      "name": "Korotiti Bay",
+      "csv_name": "Korotiti Bay",
+      "latitude": -36.183333,
+      "longitude": 175.483333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Korotiti Bay 2026.csv"
+    },
+    {
+      "name": "Leigh",
+      "csv_name": "Leigh",
+      "latitude": -36.283333,
+      "longitude": 174.8,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Leigh 2026.csv"
+    },
+    {
+      "name": "Long Island",
+      "csv_name": "Long Island",
+      "latitude": -41.116667,
+      "longitude": 174.283333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Long Island 2026.csv"
+    },
+    {
+      "name": "Lottin Point / Wakatiri",
+      "csv_name": "Lottin Point - Wakatiri",
+      "latitude": -37.55,
+      "longitude": 178.166667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Lottin Point - Wakatiri 2026.csv"
+    },
+    {
+      "name": "Lyttelton",
+      "csv_name": "Lyttelton",
+      "latitude": -43.6,
+      "longitude": 172.716667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Lyttelton 2026.csv"
+    },
+    {
+      "name": "Man o‘War Bay",
+      "csv_name": "Man o‘War Bay",
+      "latitude": -36.783333,
+      "longitude": 175.15,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Man o‘War Bay 2026.csv"
+    },
+    {
+      "name": "Mana Marina",
+      "csv_name": "Mana Marina",
+      "latitude": -41.1,
+      "longitude": 174.866667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Mana Marina 2026.csv"
+    },
+    {
+      "name": "Manu Bay",
+      "csv_name": "Manu Bay",
+      "latitude": -37.816667,
+      "longitude": 174.816667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Manu Bay 2026.csv"
+    },
+    {
+      "name": "Marsden Point",
+      "csv_name": "Marsden Point",
+      "latitude": -35.833333,
+      "longitude": 174.5,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Marsden Point 2026.csv"
+    },
+    {
+      "name": "Motuara Island",
+      "csv_name": "Motuara Island",
+      "latitude": -41.093333,
+      "longitude": 174.271667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Motuara Island 2026.csv"
+    },
+    {
+      "name": "Moturiki Island",
+      "csv_name": "Moturiki Island",
+      "latitude": -37.633333,
+      "longitude": 176.183333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Moturiki Island 2026.csv"
+    },
+    {
+      "name": "Māpua",
+      "csv_name": "Māpua",
+      "latitude": -41.25,
+      "longitude": 173.1,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Māpua 2026.csv"
+    },
+    {
+      "name": "Mātiatia Bay",
+      "csv_name": "Mātiatia Bay",
+      "latitude": -36.783333,
+      "longitude": 174.983333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Mātiatia Bay 2026.csv"
+    },
+    {
+      "name": "Napier",
+      "csv_name": "Napier",
+      "latitude": -39.483333,
+      "longitude": 176.916667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Napier 2026.csv"
+    },
+    {
+      "name": "Nelson",
+      "csv_name": "Nelson",
+      "latitude": -41.266667,
+      "longitude": 173.266667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Nelson 2026.csv"
+    },
+    {
+      "name": "New Brighton Pier",
+      "csv_name": "New Brighton Pier",
+      "latitude": -43.506667,
+      "longitude": 172.735,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/New Brighton Pier 2026.csv"
+    },
+    {
+      "name": "North Cape / Otou",
+      "csv_name": "North Cape - Otou",
+      "latitude": -34.416667,
+      "longitude": 173.033333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/North Cape - Otou 2026.csv"
+    },
+    {
+      "name": "Oamaru",
+      "csv_name": "Oamaru",
+      "latitude": -45.1,
+      "longitude": 170.983333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Oamaru 2026.csv"
+    },
+    {
+      "name": "Omaha Bridge",
+      "csv_name": "Omaha Bridge",
+      "latitude": -36.341667,
+      "longitude": 174.765,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Omaha Bridge 2026.csv"
+    },
+    {
+      "name": "Onehunga",
+      "csv_name": "Onehunga",
+      "latitude": -36.933333,
+      "longitude": 174.783333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Onehunga 2026.csv"
+    },
+    {
+      "name": "Opononi",
+      "csv_name": "Opononi",
+      "latitude": -35.5,
+      "longitude": 173.4,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Opononi 2026.csv"
+    },
+    {
+      "name": "Opua",
+      "csv_name": "Opua",
+      "latitude": -35.316667,
+      "longitude": 174.116667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Opua 2026.csv"
+    },
+    {
+      "name": "Owenga - Chatham Island",
+      "csv_name": "Owenga - Chatham Island",
+      "latitude": -44.033333,
+      "longitude": -176.366667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Owenga - Chatham Island 2026.csv"
+    },
+    {
+      "name": "Paratutae Island",
+      "csv_name": "Paratutae Island",
+      "latitude": -37.05,
+      "longitude": 174.516667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Paratutae Island 2026.csv"
+    },
+    {
+      "name": "Picton",
+      "csv_name": "Picton",
+      "latitude": -41.283333,
+      "longitude": 174.0,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Picton 2026.csv"
+    },
+    {
+      "name": "Port Chalmers",
+      "csv_name": "Port Chalmers",
+      "latitude": -45.816667,
+      "longitude": 170.65,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Chalmers 2026.csv"
+    },
+    {
+      "name": "Port Taranaki",
+      "csv_name": "Port Taranaki",
+      "latitude": -39.05,
+      "longitude": 174.033333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Taranaki 2026.csv"
+    },
+    {
+      "name": "Port Ōhope Wharf",
+      "csv_name": "Port Ōhope Wharf",
+      "latitude": -37.983333,
+      "longitude": 177.1,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Ōhope Wharf 2026.csv"
+    },
+    {
+      "name": "Pouto Point",
+      "csv_name": "Pouto Point",
+      "latitude": -36.366667,
+      "longitude": 174.183333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Pouto Point 2026.csv"
+    },
+    {
+      "name": "Raglan",
+      "csv_name": "Raglan",
+      "latitude": -37.8,
+      "longitude": 174.883333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Raglan 2026.csv"
+    },
+    {
+      "name": "Rangatira Point",
+      "csv_name": "Rangatira Point",
+      "latitude": -40.85,
+      "longitude": 174.933333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Rangatira Point 2026.csv"
+    },
+    {
+      "name": "Rangitaiki River Entrance",
+      "csv_name": "Rangitaiki River Entrance",
+      "latitude": -37.916667,
+      "longitude": 176.866667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Rangitaiki River Entrance 2026.csv"
+    },
+    {
+      "name": "Richmond Bay",
+      "csv_name": "Richmond Bay",
+      "latitude": -41.015,
+      "longitude": 173.988333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Richmond Bay 2026.csv"
+    },
+    {
+      "name": "Riverton / Aparima",
+      "csv_name": "Riverton - Aparima",
+      "latitude": -46.366667,
+      "longitude": 168.016667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Riverton - Aparima 2026.csv"
+    },
+    {
+      "name": "Scott Base",
+      "csv_name": "Scott Base",
+      "latitude": -77.833333,
+      "longitude": 166.666667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Scott Base 2026.csv"
+    },
+    {
+      "name": "Spit Wharf",
+      "csv_name": "Spit Wharf",
+      "latitude": -45.783333,
+      "longitude": 170.716667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Spit Wharf 2026.csv"
+    },
+    {
+      "name": "Sumner Head",
+      "csv_name": "Sumner Head",
+      "latitude": -43.566667,
+      "longitude": 172.766667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Sumner Head 2026.csv"
+    },
+    {
+      "name": "Tarakohe",
+      "csv_name": "Tarakohe",
+      "latitude": -40.816667,
+      "longitude": 172.9,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Tarakohe 2026.csv"
+    },
+    {
+      "name": "Tauranga",
+      "csv_name": "Tauranga",
+      "latitude": -37.65,
+      "longitude": 176.183333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Tauranga 2026.csv"
+    },
+    {
+      "name": "Thames",
+      "csv_name": "Thames",
+      "latitude": -37.133333,
+      "longitude": 175.516667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Thames 2026.csv"
+    },
+    {
+      "name": "Timaru",
+      "csv_name": "Timaru",
+      "latitude": -44.383333,
+      "longitude": 171.25,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Timaru 2026.csv"
+    },
+    {
+      "name": "Town Basin",
+      "csv_name": "Town Basin",
+      "latitude": -35.716667,
+      "longitude": 174.333333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Town Basin 2026.csv"
+    },
+    {
+      "name": "Tāmaki River",
+      "csv_name": "Tāmaki River",
+      "latitude": -36.911667,
+      "longitude": 174.861667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Tāmaki River 2026.csv"
+    },
+    {
+      "name": "Waihopai River Entrance",
+      "csv_name": "Waihopai River Entrance",
+      "latitude": -46.416667,
+      "longitude": 168.333333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Waihopai River Entrance 2026.csv"
+    },
+    {
+      "name": "Waitangi - Chatham Island",
+      "csv_name": "Waitangi - Chatham Island",
+      "latitude": -43.95,
+      "longitude": -176.566667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Waitangi - Chatham Island 2026.csv"
+    },
+    {
+      "name": "Weiti River Entrance",
+      "csv_name": "Weiti River Entrance",
+      "latitude": -36.65,
+      "longitude": 174.733333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Weiti River Entrance 2026.csv"
+    },
+    {
+      "name": "Welcombe Bay",
+      "csv_name": "Welcombe Bay",
+      "latitude": -46.083333,
+      "longitude": 166.583333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Welcombe Bay 2026.csv"
+    },
+    {
+      "name": "Wellington",
+      "csv_name": "Wellington",
+      "latitude": -41.283333,
+      "longitude": 174.783333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Wellington 2026.csv"
+    },
+    {
+      "name": "Westport",
+      "csv_name": "Westport",
+      "latitude": -41.75,
+      "longitude": 171.6,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Westport 2026.csv"
+    },
+    {
+      "name": "Whakatāne",
+      "csv_name": "Whakatāne",
+      "latitude": -37.95,
+      "longitude": 177.0,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whakatāne 2026.csv"
+    },
+    {
+      "name": "Whanganui River Entrance",
+      "csv_name": "Whanganui River Entrance",
+      "latitude": -39.95,
+      "longitude": 174.983333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whanganui River Entrance 2026.csv"
+    },
+    {
+      "name": "Whangaroa",
+      "csv_name": "Whangaroa",
+      "latitude": -35.05,
+      "longitude": 173.75,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whangaroa 2026.csv"
+    },
+    {
+      "name": "Whangārei",
+      "csv_name": "Whangārei",
+      "latitude": -35.766667,
+      "longitude": 174.35,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whangārei 2026.csv"
+    },
+    {
+      "name": "Whitianga",
+      "csv_name": "Whitianga",
+      "latitude": -36.833333,
+      "longitude": 175.7,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whitianga 2026.csv"
+    },
+    {
+      "name": "Wilson Bay",
+      "csv_name": "Wilson Bay",
+      "latitude": -41.083333,
+      "longitude": 173.9,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Wilson Bay 2026.csv"
+    },
+    {
+      "name": "Ōkukari Bay",
+      "csv_name": "Ōkukari Bay",
+      "latitude": -41.2,
+      "longitude": 174.316667,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ōkukari Bay 2026.csv"
+    },
+    {
+      "name": "Ōmokoroa",
+      "csv_name": "Ōmokoroa",
+      "latitude": -37.666667,
+      "longitude": 176.05,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ōmokoroa 2026.csv"
+    },
+    {
+      "name": "Ōpōtiki Wharf",
+      "csv_name": "Ōpōtiki Wharf",
+      "latitude": -38.033333,
+      "longitude": 177.233333,
+      "linz_2026_csv_url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ōpōtiki Wharf 2026.csv"
+    }
+  ]
+}

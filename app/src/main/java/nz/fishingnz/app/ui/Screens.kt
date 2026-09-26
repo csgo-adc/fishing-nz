@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.location.Geocoder
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -11,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -69,12 +71,13 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import nz.fishingnz.app.model.*
 import nz.fishingnz.app.data.FishingRulesPage
 import nz.fishingnz.app.data.RulesRepository
-import nz.fishingnz.app.data.rulesAreaForLocation
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
@@ -84,12 +87,17 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { vm.setFishPhoto(it) }
     val context = LocalContext.current
     var showPlan by rememberSaveable { mutableStateOf(false) }
+    var showCities by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(s.location, s.hasDeviceLocation) {
+        if (s.hasDeviceLocation) resolvedCity(context, s.location)?.let(vm::setResolvedCity)
+    }
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
             requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
         else vm.locationUnavailable()
     }
     fun search() {
+        if (s.originName != null) { vm.showResults(); return }
         vm.startLocationSearch()
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -125,7 +133,7 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                     Text("$dateSummary  ·  $time  ·  ${s.radiusKm} km", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
                     Text(s.originName?.let { "From $it" } ?: "From your location or a chosen city", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .8f), style = MaterialTheme.typography.bodySmall)
                     Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) { Text("Find fishing windows") }
-                    TextButton(onClick = { vm.showResults() }) { Text(if (s.originName == null) "Choose a city" else "Change city") }
+                    TextButton(onClick = { showCities = true }) { Text(s.originName ?: "Choose a city") }
                 }
             }
         }
@@ -155,6 +163,10 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
             Spacer(Modifier.height(16.dp))
         }
     }
+    if (showCities) OriginPickerSheet(onDismiss = { showCities = false }, onChoose = {
+        vm.selectManualOrigin(it)
+        showCities = false
+    })
 }
 
 @Composable private fun RecommendationFilters(s: FishingUiState, vm: FishingViewModel) {
@@ -164,7 +176,7 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text("When are you going?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today", "In 3 days", "Next 3 days", "This weekend").forEach { choice ->
+            listOf("Today", "In 3 days", "This week", "This weekend").forEach { choice ->
                 FilterChip(selected = s.dateLabel == choice, onClick = { vm.setDate(choice) }, label = { Text(choice) })
             }
             FilterChip(selected = s.dateLabel == "Custom", onClick = {
@@ -231,11 +243,14 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     startPicker.show()
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun FishIdentifierCard(s: FishingUiState, picker: androidx.activity.result.ActivityResultLauncher<PickVisualMediaRequest>, vm: FishingViewModel) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val hasFishAccess = s.account != null
     val needsAccountRefresh = s.account == null && s.hasStoredSession && !s.accountLoading
     var showCamera by remember { mutableStateOf(false) }
+    var showRuleAreas by remember { mutableStateOf(false) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) showCamera = true }
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
@@ -256,21 +271,41 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text("${result.confidence}% match", color = Orange, fontWeight = FontWeight.Bold) }
             Text(result.scientificName, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("MPI rules · ${result.areaName}", color = Navy, fontWeight = FontWeight.SemiBold); result.rulesReviewedAt?.let { Text("Reviewed $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
-            if (result.fishRules.isEmpty()) Text("No species-specific size or catch-limit entry was found in the saved rules for this area. Check local closures and restrictions before keeping this fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp))
+            if (result.fishRules.isEmpty()) Text(when {
+                result.rulesNeedsReview -> "MPI has updated this area. Open the current MPI page for size and catch limits."
+                result.areaSelectionRequired || s.fishRulesAreaId == null -> "Choose the MPI fishing area where you caught this fish to check size and catch limits."
+                else -> "No matching species limit was found in the saved rules for this area. Check MPI before keeping this fish."
+            }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp))
             result.fishRules.forEach { rule ->
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(rule.species, color = Navy, fontWeight = FontWeight.Bold)
-                    rule.minimumSize?.let { Text("Minimum size: $it", color = Navy) }
-                    rule.dailyLimit?.let { Text("Daily limit: $it", color = Navy) }
-                    rule.details.forEach { Text("${it.label}: ${it.value}", color = Navy) }
+                    if (rule.details.any { it.label.contains("daily limit", ignoreCase = true) || it.label.contains("bag limit", ignoreCase = true) }) {
+                        Text("Limits differ within this area. Check the exact subarea on MPI.", color = Navy)
+                    } else {
+                        rule.minimumSize?.let { Text("${rule.minimumSizeLabel ?: "Minimum size"}: $it", color = Navy) }
+                        rule.dailyLimit?.let { Text("Daily limit: $it", color = Navy) }
+                    }
                 }
             }
-            Text(if (result.areaIsEstimated) "Fishing area is estimated because device location was unavailable. Confirm where you are fishing." else "Area selected from current device location. Confirm the exact fishing location.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Check local closures and current MPI rules before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text("Rules area: ${fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.name ?: "not selected"}. Check local closures before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            (result.rulesSourceUrl ?: fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.officialUrl)?.let { url ->
+                TextButton(onClick = { uriHandler.openUri(url) }) { Text("See full MPI rules") }
+            } ?: TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("Find your MPI fishing area") }
         } } }
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Take photo") }; OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(4.dp)); Text(if (s.fishPhoto == null) "Choose photo" else "Gallery") } }
+        OutlinedButton(onClick = { showRuleAreas = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.name ?: "Choose MPI rules area", modifier = Modifier.weight(1f))
+            Text("⌄")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f).height(48.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Camera")
+            }
+            OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f).height(48.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(4.dp)); Text("Gallery")
+            }
+        }
         Button(enabled = !s.fishChecking && !s.accountLoading && (!hasFishAccess || s.fishPhoto != null), onClick = {
             if (needsAccountRefresh) vm.refreshAccount()
             else if (s.account == null) vm.selectTab(5)
@@ -294,6 +329,18 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     } }
+    if (showRuleAreas) ModalBottomSheet(onDismissRequest = { showRuleAreas = false }) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Where was the fish caught?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Choose the MPI area for this fishing spot.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            fishingRulesAreas.forEach { area ->
+                TextButton(onClick = { vm.chooseFishRulesArea(area.id); showRuleAreas = false }, modifier = Modifier.fillMaxWidth()) {
+                    Text(area.name, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+                    if (area.id == s.fishRulesAreaId) Icon(Icons.Default.CheckCircle, null)
+                }
+            }
+        }
+    }
     if (showCamera) Dialog(onDismissRequest = { showCamera = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         FishCameraScreen(onClose = { showCamera = false }, onPhotoCaptured = { vm.setFishPhoto(it); showCamera = false })
     }
@@ -502,41 +549,60 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
 }
 @Composable private fun Metric(label: String, value: String) { Column { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall); Text(value, color = Navy, fontWeight = FontWeight.SemiBold) } }
 
-@Composable fun ResultsScreen(s: FishingUiState, vm: FishingViewModel) {
-    val context = LocalContext.current
-    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
-            requestCurrentLocation(context, { vm.completeLocationSearch(it) }, { vm.locationUnavailable() })
-        else vm.locationUnavailable()
-    }
-    fun useCurrentLocation() {
-        vm.startLocationSearch()
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) requestCurrentLocation(context, { vm.completeLocationSearch(it) }, { vm.locationUnavailable() })
-        else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-    }
-    Surface(modifier = Modifier.fillMaxSize(), color = Cream) {
-        LazyColumn(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text("Best options", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy); OutlinedButton(onClick = { vm.closeResults() }) { Text("Back") } } }
-            item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land") }); FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat") }) } }
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text(s.originName?.let { "From $it · straight-line radius" } ?: "Choose where to search from", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                    Text("Search from a city", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        searchOrigins.forEach { origin -> FilterChip(selected = !s.hasDeviceLocation && s.originName == origin.name,
-                            onClick = { vm.selectManualOrigin(origin) }, label = { Text(origin.name) }) }
-                    }
-                    OutlinedButton(onClick = { useCurrentLocation() }) { Icon(Icons.Default.NearMe, null); Spacer(Modifier.width(6.dp)); Text("Use current location") }
-                    s.locationNotice?.let { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) }
+private suspend fun resolvedCity(context: android.content.Context, point: GeoPoint): String? = withContext(Dispatchers.IO) {
+    runCatching {
+        @Suppress("DEPRECATION")
+        val address = Geocoder(context, Locale.getDefault()).getFromLocation(point.latitude, point.longitude, 1)?.firstOrNull()
+        address?.locality?.takeIf { it.isNotBlank() } ?: address?.subAdminArea?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun OriginPickerSheet(onDismiss: () -> Unit, onChoose: (SearchOrigin) -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val matches = remember(query) { searchOrigins.filter { it.name.contains(query.trim(), ignoreCase = true) }.sortedBy { it.name } }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Choose a city", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            OutlinedTextField(query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search cities") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
+            LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.72f)) {
+                items(matches, key = { it.name }) { origin ->
+                    ListItem(headlineContent = { Text(origin.name) }, modifier = Modifier.fillMaxWidth().clickable { onChoose(origin) })
+                    HorizontalDivider()
                 }
             }
-            item { RecommendationFilters(s, vm) }
+        }
+    }
+}
+
+@Composable fun ResultsScreen(s: FishingUiState, vm: FishingViewModel) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            item { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Text("Fishing windows", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
+                OutlinedButton(onClick = vm::closeResults) { Text("Back") }
+            } }
+            item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(s.originName?.let { "Near $it" } ?: "Finding your location", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("${if (s.boat) "Boat" else "Land"} fishing · ${s.dateLabel} · ${s.radiusKm} km radius", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val hours = when {
+                        s.preferredTime == null -> "Anytime"
+                        s.preferredTimeIsSuggested -> "7 AM–9 PM"
+                        else -> "${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}"
+                    }
+                    Text(hours, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            } }
+            s.locationNotice?.let { item { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) } }
             when {
                 s.locating -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Getting current location…", color = Navy) } }
                 s.recommendationsLoading -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Checking hourly forecasts…", color = Navy) } }
-                s.recommendationsError != null -> item { Column { Text(s.recommendationsError, color = Orange); TextButton(onClick = { vm.refreshRecommendations() }) { Text("Try again") } } }
+                s.recommendationsError != null -> item { Column {
+                    Text(s.recommendationsError, color = Orange)
+                    if (s.originName != null) TextButton(onClick = vm::refreshRecommendations) { Text("Try again") }
+                } }
                 s.recommendationSearch?.nearbySpots == 0 -> item {
                     val nearest = s.recommendationSearch
                     Text("No known ${if (s.boat) "boat" else "land"} fishing areas are within ${s.radiusKm} km." +
@@ -545,15 +611,15 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
                 s.recommendationSearch?.items?.isEmpty() == true -> item {
                     Text(when {
                         s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
-                        s.dateLabel == "Today" -> "No safe 2–3 hour window remains today within your selected hours. Try Next 3 days, wider hours or Anytime."
+                        s.dateLabel == "Today" -> "No safe 2–3 hour window remains today within your selected hours. Try In 3 days, wider hours or Anytime."
                         else -> "No safe 2–3 hour windows fit these dates and hours. Try wider hours, Anytime or another date."
                     }, color = Navy)
                 }
                 else -> items(s.recommendationSearch?.items ?: emptyList()) { RecommendationCard(it) { vm.openSpot(it) } }
             }
             if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); those spots have no score.", color = Orange, style = MaterialTheme.typography.bodySmall) }
-            item { Text("Scores compare the best 2–3 hour window at each named area. Land scores include tide movement. Boat scores omit tide and give more weight to waves and wind. Severe conditions found in available forecasts are excluded. Check local access, marine warnings and fishing rules before leaving.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            item { Text("Weather and marine forecasts: Open-Meteo (open-meteo.com). Tide model accuracy is limited near shore; do not use it for navigation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Scores use forecast-based 2–3 hour windows. Check local access, marine warnings and MPI fishing rules before you go.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Weather: Open-Meteo. Tide estimates are not for navigation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -636,29 +702,25 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         else items(s.savedRecommendations) { RecommendationCard(it) { vm.openSpot(it) } }
     }
 }
-private data class FishingRulesArea(val id: String, val name: String, val slug: String) {
+private data class FishingRulesArea(val id: String, val name: String, val slug: String, val description: String) {
     val officialUrl: String get() = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
 }
 private val fishingRulesAreas = listOf(
-    FishingRulesArea("auckland-kermadec", "Auckland / Kermadec", "auckland-kermadec-fishing-rules"),
-    FishingRulesArea("central", "Central", "central-fishing-rules"),
-    FishingRulesArea("challenger", "Challenger", "challenger-fishing-rules"),
-    FishingRulesArea("south-east", "South-East", "south-east-fishing-rules"),
-    FishingRulesArea("southland", "Southland", "southland-fishing-rules"),
-    FishingRulesArea("kaikoura", "Kaikōura", "kaikoura-fishing-rules"),
-    FishingRulesArea("chatham-rise", "Chatham Rise", "chatham-rise-area-recreational-fishing-rules"),
-    FishingRulesArea("fiordland", "Fiordland", "fiordland-marine-area-fishing-rules")
+    FishingRulesArea("auckland-kermadec", "Auckland / Kermadec", "auckland-kermadec-fishing-rules", "Northland, Auckland, Waikato, Bay of Plenty and the Kermadec Islands"),
+    FishingRulesArea("central", "Central", "central-fishing-rules", "North Island coast from Cape Runaway to Tirua Point"),
+    FishingRulesArea("challenger", "Challenger", "challenger-fishing-rules", "West Coast north of Awarua Point, through Marlborough to Clarence Point"),
+    FishingRulesArea("south-east", "South-East", "south-east-fishing-rules", "South Island east coast from Clarence Point to Slope Point"),
+    FishingRulesArea("southland", "Southland", "southland-fishing-rules", "Coast from Awarua Point around the south to Slope Point, including Rakiura"),
+    FishingRulesArea("kaikoura", "Kaikōura Marine Area", "kaikoura-fishing-rules", "Special area from Clarence Point to the Conway River mouth, up to 12 nautical miles offshore"),
+    FishingRulesArea("chatham-rise", "Chatham Rise", "chatham-rise-area-recreational-fishing-rules", "Chatham Islands and surrounding Chatham Rise waters"),
+    FishingRulesArea("fiordland", "Fiordland Marine Area", "fiordland-marine-area-fishing-rules", "Special area from Awarua Point to Sand Hill Point, up to 12 nautical miles offshore")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun RulesScreen(modifier: Modifier) {
-    val context = LocalContext.current
+@Composable fun RulesScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val uriHandler = LocalUriHandler.current
     val repository = remember { RulesRepository() }
-    var selectedAreaId by rememberSaveable { mutableStateOf<String?>(null) }
-    var manuallyChosen by rememberSaveable { mutableStateOf(false) }
-    var locationAttempted by rememberSaveable { mutableStateOf(false) }
-    var locationMessage by remember { mutableStateOf<String?>(null) }
+    val selectedAreaId = s.fishRulesAreaId
     var showAreas by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var page by remember { mutableStateOf<FishingRulesPage?>(null) }
@@ -669,31 +731,6 @@ private val fishingRulesAreas = listOf(
     var expandedTables by remember(selectedAreaId) { mutableStateOf(setOf<Int>()) }
     val area = fishingRulesAreas.firstOrNull { it.id == selectedAreaId }
 
-    fun locationUnavailable() {
-        if (selectedAreaId == null) selectedAreaId = fishingRulesAreas.first().id
-        locationMessage = "Location unavailable. Choose the area where you plan to fish."
-    }
-    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        if (grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
-            requestCurrentLocation(context, { point ->
-                if (!manuallyChosen) selectedAreaId = rulesAreaForLocation(point)
-                locationMessage = "Area estimated from your current location. Confirm the exact fishing spot."
-            }, ::locationUnavailable)
-        else locationUnavailable()
-    }
-    fun useCurrentLocation() {
-        manuallyChosen = false
-        locationAttempted = true
-        locationMessage = "Finding your fishing area…"
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) requestCurrentLocation(context, { point ->
-            if (!manuallyChosen) selectedAreaId = rulesAreaForLocation(point)
-            locationMessage = "Area estimated from your current location. Confirm the exact fishing spot."
-        }, ::locationUnavailable)
-        else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-    }
-    LaunchedEffect(Unit) { if (!locationAttempted) useCurrentLocation() }
     LaunchedEffect(selectedAreaId, reloadToken) {
         val id = selectedAreaId ?: return@LaunchedEffect
         loading = true
@@ -707,16 +744,18 @@ private val fishingRulesAreas = listOf(
     if (showAreas) ModalBottomSheet(onDismissRequest = { showAreas = false }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Choose fishing area", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Match the area to where you will fish.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("MPI divides the coast into these fishing areas. Choose where you will fish.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             fishingRulesAreas.forEach { option ->
                 TextButton(onClick = {
-                    selectedAreaId = option.id
-                    manuallyChosen = true
-                    locationMessage = null
+                    vm.chooseFishRulesArea(option.id)
+                    query = ""
                     showAreas = false
                 }, modifier = Modifier.fillMaxWidth()) {
-                    Text(option.name, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+                    Column(Modifier.weight(1f)) {
+                        Text(option.name, color = MaterialTheme.colorScheme.onSurface)
+                        Text(option.description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
                     if (option.id == selectedAreaId) Icon(Icons.Default.CheckCircle, contentDescription = "Selected")
                 }
             }
@@ -724,30 +763,42 @@ private val fishingRulesAreas = listOf(
     }
 
     val search = query.trim()
-    val matchingSections = page?.sections?.withIndex()?.filter { search.isEmpty() ||
-        it.value.heading.contains(search, ignoreCase = true) || it.value.text.contains(search, ignoreCase = true) }.orEmpty()
-    val matchingTables = page?.tables?.withIndex()?.filter { search.isEmpty() ||
-        it.value.any { row -> row.any { cell -> cell.contains(search, ignoreCase = true) } } }.orEmpty()
+    val bagSummary = if (selectedAreaId == "fiordland")
+        "Daily limits differ between the outer Fiordland Marine Area and the inner Fiords. Check the exact subarea on MPI."
+    else page?.sections?.firstNotNullOfOrNull { section ->
+        Regex("combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\.", RegexOption.IGNORE_CASE)
+            .find(section.text)?.value
+    } ?: "Daily limits vary by species and location. Check the MPI page for the exact fishing spot."
+    val matchingSections = page?.sections?.withIndex()?.filter {
+        search.isNotEmpty() && (it.value.heading.contains(search, ignoreCase = true) || it.value.text.contains(search, ignoreCase = true))
+    }.orEmpty()
+    val defaultSpeciesTable = page?.tables?.indexOfFirst { table ->
+        table.firstOrNull()?.firstOrNull()?.contains("finfish species", ignoreCase = true) == true
+    } ?: -1
+    val matchingTables = page?.tables?.withIndex()?.filter {
+        if (search.isEmpty()) it.index == defaultSpeciesTable
+        else it.value.any { row -> row.any { cell -> cell.contains(search, ignoreCase = true) } }
+    }.orEmpty()
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(8.dp))
             Text("Fishing rules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Sizes, limits and restrictions from Fisheries New Zealand", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("A quick guide to MPI limits. Search a species for more.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Fishing area", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Where will you fish?", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = { showAreas = true }, modifier = Modifier.fillMaxWidth()) {
                         Text(area?.name ?: "Choose an area", modifier = Modifier.weight(1f))
                         Text("⌄")
                     }
-                    TextButton(onClick = ::useCurrentLocation) { Icon(Icons.Default.NearMe, null); Spacer(Modifier.width(6.dp)); Text("Use my location") }
-                    locationMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    area?.let { Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Text("GPS on land cannot safely identify the exact marine rule boundary. Select the MPI area for your fishing spot.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-        item { OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+        if (selectedAreaId != null && page?.needsReview != true) item { OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
             label = { Text("Search species or rules") }, singleLine = true,
             leadingIcon = { Icon(Icons.Default.Search, null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "Clear search") } }) }
@@ -760,11 +811,26 @@ private val fishingRulesAreas = listOf(
             }
         } } }
         page?.let { rules ->
+            if (rules.needsReview) item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("MPI has updated this area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Open the current MPI page for limits and local restrictions. The saved summary is being reviewed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = { uriHandler.openUri(rules.sourceUrl) }) { Text("Open current MPI rules") }
+                }
+            } }
+            else {
             item {
-                Text("${matchingSections.size + matchingTables.size} ${if (search.isEmpty()) "rule topics" else "matching topics"}",
+                Text(if (search.isEmpty()) "At a glance" else "${matchingSections.size + matchingTables.size} matching topics",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 rules.reviewedAt?.let { Text("MPI last reviewed: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
+            if (search.isEmpty()) item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Combined finfish limit", fontWeight = FontWeight.Bold, color = Navy)
+                    Text(bagSummary, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } }
+            if (search.isEmpty()) item { Text("Local closures, gear restrictions and species limits can change. Open MPI for the complete current rules at your exact spot.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             matchingSections.forEach { (index, section) ->
                 item(key = "rule-section-$index") {
                     RuleSectionCard(section.heading, section.text, search.isNotEmpty() || index in expandedSections) {
@@ -777,7 +843,7 @@ private val fishingRulesAreas = listOf(
                 item(key = "rule-table-$index") {
                     val headerMatches = table.firstOrNull()?.any { it.contains(search, ignoreCase = true) } == true
                     val rows = table.drop(1).filter { search.isEmpty() || headerMatches || it.any { cell -> cell.contains(search, ignoreCase = true) } }
-                    RuleTableCard(table.firstOrNull().orEmpty(), rows, search.isNotEmpty() || index in expandedTables) {
+                    RuleTableCard(table.firstOrNull().orEmpty(), rows, search.isNotEmpty() || index in expandedTables, compact = search.isEmpty()) {
                         expandedTables = if (index in expandedTables) expandedTables - index else expandedTables + index
                     }
                 }
@@ -785,9 +851,10 @@ private val fishingRulesAreas = listOf(
             if (search.isNotEmpty() && matchingSections.isEmpty() && matchingTables.isEmpty()) item {
                 Text("No saved rules match “$search” in ${rules.areaName}. Try a species or another term.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            item { TextButton(onClick = { uriHandler.openUri(rules.sourceUrl) }) { Text("Open official MPI rules") } }
+            item { Button(onClick = { uriHandler.openUri(rules.sourceUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See all rules on MPI") } }
+            }
         }
-        item { Text("Confirm the exact location and latest official rules each time you fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        if (selectedAreaId == null) item { TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("View MPI fishing-area maps") } }
         item { Spacer(Modifier.height(12.dp)) }
     }
 }
@@ -801,25 +868,38 @@ private val fishingRulesAreas = listOf(
     }
 }
 
-@Composable private fun RuleTableCard(headers: List<String>, rows: List<List<String>>, expanded: Boolean, onToggle: () -> Unit) {
+@Composable private fun RuleTableCard(headers: List<String>, rows: List<List<String>>, expanded: Boolean, compact: Boolean, onToggle: () -> Unit) {
     if (rows.isEmpty()) return
+    val visibleColumns = headers.indices.drop(1).filter { index ->
+        if (!compact) true
+        else headers[index].lowercase().let { heading ->
+            listOf("limit", "size", "length", "area", "fiord", "coast", "fma", "daily").any(heading::contains)
+        }
+    }
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(headers.firstOrNull().orEmpty().ifBlank { "Rules table" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            (if (expanded) rows else rows.take(6)).forEach { row ->
+            Text(if (compact) "Common species" else headers.firstOrNull().orEmpty().ifBlank { "Rules table" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            (if (expanded && !compact) rows else rows.take(if (compact) 4 else 6)).forEach { row ->
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Text(row.firstOrNull().orEmpty(), fontWeight = FontWeight.SemiBold)
-                row.drop(1).forEachIndexed { index, value ->
-                    if (value.isNotBlank() && value != "—") Text("${headers.getOrNull(index + 1).orEmpty()}: $value",
+                visibleColumns.forEach { index ->
+                    val value = row.getOrNull(index).orEmpty()
+                    if (value.isNotBlank() && value != "—") Text("${headers[index]}: $value",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (rows.size > 6) TextButton(onClick = onToggle) { Text(if (expanded) "Show fewer" else "Show all ${rows.size} entries") }
+            if (!compact && rows.size > 6) TextButton(onClick = onToggle) { Text(if (expanded) "Show fewer" else "Show all ${rows.size} entries") }
         }
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable fun TideScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
+    var showStations by rememberSaveable { mutableStateOf(false) }
+    var stationQuery by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(s.tideDeviceLocation) {
+        s.tideDeviceLocation?.let { resolvedCity(context, it)?.let(vm::setResolvedTidePlace) }
+    }
     val today = java.time.LocalDate.now(java.time.ZoneId.of("Pacific/Auckland"))
     val formatter = DateTimeFormatter.ofPattern("EEEE, d MMM yyyy", Locale.US)
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -844,20 +924,16 @@ private val fishingRulesAreas = listOf(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                     Text("Tide station", color = Navy, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = ::useCurrentLocation) { Text("Use my location") }
+                    TextButton(onClick = ::useCurrentLocation) { Icon(Icons.Default.NearMe, null); Spacer(Modifier.width(4.dp)); Text(s.tidePlaceName ?: "Use my location") }
                 }
                 Text(if (s.tideStationManual) "Selected: ${s.selectedStation.name}"
                     else if (s.tideDeviceLocation != null) "Nearest to your location: ${s.selectedStation.name}"
                     else "Using ${s.selectedStation.name} until your location is available", color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall)
                 s.tideLocationNotice?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-                key(s.selectedStation.id) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (listOf(s.selectedStation) + tideStations.filter { it.id != s.selectedStation.id }).forEach { station ->
-                            FilterChip(selected = station.id == s.selectedStation.id,
-                                onClick = { vm.chooseStation(station) }, label = { Text(station.name) })
-                        }
-                    }
+                OutlinedButton(onClick = { showStations = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(s.selectedStation.name, modifier = Modifier.weight(1f))
+                    Text("Change station  ⌄")
                 }
             }
         } }
@@ -917,6 +993,23 @@ private val fishingRulesAreas = listOf(
             else Text(s.tideError ?: "LINZ tide data unavailable for this station and date.", color = Navy)
         }
         item { Text("High and low tide predictions: Toitū Te Whenua Land Information New Zealand (LINZ). Times are New Zealand local time; heights are above the station's Chart Datum. Check the official table before planning around water depth.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+    }
+    if (showStations) ModalBottomSheet(onDismissRequest = { showStations = false }) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Choose tide location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("${tideStations.size} LINZ daily-prediction locations", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(stationQuery, onValueChange = { stationQuery = it }, modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search location") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
+            val matching = remember(stationQuery) { tideStations.filter { it.name.contains(stationQuery.trim(), ignoreCase = true) } }
+            LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.72f)) {
+                items(matching, key = { it.id }) { station ->
+                    ListItem(headlineContent = { Text(station.name) },
+                        trailingContent = { if (station.id == s.selectedStation.id) Icon(Icons.Default.CheckCircle, null) },
+                        modifier = Modifier.fillMaxWidth().clickable { vm.chooseStation(station); showStations = false })
+                    HorizontalDivider()
+                }
+            }
+        }
     }
 }
 

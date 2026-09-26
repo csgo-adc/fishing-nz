@@ -98,15 +98,15 @@ struct FishingRepository {
         let dayStart = calendar.startOfDay(for: date)
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { throw URLError(.badURL) }
         let year = calendar.component(.year, from: date)
-        var predictions = try await Self.tideStore.load(stationName: station.name, year: year)
+        var predictions = try await Self.tideStore.load(stationName: station.csvName, year: year)
         let month = calendar.component(.month, from: date)
         let day = calendar.component(.day, from: date)
         if month == 1 && day == 1,
-           let prior = try? await Self.tideStore.load(stationName: station.name, year: year - 1) {
+           let prior = try? await Self.tideStore.load(stationName: station.csvName, year: year - 1) {
             predictions.insert(contentsOf: prior.suffix(2), at: 0)
         }
         if month == 12 && day == 31,
-           let following = try? await Self.tideStore.load(stationName: station.name, year: year + 1) {
+           let following = try? await Self.tideStore.load(stationName: station.csvName, year: year + 1) {
             predictions.append(contentsOf: following.prefix(2))
         }
         predictions.sort { $0.time < $1.time }
@@ -168,7 +168,7 @@ struct FishingRepository {
         return before.height + (after.height - before.height) * smoothProgress
     }
 
-    func identifyFish(image: UIImage, at point: GeoPoint, hasDeviceLocation: Bool) async throws -> FishCheck {
+    func identifyFish(image: UIImage, at point: GeoPoint, hasDeviceLocation: Bool, selectedRulesAreaID: String?) async throws -> FishCheck {
         guard let baseURL = Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String,
               let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/fish/identify"),
               let imageData = image.jpegData(compressionQuality: 0.88) else { throw URLError(.badURL) }
@@ -179,6 +179,7 @@ struct FishingRepository {
         request.setValue("\(point.latitude),\(point.longitude)", forHTTPHeaderField: "X-Location-Lat-Lon")
         request.setValue(hasDeviceLocation ? "device" : "fallback", forHTTPHeaderField: "X-Location-Source")
         request.setValue("ios", forHTTPHeaderField: "X-Client-Platform")
+        if let selectedRulesAreaID { request.setValue(selectedRulesAreaID, forHTTPHeaderField: "X-Fishing-Rules-Area") }
         if let token = KeychainSession.load() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.timeoutInterval = 30
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -186,7 +187,7 @@ struct FishingRepository {
         guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NSError(domain: "FishIdentification", code: 1, userInfo: [NSLocalizedDescriptionKey: payload.error ?? "Fish identification failed."]) }
         let commonName = payload.commonName ?? "Unknown fish"
         let scientificName = payload.scientificName ?? ""
-        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaName: payload.areaName ?? "Fishing area", areaIsEstimated: payload.areaIsEstimated ?? true, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [])
+        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [])
     }
 
     private static let tideStore = LINZTideStore()
@@ -201,9 +202,9 @@ struct FishingRepository {
 
 private struct FishIdentificationResponse: Decodable {
     let commonName: String?; let scientificName: String?; let confidence: Double?; let error: String?
-    let areaName: String?; let areaIsEstimated: Bool?; let rulesReviewedAt: String?; let rulesSourceURL: String?; let fishRules: [FishRuleMatch]?
+    let areaName: String?; let areaIsEstimated: Bool?; let rulesNeedsReview: Bool?; let rulesReviewedAt: String?; let rulesSourceURL: String?; let fishRules: [FishRuleMatch]?
     enum CodingKeys: String, CodingKey {
-        case commonName, scientificName, confidence, error, areaName, areaIsEstimated, rulesReviewedAt, fishRules
+        case commonName, scientificName, confidence, error, areaName, areaIsEstimated, rulesNeedsReview, rulesReviewedAt, fishRules
         case rulesSourceURL = "rulesSourceUrl"
     }
 }

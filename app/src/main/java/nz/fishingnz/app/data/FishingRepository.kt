@@ -87,7 +87,7 @@ class FishingRepository {
     private fun annualPredictions(station: TideStation, year: Int): List<TidePrediction> {
         val key = "${station.id}:$year"
         annualTides[key]?.let { return it }
-        val filename = URLEncoder.encode("${station.name} $year.csv", Charsets.UTF_8.name()).replace("+", "%20")
+        val filename = URLEncoder.encode("${station.csvName} $year.csv", Charsets.UTF_8.name()).replace("+", "%20")
         val connection = get("https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/$filename")
         val text = try {
             if (connection.responseCode !in 200..299) error("LINZ tide table unavailable for ${station.name} in $year.")
@@ -122,7 +122,7 @@ class FishingRepository {
         return before.height + (after.height - before.height) * (1.0 - cos(PI * fraction)) / 2.0
     }
 
-    suspend fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean): FishCheck = withContext(Dispatchers.IO) {
+    suspend fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean, rulesAreaId: String?): FishCheck = withContext(Dispatchers.IO) {
         val token = AccountSessionStore.token()
         require(token != null) { "Sign in to use fish identification." }
         val connection = (URL("$accountBaseUrl/v1/fish/identify").openConnection() as HttpURLConnection).apply {
@@ -132,6 +132,7 @@ class FishingRepository {
             setRequestProperty("Accept", "application/json")
             setRequestProperty("X-Location-Lat-Lon", "${point.latitude},${point.longitude}")
             setRequestProperty("X-Location-Source", if (hasDeviceLocation) "device" else "fallback")
+            rulesAreaId?.let { setRequestProperty("X-Fishing-Rules-Area", it) }
             setRequestProperty("X-Client-Platform", "android")
             setRequestProperty("Authorization", "Bearer $token")
             connectTimeout = 15_000
@@ -157,7 +158,8 @@ class FishingRepository {
                     item.optString("species"),
                     item.optString("dailyLimit").takeIf { it.isNotBlank() && it != "null" },
                     item.optString("minimumSize").takeIf { it.isNotBlank() && it != "null" },
-                    parsedDetails
+                    parsedDetails,
+                    item.optString("minimumSizeLabel").takeIf { it.isNotBlank() && it != "null" }
                 )
             }
             FishCheck(
@@ -167,7 +169,10 @@ class FishingRepository {
                 areaName = payload.optString("areaName", "Fishing area"),
                 areaIsEstimated = payload.optBoolean("areaIsEstimated", true),
                 rulesReviewedAt = payload.optString("rulesReviewedAt").takeIf { it.isNotBlank() && it != "null" },
-                fishRules = fishRules
+                fishRules = fishRules,
+                rulesNeedsReview = payload.optBoolean("rulesNeedsReview", false),
+                rulesSourceUrl = payload.optString("rulesSourceUrl").takeIf { it.isNotBlank() && it != "null" },
+                areaSelectionRequired = payload.optBoolean("areaSelectionRequired", false)
             )
         } finally { connection.disconnect() }
     }

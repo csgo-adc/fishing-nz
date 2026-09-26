@@ -464,7 +464,7 @@ function corsHeaders(): HeadersInit {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
-    "access-control-allow-headers": "authorization, content-type, x-account-admin-token, x-rules-ingest-token, x-location-lat-lon, x-location-source, x-client-platform",
+    "access-control-allow-headers": "authorization, content-type, x-account-admin-token, x-rules-ingest-token, x-location-lat-lon, x-location-source, x-fishing-rules-area, x-client-platform",
     "access-control-max-age": "86400",
   };
 }
@@ -539,11 +539,16 @@ export default {
       const identification = await identifyFishWithOpenAI(image, contentType, env.OPENAI_API_KEY);
       if (!identification.is_fish) return json({ error: "No fish could be identified in this photo." }, 422);
       const commonName = identification.common_name_nz || "Unknown fish";
-      const point = parseLocation(request.headers.get("x-location-lat-lon"));
-      const areaId = rulesAreaForLocation(point.latitude, point.longitude);
-      const rulePage = await env.RULES_DB.prepare("SELECT area_name, source_url, reviewed_at, tables_json FROM mpi_fishing_rules WHERE area_id = ?")
-        .bind(areaId).first<{ area_name: string; source_url: string; reviewed_at: string | null; tables_json: string }>();
-      const rules = rulePage ? findFishRules(rulePage.tables_json, commonName) : [];
+      const areaId = validatedFishingRulesArea(request.headers.get("x-fishing-rules-area"));
+      const rulePage = areaId
+        ? await env.RULES_DB.prepare(
+          `SELECT r.area_name, r.source_url, r.reviewed_at, r.tables_json, s.status AS crawl_status
+           FROM mpi_fishing_rules r LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id
+           WHERE r.area_id = ?`
+        ).bind(areaId).first<{ area_name: string; source_url: string; reviewed_at: string | null; tables_json: string; crawl_status: string | null }>()
+        : null;
+      const rulesNeedReview = rulePage?.crawl_status === "source_changed";
+      const rules = rulePage && !rulesNeedReview ? findFishRules(rulePage.tables_json, commonName) : [];
       await recordAccountEvent(env, auth.account.id, "fish_identity_used", "fish_identity", clientPlatform(request));
       return json({
         commonName,
@@ -554,10 +559,13 @@ export default {
         visibleClues: identification.visible_clues,
         identificationNote: identification.note,
         areaId,
-        areaName: rulePage?.area_name || rulesAreas.get(areaId),
-        areaEstimated: request.headers.get("x-location-source") !== "device",
-        rulesReviewedAt: rulePage?.reviewed_at || null,
-        rulesSourceUrl: rulePage?.source_url || null,
+        areaName: rulePage?.area_name || (areaId ? rulesAreas.get(areaId) : "Choose an MPI fishing area"),
+        areaIsEstimated: false,
+        areaEstimated: false,
+        areaSelectionRequired: areaId === null,
+        rulesNeedsReview: rulesNeedReview,
+        rulesReviewedAt: rulesNeedReview ? null : rulePage?.reviewed_at || null,
+        rulesSourceUrl: rulePage?.source_url || (areaId ? `https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/${areaSlug(areaId)}` : null),
         fishRules: rules,
       });
     } catch (error) {
@@ -642,29 +650,15 @@ type RulePage = {
   sections_json: string;
   tables_json: string;
   page_html?: string;
+  crawl_status?: string | null;
 };
 
 type FishRuleDetail = { label: string; value: string };
-type FishRuleMatch = { species: string; dailyLimit: string | null; minimumSize: string | null; details: FishRuleDetail[] };
+type FishRuleMatch = { species: string; dailyLimit: string | null; minimumSize: string | null; minimumSizeLabel: string | null; details: FishRuleDetail[] };
 
-function parseLocation(value: string | null): { latitude: number; longitude: number } {
-  if (value) {
-    const [latitude, longitude] = value.split(",").map(Number);
-    if (Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) return { latitude, longitude };
-  }
-  return { latitude: -36.85, longitude: 174.76 };
-}
-
-function rulesAreaForLocation(latitude: number, longitude: number): string {
-  if (longitude < -175 && latitude < -40 && latitude > -49) return "chatham-rise";
-  if (latitude <= -44.5 && longitude >= 166 && longitude <= 168.8) return "fiordland";
-  if (latitude <= -46.3) return "southland";
-  if (latitude < -42.4 && latitude > -44 && longitude >= 172.2 && longitude <= 174.4) return "kaikoura";
-  if (latitude <= -40 && latitude >= -46.3 && longitude < 171) return "challenger";
-  if (latitude <= -42.5 && latitude > -46.3 && longitude >= 171) return "south-east";
-  if (latitude > -37.7) return "auckland-kermadec";
-  if (latitude > -41.6) return "central";
-  return "challenger";
+export function validatedFishingRulesArea(value: string | null): string | null {
+  const areaId = value?.trim() || "";
+  return rulesAreas.has(areaId) ? areaId : null;
 }
 
 function findFishRules(tablesJson: string, commonName: string): FishRuleMatch[] {
@@ -684,12 +678,13 @@ function findFishRules(tablesJson: string, commonName: string): FishRuleMatch[] 
       if (!candidate || !(candidate === target || candidate.startsWith(`${target} `) || candidate.includes(` ${target} `))) continue;
       const dailyLimit = dailyIndex >= 0 ? row[dailyIndex]?.trim() || null : null;
       const minimumSize = sizeIndex >= 0 ? row[sizeIndex]?.trim() || null : null;
+      const minimumSizeLabel = minimumSize ? headers[sizeIndex]?.trim() || null : null;
       const details = headers.flatMap((header, index) => {
         if (index === 0 || index === dailyIndex || index === sizeIndex) return [];
         const value = row[index]?.trim();
         return value && value !== "—" ? [{ label: header.trim(), value }] : [];
       });
-      const item = { species, dailyLimit, minimumSize, details };
+      const item = { species, dailyLimit, minimumSize, minimumSizeLabel, details };
       found.set(JSON.stringify(item), item);
     }
   }
@@ -721,18 +716,32 @@ async function getMpiSource(request: Request, env: Env): Promise<Response> {
 
 async function getRules(request: Request, env: Env): Promise<Response> {
   const area = new URL(request.url).searchParams.get("area");
-  const query = area
-    ? await env.RULES_DB.prepare("SELECT * FROM mpi_fishing_rules WHERE area_id = ?").bind(area).all<RulePage>()
-    : await env.RULES_DB.prepare("SELECT * FROM mpi_fishing_rules ORDER BY area_name").all<RulePage>();
   if (area && !rulesAreas.has(area)) return json({ error: "Unknown fishing area." }, 400);
+  const query = area
+    ? await env.RULES_DB.prepare(
+      `SELECT r.*, s.status AS crawl_status FROM mpi_fishing_rules r
+       LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id WHERE r.area_id = ?`
+    ).bind(area).all<RulePage>()
+    : await env.RULES_DB.prepare(
+      `SELECT r.*, s.status AS crawl_status FROM mpi_fishing_rules r
+       LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id ORDER BY r.area_name`
+    ).all<RulePage>();
   if (area && query.results.length === 0) return json({ error: "No cached rules for this area yet." }, 404);
-  const results = query.results.map((row) => ({
-    ...row,
-    sections: JSON.parse(row.sections_json),
-    tables: JSON.parse(row.tables_json),
-    sections_json: undefined,
-    tables_json: undefined,
-  }));
+  const results = query.results.map((row) => {
+    const needsReview = row.crawl_status === "source_changed";
+    return {
+      ...row,
+      reviewed_at: needsReview ? null : row.reviewed_at,
+      page_text: needsReview ? "MPI has updated this area. Review the current rules on the official site." : row.page_text,
+      page_html: needsReview ? "" : row.page_html,
+      sections: needsReview ? [] : JSON.parse(row.sections_json),
+      tables: needsReview ? [] : JSON.parse(row.tables_json),
+      sections_json: undefined,
+      tables_json: undefined,
+      crawl_status: undefined,
+      needsReview,
+    };
+  });
   return json({ source: "Fisheries New Zealand (MPI)", count: results.length, rules: results });
 }
 
@@ -817,29 +826,27 @@ async function refreshRuleArea(areaId: string, env: Env): Promise<boolean> {
       return false;
     }
 
-    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ").trim() || `${areaName} fishing rules`;
-    const review = html.match(/Last reviewed\s*:?\s*([^<\n]{4,30})/i)?.[1]?.trim() || null;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(html));
     const contentHash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    const sourceText = `${title}\nOfficial source: ${url}`;
-    await env.RULES_DB.batch([
-      env.RULES_DB.prepare(
-        `INSERT INTO mpi_fishing_rules
-          (area_id, area_name, source_url, page_title, reviewed_at, fetched_at, content_sha256, page_text, sections_json, tables_json, page_html)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(area_id) DO UPDATE SET area_name=excluded.area_name, source_url=excluded.source_url,
-           page_title=excluded.page_title, reviewed_at=excluded.reviewed_at, fetched_at=excluded.fetched_at,
-           content_sha256=excluded.content_sha256, page_text=excluded.page_text,
-           sections_json=excluded.sections_json, tables_json=excluded.tables_json, page_html=excluded.page_html`
-      ).bind(areaId, areaName, url, title, review, attemptedAt, contentHash, sourceText,
-        JSON.stringify([{ heading: title, text: sourceText }]), "[]", html),
-      env.RULES_DB.prepare(
-        `INSERT INTO mpi_rules_crawl_status (area_id, area_name, last_attempt_at, last_success_at, status, http_status, error)
-         VALUES (?, ?, ?, ?, 'success', ?, NULL)
-         ON CONFLICT(area_id) DO UPDATE SET area_name=excluded.area_name, last_attempt_at=excluded.last_attempt_at,
-           last_success_at=excluded.last_success_at, status='success', http_status=excluded.http_status, error=NULL`
-      ).bind(areaId, areaName, attemptedAt, attemptedAt, response.status),
-    ]);
+    const reviewedAt = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ")
+      .match(/Last reviewed\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i)?.[1] || null;
+    const cached = await env.RULES_DB.prepare("SELECT content_sha256, reviewed_at FROM mpi_fishing_rules WHERE area_id = ?")
+      .bind(areaId).first<{ content_sha256: string; reviewed_at: string | null }>();
+    // Manual browser captures and direct fetches can have different page markup.
+    // MPI's published review date is the stable comparison when both pages have one.
+    const matchesReview = reviewedAt !== null && cached?.reviewed_at !== null && reviewedAt === cached?.reviewed_at;
+    const status = !cached ? "needs_import" : matchesReview || cached.content_sha256 === contentHash ? "success" : "source_changed";
+    const note = status === "source_changed"
+      ? `MPI source changed (SHA-256 ${contentHash}). Review and re-import this area's structured rules.`
+      : status === "needs_import" ? "MPI source is available, but structured rules have not been imported." : null;
+    // A scheduled fetch must not replace parsed rules with placeholder text or stale limits.
+    await env.RULES_DB.prepare(
+      `INSERT INTO mpi_rules_crawl_status (area_id, area_name, last_attempt_at, last_success_at, status, http_status, error)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(area_id) DO UPDATE SET area_name=excluded.area_name, last_attempt_at=excluded.last_attempt_at,
+         last_success_at=excluded.last_success_at, status=excluded.status,
+         http_status=excluded.http_status, error=excluded.error`
+    ).bind(areaId, areaName, attemptedAt, attemptedAt, status, response.status, note).run();
     return true;
   } catch (error) {
     await saveCrawlFailure(env, areaId, areaName, attemptedAt, null, String(error).slice(0, 500));
@@ -852,7 +859,11 @@ async function saveCrawlFailure(env: Env, areaId: string, areaName: string, atte
     `INSERT INTO mpi_rules_crawl_status (area_id, area_name, last_attempt_at, last_success_at, status, http_status, error)
      VALUES (?, ?, ?, NULL, 'failed', ?, ?)
      ON CONFLICT(area_id) DO UPDATE SET area_name=excluded.area_name, last_attempt_at=excluded.last_attempt_at,
-       status='failed', http_status=excluded.http_status, error=excluded.error`
+       status=CASE WHEN mpi_rules_crawl_status.status IN ('source_changed', 'needs_import')
+         THEN mpi_rules_crawl_status.status ELSE 'failed' END,
+       http_status=excluded.http_status,
+       error=CASE WHEN mpi_rules_crawl_status.status IN ('source_changed', 'needs_import')
+         THEN mpi_rules_crawl_status.error ELSE excluded.error END`
   ).bind(areaId, areaName, attemptedAt, httpStatus, error).run();
 }
 

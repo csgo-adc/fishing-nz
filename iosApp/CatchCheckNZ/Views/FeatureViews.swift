@@ -7,11 +7,13 @@ import EventKitUI
 struct FishingMapView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @State private var filter = "All"
+    @State private var needsFirstLocationCenter = true
+    @State private var recenterOnLocationUpdate = false
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: -41.2, longitude: 174.8), span: MKCoordinateSpan(latitudeDelta: 13, longitudeDelta: 13)))
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) { Text("Fishing map").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("New Zealand spots · tap a marker to explore").foregroundStyle(.secondary); Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented) }.padding(20)
+            VStack(alignment: .leading, spacing: 10) { Text("Fishing map").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Explore named coastal areas · check access and local rules").foregroundStyle(.secondary); Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented) }.padding(20)
             Map(position: $position) {
                 UserAnnotation()
                 ForEach(visibleSpots, id: \.id) { spot in
@@ -25,13 +27,46 @@ struct FishingMapView: View {
                         }
                     }
                 }
-            }.mapStyle(.standard(elevation: .realistic)).overlay(alignment: .bottomTrailing) { Button { vm.requestLocation(); position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude), span: MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12))) } label: { Image(systemName: "location.fill").padding().background(.white, in: Circle()).shadow(radius: 3) }.padding(18) }
+            }.mapStyle(.standard(elevation: .realistic)).overlay(alignment: .bottomTrailing) {
+                Button {
+                    recenterOnLocationUpdate = true
+                    if vm.hasDeviceLocation { centerOnCurrentLocation(); recenterOnLocationUpdate = false }
+                    vm.requestLocation()
+                } label: { Image(systemName: "location.fill").padding().background(.white, in: Circle()).shadow(radius: 3) }
+                    .accessibilityLabel("Center map on my location")
+                    .padding(18)
+            }
         }.background(CatchCheckColor.cream)
+            .onAppear {
+                if vm.hasDeviceLocation { centerOnCurrentLocation(); needsFirstLocationCenter = false }
+                else { needsFirstLocationCenter = true }
+                vm.requestLocation()
+            }
+            .onChange(of: vm.location) { _, _ in
+                if vm.hasDeviceLocation && (needsFirstLocationCenter || recenterOnLocationUpdate) {
+                    centerOnCurrentLocation()
+                    needsFirstLocationCenter = false
+                    recenterOnLocationUpdate = false
+                }
+            }
+            .onChange(of: vm.hasDeviceLocation) { _, available in
+                if available && (needsFirstLocationCenter || recenterOnLocationUpdate) {
+                    centerOnCurrentLocation()
+                    needsFirstLocationCenter = false
+                    recenterOnLocationUpdate = false
+                }
+            }
+    }
+
+    private func centerOnCurrentLocation() {
+        position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude),
+                                              span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)))
     }
 }
 
 struct TideForecastView: View {
     @EnvironmentObject private var vm: FishingViewModel
+    @State private var showingStationPicker = false
     private var nzCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
@@ -66,15 +101,18 @@ struct TideForecastView: View {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Tide station").font(.caption).foregroundStyle(.secondary)
-                                Text(vm.selectedStation.name)
-                                    .font(.title2.bold())
-                                    .foregroundStyle(CatchCheckColor.navy)
+                                Button { showingStationPicker = true } label: {
+                                    HStack {
+                                        Text(vm.selectedStation.name).font(.title2.bold())
+                                        Image(systemName: "chevron.down").font(.caption.bold())
+                                    }.foregroundStyle(CatchCheckColor.navy)
+                                }.buttonStyle(.plain)
                             }
                             Spacer()
                             Button {
                                 vm.useCurrentLocationForTides()
                             } label: {
-                                Label("Nearby", systemImage: "location.fill")
+                                Label(vm.hasDeviceLocation ? vm.devicePlaceName ?? "My location" : "Use my location", systemImage: "location.fill")
                             }
                             .buttonStyle(.bordered)
                             .accessibilityLabel("Use the tide station nearest my current location")
@@ -82,14 +120,8 @@ struct TideForecastView: View {
                         Text(vm.tideLocationSummary)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(tideStations) { station in
-                                    Button(station.name) { vm.chooseStation(station) }
-                                        .buttonStyle(ChoiceButton(selected: vm.selectedStation == station))
-                                }
-                            }
-                        }
+                        Button("Choose another tide station") { showingStationPicker = true }
+                            .font(.subheadline.weight(.semibold))
                     }
 
                     HStack(spacing: 14) {
@@ -150,6 +182,53 @@ struct TideForecastView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear { vm.activateTideTab() }
+        .sheet(isPresented: $showingStationPicker) { TideStationPicker() }
+    }
+}
+
+private struct TideStationPicker: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var matchingStations: [TideStation] {
+        let sorted = tideStations.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        guard !query.isEmpty else { return sorted }
+        return sorted.filter { $0.name.localizedStandardContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        vm.useCurrentLocationForTides()
+                        dismiss()
+                    } label: {
+                        Label(vm.hasDeviceLocation ? "Near \(vm.devicePlaceName ?? "my location")" : "Use my location", systemImage: "location.fill")
+                    }
+                } footer: {
+                    Text("Only LINZ sites with direct daily predictions are listed. Offset locations need a reference-port calculation.")
+                }
+                Section("Stations") {
+                    ForEach(matchingStations) { station in
+                        Button {
+                            vm.chooseStation(station)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(station.name)
+                                Spacer()
+                                if vm.selectedStation == station { Image(systemName: "checkmark").foregroundStyle(CatchCheckColor.accent) }
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: "Search tide stations")
+            .navigationTitle("Tide locations")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
     }
 }
 
@@ -431,69 +510,59 @@ struct TripCalendarEditor: UIViewControllerRepresentable {
     }
 }
 
-private struct FishingRulesArea: Identifiable, Hashable {
+struct FishingRulesArea: Identifiable, Hashable {
     let id: String
     let name: String
     let slug: String
+    let scope: String
     var officialURL: URL { URL(string: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/\(slug)")! }
 }
-private let fishingRulesAreas = [
-    FishingRulesArea(id: "auckland-kermadec", name: "Auckland / Kermadec", slug: "auckland-kermadec-fishing-rules"),
-    FishingRulesArea(id: "central", name: "Central", slug: "central-fishing-rules"),
-    FishingRulesArea(id: "challenger", name: "Challenger", slug: "challenger-fishing-rules"),
-    FishingRulesArea(id: "south-east", name: "South-East", slug: "south-east-fishing-rules"),
-    FishingRulesArea(id: "southland", name: "Southland", slug: "southland-fishing-rules"),
-    FishingRulesArea(id: "kaikoura", name: "Kaikōura", slug: "kaikoura-fishing-rules"),
-    FishingRulesArea(id: "chatham-rise", name: "Chatham Rise", slug: "chatham-rise-area-recreational-fishing-rules"),
-    FishingRulesArea(id: "fiordland", name: "Fiordland", slug: "fiordland-marine-area-fishing-rules")
+let fishingRulesAreas = [
+    FishingRulesArea(id: "auckland-kermadec", name: "Auckland / Kermadec", slug: "auckland-kermadec-fishing-rules", scope: "Northland, Auckland, Waikato and Bay of Plenty coasts; east and west subareas can have different limits."),
+    FishingRulesArea(id: "central", name: "Central", slug: "central-fishing-rules", scope: "North Island coast from Cape Runaway around the south to Tirua Point."),
+    FishingRulesArea(id: "challenger", name: "Challenger", slug: "challenger-fishing-rules", scope: "South Island coast from Awarua Point up the west and north to Clarence Point."),
+    FishingRulesArea(id: "south-east", name: "South-East", slug: "south-east-fishing-rules", scope: "South Island east coast from Clarence Point to Slope Point, except the Kaikōura special area."),
+    FishingRulesArea(id: "southland", name: "Southland", slug: "southland-fishing-rules", scope: "South and west from Awarua Point to Slope Point, including Rakiura; Fiordland has separate rules."),
+    FishingRulesArea(id: "kaikoura", name: "Kaikōura", slug: "kaikoura-fishing-rules", scope: "Clarence Point to Conway River mouth, extending 12 nautical miles offshore."),
+    FishingRulesArea(id: "chatham-rise", name: "Chatham Rise", slug: "chatham-rise-area-recreational-fishing-rules", scope: "Chatham Islands and Chatham Rise; check the MPI map for your exact position."),
+    FishingRulesArea(id: "fiordland", name: "Fiordland", slug: "fiordland-marine-area-fishing-rules", scope: "Fiordland coast from Awarua Point to Sand Hill Point, extending 12 nautical miles offshore.")
 ]
 
 struct RulesView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedArea = fishingRulesAreas[0]
-    @State private var manuallyChosen = false
+    @State private var selectedArea: FishingRulesArea?
     @State private var showAreas = false
     @State private var query = ""
     @State private var page: SavedRulesPage?
     @State private var loadError: String?
     @State private var loading = false
-    @State private var locationRequested = false
-
-    private var matchingSections: [SavedRulesSection] {
-        guard let page else { return [] }
-        guard !query.isEmpty else { return page.sections }
-        return page.sections.filter { $0.heading.localizedStandardContains(query) || $0.text.localizedStandardContains(query) }
-    }
-    private var matchingTables: [[[String]]] {
-        guard let page else { return [] }
-        guard !query.isEmpty else { return page.tables }
-        return page.tables.filter { table in table.contains { row in row.contains { $0.localizedStandardContains(query) } } }
-    }
+    private var quickRows: [SavedRuleQuickRow] { page?.quickRows(matching: query) ?? [] }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Fishing rules").font(.largeTitle.bold()).foregroundStyle(.primary)
-                    Text("Sizes, limits and restrictions from Fisheries New Zealand").foregroundStyle(.secondary)
+                    Text("Choose the MPI area where you will fish, then look up a species.").foregroundStyle(.secondary)
                     Card {
-                        Text("Fishing area").font(.caption).foregroundStyle(.secondary)
+                        Text("MPI fishing area").font(.caption).foregroundStyle(.secondary)
                         Button { showAreas = true } label: {
-                            HStack { Text(selectedArea.name).font(.headline); Spacer(); Image(systemName: "chevron.down") }
+                            HStack { Text(selectedArea?.name ?? "Choose an area").font(.headline); Spacer(); Image(systemName: "chevron.right") }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }.buttonStyle(.borderedProminent)
-                        Button { manuallyChosen = false; vm.requestLocation() } label: {
-                            Label("Use my location", systemImage: "location.fill")
-                        }.buttonStyle(.bordered)
-                        Text(vm.hasDeviceLocation && !manuallyChosen
-                             ? "Area estimated from your current location. Confirm the exact fishing spot."
-                             : "Choose the area where you plan to fish."
-                        ).font(.caption).foregroundStyle(.secondary)
+                        if let selectedArea { Text(selectedArea.scope).font(.subheadline).foregroundStyle(.secondary) }
+                        if vm.hasDeviceLocation {
+                            Label("Near \(vm.devicePlaceName ?? "your current location")", systemImage: "location.fill")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text("MPI areas follow coastlines and have local exceptions. Confirm the exact fishing spot on the official map.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
+                    if selectedArea != nil {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search species or rules", text: $query)
+                        TextField("Search a fish or shellfish", text: $query)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                         if !query.isEmpty {
@@ -503,35 +572,46 @@ struct RulesView: View {
                     }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                    if loading { ProgressView("Loading saved rules…").frame(maxWidth: .infinity).padding(24) }
+                    if loading { ProgressView("Loading MPI rules…").frame(maxWidth: .infinity).padding(24) }
                     if let loadError {
                         Card {
                             Text(loadError).foregroundStyle(.secondary)
                             Button("Try again") { Task { await loadRules() } }.buttonStyle(.bordered)
-                            Link("Open official MPI page", destination: selectedArea.officialURL)
+                            if let selectedArea { Link("Open official MPI page", destination: selectedArea.officialURL) }
                         }
                     }
                     if let page {
-                        Text("\(matchingSections.count + matchingTables.count) \(query.isEmpty ? "rule topics" : "matching topics")")
-                            .font(.headline)
-                        if let reviewedAt = page.reviewedAt {
-                            Text("MPI last reviewed: \(reviewedAt)").font(.caption).foregroundStyle(.secondary)
+                        if page.needsReview == true {
+                            Card(background: CatchCheckColor.seafoam) {
+                                Label("Rules changed at MPI", systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                                Text("This area's saved summary is being reviewed. Open the official MPI page for current limits and closures.")
+                                    .font(.subheadline)
+                                Link("Open current MPI rules", destination: page.sourceURL).buttonStyle(.borderedProminent)
+                            }
+                        } else {
+                        if let summary = page.combinedFinfishSummary {
+                            Card(background: CatchCheckColor.seafoam) {
+                                Label("General finfish limit", systemImage: "checkmark.shield").font(.headline)
+                                Text(summary).font(.subheadline)
+                            }
                         }
-                        ForEach(Array(matchingSections.enumerated()), id: \.offset) { _, section in
-                            SavedRuleSectionCard(section: section, searching: !query.isEmpty)
+                        Text(query.isEmpty ? "Common species" : "Matching species")
+                            .font(.title2.bold())
+                        if quickRows.isEmpty {
+                            Card { Text(query.isEmpty ? "Search for a species to see its saved size and daily limits." : "No saved species limits match “\(query)”. Check the MPI page for other rules.").foregroundStyle(.secondary) }
+                        } else {
+                            ForEach(quickRows) { row in SavedRuleQuickCard(row: row) }
                         }
-                        if !matchingTables.isEmpty { Text("Species and limits").font(.title2.bold()) }
-                        ForEach(Array(matchingTables.enumerated()), id: \.offset) { _, table in
-                            SavedRuleTableCard(table: table, query: query)
+                        Card {
+                            Label("Check local restrictions", systemImage: "exclamationmark.triangle").font(.headline)
+                            Text("Closures, subareas, methods and recent changes can change what applies at a particular spot. Check the official page before keeping a catch.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Link("See full official MPI rules", destination: page.sourceURL).buttonStyle(.borderedProminent)
+                            if let reviewedAt = page.reviewedAt { Text("Saved page reviewed by MPI: \(reviewedAt)").font(.caption).foregroundStyle(.secondary) }
                         }
-                        if !query.isEmpty && matchingSections.isEmpty && matchingTables.isEmpty {
-                            Text("No saved rules match “\(query)” in \(page.areaName). Try a species or another term.")
-                                .foregroundStyle(.secondary)
                         }
-                        Link("Open official MPI rules", destination: page.sourceURL).buttonStyle(.bordered)
                     }
-                    Text("Confirm the exact location and latest official rules each time you fish.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    }
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
@@ -540,13 +620,28 @@ struct RulesView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $showAreas) {
                 NavigationStack {
-                    List(fishingRulesAreas) { area in
-                        Button {
-                            selectedArea = area
-                            manuallyChosen = true
-                            showAreas = false
-                        } label: {
-                            HStack { Text(area.name); Spacer(); if area == selectedArea { Image(systemName: "checkmark") } }
+                    List {
+                        Section {
+                            Link("View MPI fishing area maps", destination: URL(string: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules")!)
+                        } footer: {
+                            Text("Areas follow the coast, and Kaikōura and Fiordland have special boundaries. Select where you will fish.")
+                        }
+                        ForEach(fishingRulesAreas) { area in
+                            Button {
+                                selectedArea = area
+                                vm.selectedRulesAreaID = area.id
+                                query = ""
+                                showAreas = false
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(area.name).font(.headline)
+                                        Text(area.scope).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if area == selectedArea { Image(systemName: "checkmark") }
+                                }
+                            }
                         }
                     }
                     .navigationTitle("Choose fishing area")
@@ -555,31 +650,14 @@ struct RulesView: View {
             }
         }
         .onAppear {
-            if vm.hasDeviceLocation { selectArea(for: vm.location) }
-            else if !locationRequested { locationRequested = true; vm.requestLocation() }
+            selectedArea = fishingRulesAreas.first(where: { $0.id == vm.selectedRulesAreaID })
+            vm.requestLocation()
         }
-        .onChange(of: vm.location) { _, point in if vm.hasDeviceLocation && !manuallyChosen { selectArea(for: point) } }
-        .onChange(of: vm.hasDeviceLocation) { _, available in if available && !manuallyChosen { selectArea(for: vm.location) } }
-        .task(id: selectedArea.id) { await loadRules() }
-    }
-
-    private func selectArea(for point: GeoPoint) {
-        let id: String
-        switch (point.latitude, point.longitude) {
-        case let (latitude, longitude) where longitude < -175 && latitude < -40 && latitude > -49: id = "chatham-rise"
-        case let (latitude, longitude) where latitude <= -44.5 && (166...168.8).contains(longitude): id = "fiordland"
-        case let (latitude, _) where latitude <= -46.3: id = "southland"
-        case let (latitude, longitude) where latitude < -42.4 && latitude > -44 && (172.2...174.4).contains(longitude): id = "kaikoura"
-        case let (latitude, longitude) where latitude <= -40 && latitude >= -46.3 && longitude < 171: id = "challenger"
-        case let (latitude, longitude) where latitude <= -42.5 && latitude > -46.3 && longitude >= 171: id = "south-east"
-        case let (latitude, _) where latitude > -37.7: id = "auckland-kermadec"
-        case let (latitude, _) where latitude > -41.6: id = "central"
-        default: id = "challenger"
-        }
-        if let area = fishingRulesAreas.first(where: { $0.id == id }) { selectedArea = area }
+        .task(id: selectedArea?.id) { await loadRules() }
     }
 
     @MainActor private func loadRules() async {
+        guard let selectedArea else { page = nil; loadError = nil; return }
         loading = true
         loadError = nil
         page = nil
@@ -607,60 +685,92 @@ private struct SavedRulesPage: Decodable {
     let areaName: String
     let sourceURL: URL
     let reviewedAt: String?
+    let needsReview: Bool?
     let sections: [SavedRulesSection]
     let tables: [[[String]]]
     enum CodingKeys: String, CodingKey {
-        case areaName = "area_name", sourceURL = "source_url", reviewedAt = "reviewed_at", sections, tables
+        case areaName = "area_name", sourceURL = "source_url", reviewedAt = "reviewed_at", needsReview, sections, tables
     }
 }
 private struct SavedRulesSection: Decodable { let heading: String; let text: String }
 
-private struct SavedRuleSectionCard: View {
-    let section: SavedRulesSection
-    let searching: Bool
-    @State private var expanded = false
-    var body: some View {
-        Card {
-            DisclosureGroup(isExpanded: $expanded) {
-                Text(section.text).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 6)
-            } label: {
-                Text(section.heading).font(.headline).foregroundStyle(.primary)
+private struct SavedRuleQuickRow: Identifiable {
+    let id: String
+    let species: String
+    let dailyLimit: String?
+    let minimumSize: String?
+    let minimumSizeLabel: String?
+}
+
+private extension SavedRulesPage {
+    var combinedFinfishSummary: String? {
+        if areaName.localizedCaseInsensitiveContains("Fiordland") {
+            return "Daily limits differ between the outer Fiordland Marine Area and the inner fiords. Check the exact subarea on MPI."
+        }
+        let pattern = "combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\."
+        for section in sections {
+            if let range = section.text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                return String(section.text[range])
             }
         }
-        .onAppear { if searching { expanded = true } }
-        .onChange(of: searching) { _, active in if active { expanded = true } }
+        return nil
+    }
+
+    func quickRows(matching query: String) -> [SavedRuleQuickRow] {
+        let preferred = ["snapper", "blue cod", "kingfish", "kahawai", "rock lobster", "pāua", "pauā", "cockle"]
+        let rows: [SavedRuleQuickRow] = tables.enumerated().flatMap { tableIndex, table in
+            guard let headers = table.first, !headers.isEmpty else { return [SavedRuleQuickRow]() }
+            let limitIndices = headers.indices.filter { headers[$0].localizedCaseInsensitiveContains("daily limit") }
+            let sizeIndices = headers.indices.filter {
+                let header = headers[$0]
+                return header.localizedCaseInsensitiveContains("min fish length") || header.localizedCaseInsensitiveContains("min size")
+            }
+            // A single simplified value would hide subarea differences (notably Fiordland).
+            guard limitIndices.count <= 1, sizeIndices.count <= 1 else { return [SavedRuleQuickRow]() }
+            let limitIndex = limitIndices.first
+            let sizeIndex = sizeIndices.first
+            guard limitIndex != nil || sizeIndex != nil else { return [SavedRuleQuickRow]() }
+            return Array(table.dropFirst()).enumerated().compactMap { rowIndex, row in
+                guard let species = row.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !species.isEmpty, species.count < 100 else { return nil }
+                func value(at index: Int?) -> String? {
+                    guard let index, row.indices.contains(index) else { return nil }
+                    let value = row[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                    return value.isEmpty || value == "—" || value == "–" ? nil : value
+                }
+                let dailyLimit = value(at: limitIndex)
+                let minimumSize = value(at: sizeIndex)
+                guard dailyLimit != nil || minimumSize != nil else { return nil }
+                return SavedRuleQuickRow(id: "\(tableIndex)-\(rowIndex)", species: species,
+                                         dailyLimit: dailyLimit, minimumSize: minimumSize,
+                                         minimumSizeLabel: sizeIndex.map { headers[$0] })
+            }
+        }
+        if !query.isEmpty {
+            return Array(rows.filter { $0.species.localizedStandardContains(query) }.prefix(24))
+        }
+        return Array(rows.filter { row in preferred.contains { row.species.localizedCaseInsensitiveContains($0) } }.prefix(12))
     }
 }
 
-private struct SavedRuleTableCard: View {
-    let table: [[String]]
-    let query: String
-    @State private var expanded = false
-    private var headers: [String] { table.first ?? [] }
-    private var rows: [[String]] {
-        let all = Array(table.dropFirst())
-        guard !query.isEmpty && !headers.contains(where: { $0.localizedStandardContains(query) }) else { return all }
-        return all.filter { $0.contains { $0.localizedStandardContains(query) } }
-    }
+private struct SavedRuleQuickCard: View {
+    let row: SavedRuleQuickRow
     var body: some View {
         Card {
-            Text(headers.first ?? "Rules table").font(.headline)
-            ForEach(Array((expanded || !query.isEmpty ? rows : Array(rows.prefix(6))).enumerated()), id: \.offset) { _, row in
-                Divider()
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(row.first ?? "").font(.subheadline.bold())
-                    ForEach(Array(row.dropFirst().enumerated()), id: \.offset) { index, value in
-                        if !value.isEmpty && value != "—" {
-                            Text("\(headers.indices.contains(index + 1) ? headers[index + 1] : "Detail"): \(value)")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if rows.count > 6 && query.isEmpty {
-                Button(expanded ? "Show fewer" : "Show all \(rows.count) entries") { expanded.toggle() }
-                    .buttonStyle(.bordered)
+            Text(row.species).font(.headline).foregroundStyle(CatchCheckColor.navy)
+            HStack(alignment: .top, spacing: 14) {
+                if let dailyLimit = row.dailyLimit {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Daily limit").font(.caption).foregroundStyle(.secondary)
+                        Text(dailyLimit).font(.subheadline.bold())
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let minimumSize = row.minimumSize {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(row.minimumSizeLabel ?? "Minimum size").font(.caption).foregroundStyle(.secondary)
+                        Text(minimumSize).font(.subheadline.bold())
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
     }
