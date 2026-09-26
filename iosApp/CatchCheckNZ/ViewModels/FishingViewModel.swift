@@ -5,7 +5,7 @@ import UIKit
 enum FishingDatePreset: String, CaseIterable, Hashable {
     case today = "Today"
     case inThreeDays = "In 3 days"
-    case inSevenDays = "In 7 days"
+    case inSevenDays = "Next 7 days"
     case thisWeekend = "This weekend"
     case custom = "Choose dates"
 }
@@ -264,7 +264,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         case .inThreeDays:
             return [calendar.date(byAdding: .day, value: 3, to: today)].compactMap { $0 }
         case .inSevenDays:
-            return [calendar.date(byAdding: .day, value: 7, to: today)].compactMap { $0 }
+            return days(from: today, count: 7)
         case .thisWeekend:
             let weekday = calendar.component(.weekday, from: today)
             if weekday == 1 { return [today] }

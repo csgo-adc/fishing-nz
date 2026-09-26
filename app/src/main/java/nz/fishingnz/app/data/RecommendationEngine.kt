@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Ranks the best two- or three-hour window at each nearby named fishing area. */
+/** Ranks two- or three-hour windows at nearby named fishing areas or a selected tide station. */
 class RecommendationEngine {
     private val zone = ZoneId.of("Pacific/Auckland")
     private val timeFormat = DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", Locale.US)
@@ -70,7 +70,7 @@ class RecommendationEngine {
         val outcomes = nearby.map { (spot, distance) ->
             async(Dispatchers.IO) {
                 limiter.withPermit {
-                    try { Result.success(bestWindow(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight)) }
+                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation != null)) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) { Result.failure<SpotOutcome>(error) }
                 }
@@ -80,21 +80,24 @@ class RecommendationEngine {
         if (succeeded.isEmpty()) error("Weather forecasts are unavailable for nearby spots. Please try again later.")
         if (succeeded.none { it.usableWeather }) error("No usable hourly weather forecast was available for the selected days.")
         RecommendationSearch(
-            succeeded.mapNotNull { it.window }
+            succeeded.flatMap { it.windows }
                 .map { window ->
                     if (specificStation == null) window else window.copy(
                         distance = "Selected location",
                         warnings = window.warnings + "Confirm fishing access and local rules at this location"
                     )
                 }
-                .sortedWith(compareByDescending<Recommendation> { it.rating }.thenBy { it.distanceKm }.thenBy { it.name }),
+                .let { windows ->
+                    if (specificStation != null) windows.sortedBy { it.startsAtEpochSeconds }
+                    else windows.sortedWith(compareByDescending<Recommendation> { it.rating }.thenBy { it.distanceKm }.thenBy { it.name })
+                },
             nearby.size,
             outcomes.count { it.isFailure }
         )
     }
 
-    private fun bestWindow(spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int, now: Instant,
-                           preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean): SpotOutcome {
+    private fun bestWindows(spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int, now: Instant,
+                            preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean, onePerDay: Boolean): SpotOutcome {
         val weather = weather(spot, forecastDays)
         val marine = try { marine(spot, forecastDays) }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -103,7 +106,7 @@ class RecommendationEngine {
             val day = hour.time.atZone(zone).toLocalDate()
             day >= start && day <= end.plusDays(if (mayCrossMidnight) 1 else 0) && !hour.time.isBefore(now)
         }
-        var best: Recommendation? = null
+        val selection = WindowSelection(onePerDay)
         for (index in hours.indices) {
             for (length in listOf(3, 2)) {
                 if (index + length > hours.size) continue
@@ -115,14 +118,10 @@ class RecommendationEngine {
                 if (!withinPreferredTime(samples.first().time, windowEnd, firstDay, preferredTime)) continue
                 val solar = weather.solar[firstDay] ?: continue
                 val candidate = scoreWindow(spot, distance, samples, windowEnd, solar, marine, now) ?: continue
-                if (best == null || candidate.rating > best.rating ||
-                    (candidate.rating == best.rating && candidate.durationHours > best.durationHours) ||
-                    (candidate.rating == best.rating && candidate.durationHours == best.durationHours && candidate.startsAtEpochSeconds < best.startsAtEpochSeconds)) {
-                    best = candidate
-                }
+                selection.consider(firstDay, candidate)
             }
         }
-        return SpotOutcome(best, hours.isNotEmpty())
+        return SpotOutcome(selection.windows(), hours.isNotEmpty())
     }
 
     private fun withinPreferredTime(windowStart: Instant, windowEnd: Instant, startDay: LocalDate,
@@ -375,5 +374,22 @@ class RecommendationEngine {
     private data class SolarDay(val sunrise: Instant, val sunset: Instant)
     private data class MarineHour(val seaLevel: Double?, val waveHeight: Double?, val wavePeriod: Double?)
     private data class TideScore(val value: Double, val incoming: Boolean, val meanChange: Double)
-    private data class SpotOutcome(val window: Recommendation?, val usableWeather: Boolean)
+    private data class SpotOutcome(val windows: List<Recommendation>, val usableWeather: Boolean)
+}
+
+/** Keeps the highest scoring window for each local start day when searching one tide station. */
+internal class WindowSelection(private val onePerDay: Boolean) {
+    private val bestByDay = mutableMapOf<LocalDate, Recommendation>()
+
+    fun consider(startDay: LocalDate, candidate: Recommendation) {
+        val key = if (onePerDay) startDay else LocalDate.MIN
+        val current = bestByDay[key]
+        if (current == null || candidate.rating > current.rating ||
+            (candidate.rating == current.rating && candidate.durationHours > current.durationHours) ||
+            (candidate.rating == current.rating && candidate.durationHours == current.durationHours && candidate.startsAtEpochSeconds < current.startsAtEpochSeconds)) {
+            bestByDay[key] = candidate
+        }
+    }
+
+    fun windows(): List<Recommendation> = bestByDay.values.sortedBy { it.startsAtEpochSeconds }
 }

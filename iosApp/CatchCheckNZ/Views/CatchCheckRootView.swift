@@ -761,6 +761,12 @@ struct ResultsView: View {
                              : vm.timeSummary)
                         Text(vm.locationSummary)
                     }.font(.subheadline).foregroundStyle(.secondary)
+                    if vm.selectedSearchStationID != nil, vm.hasSearchedRecommendations,
+                       !vm.isResolvingRecommendationLocation, !vm.isLoadingRecommendations,
+                       vm.recommendationError == nil {
+                        Text("Suitable windows on \(vm.recommendations.count) of \(vm.recommendationDays().count) selected days.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
                     if vm.isResolvingRecommendationLocation {
                         ProgressView("Getting your current location…").frame(maxWidth: .infinity).padding(.vertical, 28)
                     } else if let locationError = vm.recommendationLocationError {
@@ -795,7 +801,7 @@ struct ResultsView: View {
                             }
                         }.padding(.vertical, 14)
                     } else {
-                        ForEach(vm.recommendations) { spot in
+                        ForEach(vm.recommendations, id: \.windowID) { spot in
                             RecommendationCard(spot: spot) { vm.showingResults = false; vm.selectedSpot = spot }
                                 .listRowInsets(EdgeInsets())
                         }

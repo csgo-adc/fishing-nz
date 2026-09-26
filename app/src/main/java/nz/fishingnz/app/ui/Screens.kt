@@ -253,7 +253,7 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text("When are you going?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today", "In 3 days", "In 7 days", "This weekend").forEach { choice ->
+            listOf("Today", "In 3 days", "Next 7 days", "This weekend").forEach { choice ->
                 FilterChip(selected = s.dateLabel == choice, onClick = { vm.setDate(choice) }, label = { Text(choice) })
             }
             FilterChip(selected = s.dateLabel == "Custom", onClick = {
@@ -785,6 +785,13 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     Text(hours, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } }
+            if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) s.recommendationSearch?.let { search ->
+                item {
+                    val selectedDays = java.time.temporal.ChronoUnit.DAYS.between(s.dateStart, s.dateEnd) + 1
+                    Text("${search.items.size} of $selectedDays selected days have a suitable 2–3 hour window.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             s.locationNotice?.let { item { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) } }
             when {
                 s.locating -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Getting current location…", color = Navy) } }

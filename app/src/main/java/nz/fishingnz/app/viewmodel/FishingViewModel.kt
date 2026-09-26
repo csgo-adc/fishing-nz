@@ -23,6 +23,18 @@ import java.time.ZoneId
 private val nzZone = ZoneId.of("Pacific/Auckland")
 private val suggestedHours = PreferredTimeRange(LocalTime.of(7, 0), LocalTime.of(21, 0))
 
+internal fun presetFishingDates(value: String, today: LocalDate): Pair<LocalDate, LocalDate>? = when (value) {
+    "Today" -> today to today
+    "In 3 days" -> today.plusDays(3) to today.plusDays(3)
+    "Next 7 days" -> today to today.plusDays(6)
+    "This weekend" -> {
+        val saturday = if (today.dayOfWeek == DayOfWeek.SUNDAY) today.minusDays(1)
+            else today.plusDays((DayOfWeek.SATURDAY.value - today.dayOfWeek.value + 7L) % 7)
+        maxOf(today, saturday) to saturday.plusDays(1)
+    }
+    else -> null
+}
+
 enum class SearchLocationMode { NEAR_ME, SPECIFIC_LOCATION }
 
 data class FishingUiState(
@@ -94,17 +106,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun setBoat(value: Boolean) { _state.value = _state.value.copy(boat = value, recommendationSearch = null); if (_state.value.showResults) refreshRecommendations() }
     fun setDate(value: String) {
         val today = LocalDate.now(nzZone)
-        val range = when (value) {
-            "Today" -> today to today
-            "In 3 days" -> today.plusDays(3) to today.plusDays(3)
-            "In 7 days" -> today.plusDays(7) to today.plusDays(7)
-            "This weekend" -> {
-                val saturday = if (today.dayOfWeek == DayOfWeek.SUNDAY) today.minusDays(1)
-                    else today.plusDays((DayOfWeek.SATURDAY.value - today.dayOfWeek.value + 7L) % 7)
-                maxOf(today, saturday) to saturday.plusDays(1)
-            }
-            else -> return
-        }
+        val range = presetFishingDates(value, today) ?: return
         _state.value = _state.value.copy(dateLabel = value, dateStart = range.first, dateEnd = range.second, recommendationSearch = null)
         if (_state.value.showResults) refreshRecommendations()
     }

@@ -178,10 +178,10 @@ struct FishingScoringService: Sendable {
                     break
                 }
                 switch outcome {
-                case .forecastAvailable(let window, let hasUsableWeather):
+                case .forecastAvailable(let spotWindows, let hasUsableWeather):
                     weatherSucceeded = true
                     usableWeatherFound = usableWeatherFound || hasUsableWeather
-                    if let window { windows.append(window) }
+                    windows.append(contentsOf: spotWindows)
                 case .forecastFailed:
                     break
                 }
@@ -195,6 +195,7 @@ struct FishingScoringService: Sendable {
         try Task.checkCancellation()
         guard weatherSucceeded else { throw ScoringError.forecastsUnavailable }
         guard usableWeatherFound else { throw ScoringError.noUsableForecast }
+        if selectedStation != nil { return windows.sorted { $0.start < $1.start } }
         return windows.sorted {
             if $0.score != $1.score { return $0.score > $1.score }
             if $0.distanceKm != $1.distanceKm { return $0.distanceKm < $1.distanceKm }
@@ -208,14 +209,14 @@ struct FishingScoringService: Sendable {
         do {
             let weather = try await fetchWeather(at: candidate.spot.coordinate, boat: candidate.spot.boat, forecastDays: forecastDays)
             let marine = await marineTask.value
-            let result = bestWindow(for: candidate, weather: weather, marine: marine, days: days, now: now, calendar: calendar, preferredHours: preferredHours)
-            return .forecastAvailable(result.window, result.hasUsableWeather)
+            let result = bestWindows(for: candidate, weather: weather, marine: marine, days: days, now: now, calendar: calendar, preferredHours: preferredHours)
+            return .forecastAvailable(result.windows, result.hasUsableWeather)
         } catch {
             return .forecastFailed
         }
     }
 
-    private static func bestWindow(for candidate: Candidate, weather: WeatherPayload, marine: MarinePayload?, days: Set<Date>, now: Date, calendar: Calendar, preferredHours: PreferredFishingHours?) -> (window: ScoredFishingWindow?, hasUsableWeather: Bool) {
+    private static func bestWindows(for candidate: Candidate, weather: WeatherPayload, marine: MarinePayload?, days: Set<Date>, now: Date, calendar: Calendar, preferredHours: PreferredFishingHours?) -> (windows: [ScoredFishingWindow], hasUsableWeather: Bool) {
         let solar = solarByDay(weather.daily, calendar: calendar)
         let marineHours = marineHoursByTime(marine?.hourly)
         var hours: [WeatherHour] = []
@@ -233,31 +234,35 @@ struct FishingScoringService: Sendable {
             hours.append(.init(time: time, wind: speed, gust: gust, precipitation: rain, rainProbability: rainProbability, code: code))
         }
         let hasUsableWeather = hours.contains { days.contains(calendar.startOfDay(for: $0.time)) }
-        guard hours.count >= 2 else { return (nil, hasUsableWeather) }
+        guard hours.count >= 2 else { return ([], hasUsableWeather) }
 
-        var best: ScoredFishingWindow?
+        var bestByDay: [Date: ScoredFishingWindow] = [:]
         for startIndex in hours.indices {
             for length in [3, 2] where startIndex + length <= hours.count {
                 let samples = Array(hours[startIndex..<(startIndex + length)])
-                guard days.contains(calendar.startOfDay(for: samples[0].time)),
+                let startDay = calendar.startOfDay(for: samples[0].time)
+                guard days.contains(startDay),
                       zip(samples, samples.dropFirst()).allSatisfy({ $1.time.timeIntervalSince($0.time) == 3_600 }),
-                      let daySolar = solar[calendar.startOfDay(for: samples[0].time)] else { continue }
+                      let daySolar = solar[startDay] else { continue }
                 let end = samples[0].time.addingTimeInterval(TimeInterval(length * 3_600))
                 if let preferredHours, !preferredHours.contains(start: samples[0].time, end: end, calendar: calendar) { continue }
                 guard let candidateWindow = evaluate(samples: samples, end: end, spot: candidate.spot, distanceKm: candidate.distanceKm,
                                                      isTideStation: candidate.isTideStation, solar: daySolar, marineHours: marineHours, now: now) else { continue }
-                if let current = best {
-                    if candidateWindow.score > current.score ||
-                        (candidateWindow.score == current.score && candidateWindow.end.timeIntervalSince(candidateWindow.start) > current.end.timeIntervalSince(current.start)) ||
-                        (candidateWindow.score == current.score && candidateWindow.end.timeIntervalSince(candidateWindow.start) == current.end.timeIntervalSince(current.start) && candidateWindow.start < current.start) {
-                        best = candidateWindow
-                    }
-                } else {
-                    best = candidateWindow
-                }
+                if let current = bestByDay[startDay], !isBetter(candidateWindow, than: current) { continue }
+                bestByDay[startDay] = candidateWindow
             }
         }
-        return (best, hasUsableWeather)
+        let best = Array(bestByDay.values)
+        if candidate.isTideStation { return (best, hasUsableWeather) }
+        return (best.max(by: { isBetter($1, than: $0) }).map { [$0] } ?? [], hasUsableWeather)
+    }
+
+    private static func isBetter(_ candidate: ScoredFishingWindow, than current: ScoredFishingWindow) -> Bool {
+        if candidate.score != current.score { return candidate.score > current.score }
+        let candidateDuration = candidate.end.timeIntervalSince(candidate.start)
+        let currentDuration = current.end.timeIntervalSince(current.start)
+        if candidateDuration != currentDuration { return candidateDuration > currentDuration }
+        return candidate.start < current.start
     }
 
     private static func evaluate(samples: [WeatherHour], end: Date, spot: FishingSpot, distanceKm: Double,
@@ -476,7 +481,7 @@ struct FishingScoringService: Sendable {
 
 private struct Candidate: Sendable { let spot: FishingSpot; let distanceKm: Double; let isTideStation: Bool }
 private enum SpotOutcome: Sendable {
-    case forecastAvailable(ScoredFishingWindow?, Bool)
+    case forecastAvailable([ScoredFishingWindow], Bool)
     case forecastFailed
 }
 private struct SolarDay: Sendable { let sunrise: Date; let sunset: Date }
