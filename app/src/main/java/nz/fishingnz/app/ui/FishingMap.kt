@@ -9,6 +9,7 @@ import android.graphics.Path
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -20,14 +21,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path as ComposePath
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -36,6 +45,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import nz.fishingnz.app.model.FishingSpot
 import nz.fishingnz.app.model.GeoPoint
 import nz.fishingnz.app.model.SearchOrigin
@@ -52,7 +63,11 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import kotlin.math.floor
 
-private const val MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty"
+private enum class BaseMap(val label: String, val description: String, val styleUrl: String) {
+    STANDARD("Standard", "Roads and places", "https://tiles.openfreemap.org/styles/liberty"),
+    LIGHT("Light", "Less detail behind fishing spots", "https://tiles.openfreemap.org/styles/positron"),
+    DARK("Dark", "Easier to read at night", "https://tiles.openfreemap.org/styles/dark")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,12 +77,20 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var filter by remember { mutableStateOf("All") }
     var selectedSpot by remember { mutableStateOf<FishingSpot?>(null) }
     var showList by remember { mutableStateOf(false) }
+    var showMapStyles by remember { mutableStateOf(false) }
+    var baseMap by remember { mutableStateOf(BaseMap.STANDARD) }
     var mapLoaded by remember { mutableStateOf(false) }
     var mapError by remember { mutableStateOf(false) }
     var locationNotice by remember { mutableStateOf<String?>(null) }
     var zoom by remember { mutableDoubleStateOf(5.0) }
-    BackHandler(enabled = showList || selectedSpot != null) {
-        if (showList) showList = false else selectedSpot = null
+    var bearing by remember { mutableDoubleStateOf(0.0) }
+    var styleRevision by remember { mutableIntStateOf(0) }
+    BackHandler(enabled = showMapStyles || showList || selectedSpot != null) {
+        when {
+            showMapStyles -> showMapStyles = false
+            showList -> showList = false
+            else -> selectedSpot = null
+        }
     }
     val nativeMap = remember { mutableStateOf<MapLibreMap?>(null) }
     val visibleSpots = remember(filter) { fishingSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) } }
@@ -82,11 +105,12 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 map.uiSettings.isCompassEnabled = false
                 map.uiSettings.isAttributionEnabled = true
                 map.addOnCameraIdleListener { zoom = map.cameraPosition.zoom }
+                map.addOnCameraMoveListener { bearing = map.cameraPosition.bearing }
                 map.cameraPosition = CameraPosition.Builder()
                     .target(if (s.hasDeviceLocation) LatLng(s.location.latitude, s.location.longitude) else LatLng(-41.0, 173.5))
                     .zoom(if (s.hasDeviceLocation) 11.0 else 4.7)
                     .build()
-                map.setStyle(MAP_STYLE) { nativeMap.value = map }
+                map.setStyle(baseMap.styleUrl) { nativeMap.value = map; styleRevision++ }
             }
         }
     }
@@ -123,7 +147,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
 
-    LaunchedEffect(nativeMap.value, visibleSpots, zoom, s.hasDeviceLocation, s.location) {
+    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.hasDeviceLocation, s.location) {
         val map = nativeMap.value ?: return@LaunchedEffect
         map.clear()
         val icons = IconFactory.getInstance(context)
@@ -158,9 +182,11 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
 
-    LaunchedEffect(nativeMap.value, s.location, s.hasDeviceLocation) {
-        if (s.hasDeviceLocation) nativeMap.value?.animateCamera(
-            CameraUpdateFactory.newLatLngZoom(LatLng(s.location.latitude, s.location.longitude), 11.0))
+    LaunchedEffect(s.location, s.hasDeviceLocation) {
+        if (s.hasDeviceLocation) {
+            val map = snapshotFlow { nativeMap.value }.filterNotNull().first()
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(s.location.latitude, s.location.longitude), 12.0))
+        }
     }
 
     fun locate() {
@@ -178,6 +204,17 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) locate()
         else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+    fun selectBaseMap(option: BaseMap) {
+        showMapStyles = false
+        if (baseMap == option) return
+        baseMap = option
+        mapLoaded = false
+        mapError = false
+        nativeMap.value?.let { map ->
+            nativeMap.value = null
+            map.setStyle(option.styleUrl) { nativeMap.value = map; styleRevision++ }
+        }
     }
     // Resolve the position when the map opens, including after a fresh permission grant.
     LaunchedEffect(Unit) { requestLocation() }
@@ -203,10 +240,26 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
                 Text("${visibleSpots.size} spots", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Navy, style = MaterialTheme.typography.labelMedium)
             }
+            Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FloatingActionButton(onClick = { showMapStyles = true }, modifier = Modifier.size(48.dp),
+                    shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
+                    Icon(Icons.Default.Layers, contentDescription = "Choose map layers")
+                }
+                FloatingActionButton(onClick = { nativeMap.value?.animateCamera(CameraUpdateFactory.bearingTo(0.0)) },
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Reset map to north" }, shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
+                    MapCompass(bearing)
+                }
+            }
             FloatingActionButton(onClick = ::requestLocation,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(48.dp),
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = when {
+                        selectedSpot != null -> 196.dp
+                        locationNotice != null -> 84.dp
+                        else -> 20.dp
+                    }).size(48.dp),
                 shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
-                Icon(Icons.Default.NearMe, contentDescription = "Jump to my location")
+                Icon(Icons.Default.NearMe, contentDescription = "Center map on my location")
             }
             if (!mapLoaded && !mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -220,7 +273,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     Text("Map unavailable", color = Navy, fontWeight = FontWeight.Bold)
                     Text("Check your connection, then try again. The fishing spots are available in the list.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { mapError = false; mapLoaded = false; nativeMap.value = null; mapView.getMapAsync { map -> map.setStyle(MAP_STYLE) { nativeMap.value = map } } }) { Text("Retry map") }
+                        TextButton(onClick = { mapError = false; mapLoaded = false; nativeMap.value = null; mapView.getMapAsync { map -> map.setStyle(baseMap.styleUrl) { nativeMap.value = map; styleRevision++ } } }) { Text("Retry map") }
                         TextButton(onClick = { showList = true }) { Text("Browse spots") }
                     }
                 }
@@ -272,6 +325,50 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 HorizontalDivider()
             }
         }
+    }
+
+    if (showMapStyles) ModalBottomSheet(onDismissRequest = { showMapStyles = false }) {
+        Text("Map layers", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold)
+        Text("Choose how the map looks. Fishing spots stay visible on every style.",
+            Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        BaseMap.entries.forEach { option ->
+            ListItem(
+                headlineContent = { Text(option.label) },
+                supportingContent = { Text(option.description) },
+                leadingContent = { Icon(when (option) {
+                    BaseMap.STANDARD -> Icons.Default.Map
+                    BaseMap.LIGHT -> Icons.Default.LightMode
+                    BaseMap.DARK -> Icons.Default.DarkMode
+                }, null) },
+                trailingContent = { RadioButton(selected = baseMap == option, onClick = null) },
+                modifier = Modifier.fillMaxWidth().clickable { selectBaseMap(option) })
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun MapCompass(bearing: Double) {
+    Canvas(Modifier.size(26.dp).rotate(-bearing.toFloat())) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val tip = size.minDimension * 0.43f
+        val wing = size.minDimension * 0.16f
+        val north = ComposePath().apply {
+            moveTo(cx, cy - tip)
+            lineTo(cx - wing, cy)
+            lineTo(cx + wing, cy)
+            close()
+        }
+        val south = ComposePath().apply {
+            moveTo(cx, cy + tip)
+            lineTo(cx - wing, cy)
+            lineTo(cx + wing, cy)
+            close()
+        }
+        drawPath(north, Color(0xFFE44B4B))
+        drawPath(south, Color(0xFF52647A))
     }
 }
 

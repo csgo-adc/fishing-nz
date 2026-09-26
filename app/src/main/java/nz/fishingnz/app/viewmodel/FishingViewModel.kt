@@ -51,9 +51,9 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     init { refreshStationTide(); refreshAccount() }
     fun selectTab(value: Int) {
         val old = _state.value
-        if (value !in 0..6 || old.tab == value) return
+        if (value !in 0..10 || old.tab == value) return
         _state.value = old.copy(tab = value)
-        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more")
+        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance")
         if (old.account != null) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
     }
     fun canGoBack(): Boolean = _state.value.let { it.selectedSpot != null || it.showResults || it.tab != 0 }
@@ -62,7 +62,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         when {
             current.selectedSpot != null -> closeSpot()
             current.showResults -> closeResults()
-            current.tab in 3..5 -> selectTab(6)
+            current.tab in 8..10 -> selectTab(7)
+            current.tab == 7 || current.tab in 3..5 -> selectTab(6)
             current.tab != 0 -> selectTab(0)
         }
     }

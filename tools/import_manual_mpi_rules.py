@@ -13,7 +13,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from crawl_mpi_rules import AREAS, DEFAULT_DB, SCHEMA, request_rules_api
+from crawl_mpi_rules import AREAS, DEFAULT_DB, SCHEMA, parse_structured_rules, request_rules_api
 
 
 SNAPSHOT_DIR = Path("/tmp/catchcheck-manual-mpi")
@@ -40,30 +40,7 @@ def rows_from_snapshots(directory: Path) -> list[dict[str, object]]:
         for tag in root.select("script, style, nav, footer, header, noscript, svg"):
             tag.decompose()
 
-        sections: list[dict[str, str]] = []
-        current = {"heading": payload["title"], "text": []}
-        for node in root.find_all(["h1", "h2", "h3", "h4", "p", "li"]):
-            text = node.get_text(" ", strip=True)
-            if not text:
-                continue
-            if node.name.startswith("h"):
-                if current["text"]:
-                    sections.append({"heading": current["heading"], "text": "\n".join(current["text"])})
-                current = {"heading": text, "text": []}
-            else:
-                current["text"].append(text)
-        if current["text"]:
-            sections.append({"heading": current["heading"], "text": "\n".join(current["text"])})
-
-        tables = []
-        for table in root.find_all("table"):
-            table_rows = []
-            for tr in table.find_all("tr"):
-                cells = [cell.get_text(" ", strip=True) for cell in tr.find_all(["th", "td"], recursive=False)]
-                if cells:
-                    table_rows.append(cells)
-            if table_rows:
-                tables.append(table_rows)
+        sections, tables = parse_structured_rules(root, payload["title"])
 
         rows.append({
             "area_id": area.id,

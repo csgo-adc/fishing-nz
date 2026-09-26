@@ -21,11 +21,13 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
@@ -120,10 +122,16 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                 3 -> MoreDetail("Trips", { vm.selectTab(6) }, modifier) { TripsScreen(Modifier, state, vm) }
                 4 -> MoreDetail("Rules", { vm.selectTab(6) }, modifier) { RulesScreen(Modifier, state, vm) }
                 5 -> MoreDetail("Account", { vm.selectTab(6) }, modifier) { AccountScreen(Modifier, state, vm) }
-                else -> MoreScreen(modifier, state.account?.user?.displayName, appearance, vm::selectTab) { choice ->
-                    appearance = choice
-                    preferences.edit().putString("mode", choice.name).apply()
+                7 -> MoreDetail("Settings", { vm.selectTab(6) }, modifier) { SettingsScreen(Modifier, vm::selectTab) }
+                8 -> MoreDetail("Feedback", { vm.selectTab(7) }, modifier) { FeedbackScreen(Modifier, state, vm) }
+                9 -> MoreDetail("Terms & privacy", { vm.selectTab(7) }, modifier) { TermsPrivacyScreen(Modifier) }
+                10 -> MoreDetail("Appearance", { vm.selectTab(7) }, modifier) {
+                    AppearanceScreen(Modifier, appearance) { choice ->
+                        appearance = choice
+                        preferences.edit().putString("mode", choice.name).apply()
+                    }
                 }
+                else -> MoreScreen(modifier, state.account?.user?.displayName, vm::selectTab)
             }
         }
         if (state.showResults) ResultsScreen(state, vm)
@@ -143,21 +151,48 @@ private fun MoreDetail(title: String, back: () -> Unit, modifier: Modifier, cont
 }
 
 @Composable
-private fun MoreScreen(modifier: Modifier, name: String?, selectedAppearance: Appearance, onNavigate: (Int) -> Unit, onAppearance: (Appearance) -> Unit) {
+private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Spacer(Modifier.height(2.dp))
         Text("More", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(name?.let { "Signed in as $it" } ?: "Your fishing tools and preferences", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            MoreItem(Icons.Default.CalendarMonth, "Trips & saved spots", "Keep your plans together") { onNavigate(3) }
+            MoreItem(Icons.Default.AccountCircle, "Account", "Profile and sign in") { onNavigate(5) }
+        }
+        Spacer(Modifier.height(2.dp))
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            MoreItem(Icons.Default.CalendarMonth, "Trips", "Saved spots and active plans") { onNavigate(3) }
             HorizontalDivider(Modifier.padding(start = 64.dp))
             MoreItem(Icons.Default.MenuBook, "Fishing rules", "Sizes, limits and local restrictions") { onNavigate(4) }
-            HorizontalDivider(Modifier.padding(start = 64.dp))
-            MoreItem(Icons.Default.AccountCircle, "Account", "Profile, access and feedback") { onNavigate(5) }
         }
-        Text("APPEARANCE", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(2.dp))
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Appearance.entries.forEach { option ->
+            MoreItem(Icons.Default.Settings, "Settings", "Appearance, feedback, terms and privacy") { onNavigate(7) }
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(modifier: Modifier, onNavigate: (Int) -> Unit) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            MoreItem(Icons.Default.MenuBook, "Terms & privacy", "How the app works and uses your information") { onNavigate(9) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.Email, "Feedback", "Report a problem or share an idea") { onNavigate(8) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.SettingsBrightness, "Appearance", "Light, dark or device setting") { onNavigate(10) }
+        }
+    }
+}
+
+@Composable
+private fun AppearanceScreen(modifier: Modifier, selectedAppearance: Appearance, onAppearance: (Appearance) -> Unit) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Appearance", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Appearance.entries.forEachIndexed { index, option ->
+                if (index > 0) HorizontalDivider(Modifier.padding(start = 64.dp))
                 val icon = when (option) { Appearance.SYSTEM -> Icons.Default.SettingsBrightness; Appearance.LIGHT -> Icons.Default.LightMode; Appearance.DARK -> Icons.Default.DarkMode }
                 ListItem(
                     headlineContent = { Text(option.label) },
@@ -165,6 +200,30 @@ private fun MoreScreen(modifier: Modifier, name: String?, selectedAppearance: Ap
                     trailingContent = { RadioButton(selected = selectedAppearance == option, onClick = null) },
                     modifier = Modifier.fillMaxWidth().clickable { onAppearance(option) }
                 )
+            }
+        }
+        Text("Use device setting follows your phone’s appearance.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun TermsPrivacyScreen(modifier: Modifier) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Terms & privacy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("A short guide to using CatchCheck NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Terms of use", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Fishing windows, tide times, fish identification and rule summaries help you plan. They can be incomplete or out of date. Check the current MPI rules and local access conditions before fishing.")
+                Text("You are responsible for following applicable fishing and access rules.")
+            }
+        }
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Privacy", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
+                Text("If you choose a fish photo, it is sent through CatchCheck’s service to an image analysis provider for identification.")
+                Text("If you sign in or send feedback, your account details and feedback are sent to CatchCheck’s service. Signing out removes the saved session from this device.")
             }
         }
     }

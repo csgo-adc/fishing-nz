@@ -352,10 +352,6 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     var displayName by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf("NZ") }
     var createAccount by rememberSaveable { mutableStateOf(false) }
-    var category by rememberSaveable { mutableStateOf("general") }
-    var message by rememberSaveable { mutableStateOf("") }
-    var rating by rememberSaveable { mutableIntStateOf(5) }
-    var submittedFeedback by remember { mutableStateOf<String?>(null) }
     val validEmail = remember(email) { android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() }
     val validPassword = password.isNotBlank() && (!createAccount || password.length >= 10)
     LaunchedEffect(s.account) {
@@ -367,15 +363,9 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             password = ""
         }
     }
-    LaunchedEffect(s.accountBusy, s.accountNotice, s.accountError) {
-        if (!s.accountBusy && submittedFeedback != null) {
-            if (s.accountNotice == "Thanks for your feedback." && message == submittedFeedback) message = ""
-            submittedFeedback = null
-        }
-    }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Text("Save your details, share feedback, and check your CatchCheck features.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        Text("Save your details and manage your CatchCheck profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
         s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -422,19 +412,51 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             OutlinedTextField(displayName, { displayName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(countryCode, { countryCode = it.take(2).uppercase() }, label = { Text("Country code") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedButton(enabled = !s.accountBusy, onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth()) { Text("Save profile") }
-            Text("Send feedback", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
-            var categoryExpanded by remember { mutableStateOf(false) }
-            Box {
-                OutlinedButton(onClick = { categoryExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Type: ${category.replaceFirstChar { it.uppercase() }}") }
-                DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
-                    listOf("general" to "General", "bug" to "Report a problem", "idea" to "Idea").forEach { (value, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { category = value; categoryExpanded = false }) }
+            OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+        }
+    }
+}
+
+@Composable fun FeedbackScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
+    var category by rememberSaveable { mutableStateOf("general") }
+    var message by rememberSaveable { mutableStateOf("") }
+    var rating by rememberSaveable { mutableIntStateOf(5) }
+    var submittedFeedback by remember { mutableStateOf<String?>(null) }
+    var categoryExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(s.accountBusy, s.accountNotice, s.accountError) {
+        if (!s.accountBusy && submittedFeedback != null) {
+            if (s.accountNotice == "Thanks for your feedback." && message == submittedFeedback) message = ""
+            submittedFeedback = null
+        }
+    }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Feedback", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Text("Report a problem or tell us what would improve your fishing trips.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (s.account == null) {
+            Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Sign in to send feedback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Feedback is linked to your CatchCheck account so we can review it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = { vm.selectTab(5) }) { Text("Go to account") }
                 }
             }
-            OutlinedTextField(message, { message = it.take(4000) }, label = { Text("Message") }, minLines = 4, modifier = Modifier.fillMaxWidth())
-            Text("Rating", color = Navy, fontWeight = FontWeight.SemiBold)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { (1..5).forEach { value -> FilterChip(selected = rating == value, onClick = { rating = value }, label = { Text(value.toString()) }) } }
-            Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = { submittedFeedback = message; vm.sendFeedback(category, message, rating) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else "Send feedback") }
-            OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+        } else {
+            s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
+            s.accountError?.let { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer) } }
+            Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Box {
+                        OutlinedButton(onClick = { categoryExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Type: ${category.replaceFirstChar { it.uppercase() }}") }
+                        DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                            listOf("general" to "General", "bug" to "Report a problem", "idea" to "Idea").forEach { (value, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { category = value; categoryExpanded = false }) }
+                        }
+                    }
+                    OutlinedTextField(message, { message = it.take(4000) }, label = { Text("Message") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+                    Text("Rating", color = Navy, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { (1..5).forEach { value -> FilterChip(selected = rating == value, onClick = { rating = value }, label = { Text(value.toString()) }) } }
+                    Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = { submittedFeedback = message; vm.sendFeedback(category, message, rating) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else "Send feedback") }
+                }
+            }
         }
     }
 }
@@ -727,8 +749,6 @@ private val fishingRulesAreas = listOf(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var reloadToken by remember { mutableIntStateOf(0) }
-    var expandedSections by remember(selectedAreaId) { mutableStateOf(setOf<Int>()) }
-    var expandedTables by remember(selectedAreaId) { mutableStateOf(setOf<Int>()) }
     val area = fishingRulesAreas.firstOrNull { it.id == selectedAreaId }
 
     LaunchedEffect(selectedAreaId, reloadToken) {
@@ -767,23 +787,20 @@ private val fishingRulesAreas = listOf(
         "Daily limits differ between the outer Fiordland Marine Area and the inner Fiords. Check the exact subarea on MPI."
     else page?.sections?.firstNotNullOfOrNull { section ->
         Regex("combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\.", RegexOption.IGNORE_CASE)
-            .find(section.text)?.value
+            .find(section.text)?.value?.replace("*", "")
     } ?: "Daily limits vary by species and location. Check the MPI page for the exact fishing spot."
-    val matchingSections = page?.sections?.withIndex()?.filter {
-        search.isNotEmpty() && (it.value.heading.contains(search, ignoreCase = true) || it.value.text.contains(search, ignoreCase = true))
-    }.orEmpty()
-    val defaultSpeciesTable = page?.tables?.indexOfFirst { table ->
-        table.firstOrNull()?.firstOrNull()?.contains("finfish species", ignoreCase = true) == true
-    } ?: -1
-    val matchingTables = page?.tables?.withIndex()?.filter {
-        if (search.isEmpty()) it.index == defaultSpeciesTable
-        else it.value.any { row -> row.any { cell -> cell.contains(search, ignoreCase = true) } }
-    }.orEmpty()
+    val speciesRules = page?.let(::ruleSpeciesRows).orEmpty()
+    val matchingSpecies = if (search.isEmpty()) {
+        val preferred = listOf("snapper", "blue cod", "kingfish", "kahawai", "pāua", "paua", "cockle")
+        speciesRules.filter { rule -> preferred.any { rule.species.startsWith(it, ignoreCase = true) } }
+            .sortedBy { rule -> preferred.indexOfFirst { rule.species.startsWith(it, ignoreCase = true) } }
+            .take(8)
+    } else speciesRules.filter { it.species.contains(search, ignoreCase = true) }.take(40)
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(8.dp))
             Text("Fishing rules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("A quick guide to MPI limits. Search a species for more.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Choose an MPI area, then search a species for its key limits.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -799,7 +816,7 @@ private val fishingRulesAreas = listOf(
             }
         }
         if (selectedAreaId != null && page?.needsReview != true) item { OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
-            label = { Text("Search species or rules") }, singleLine = true,
+            label = { Text("Search a fish or shellfish") }, singleLine = true,
             leadingIcon = { Icon(Icons.Default.Search, null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "Clear search") } }) }
         if (loading) item { Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() } }
@@ -820,7 +837,7 @@ private val fishingRulesAreas = listOf(
             } }
             else {
             item {
-                Text(if (search.isEmpty()) "At a glance" else "${matchingSections.size + matchingTables.size} matching topics",
+                Text(if (search.isEmpty()) "At a glance" else "${matchingSpecies.size} matching species",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 rules.reviewedAt?.let { Text("MPI last reviewed: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
@@ -830,27 +847,14 @@ private val fishingRulesAreas = listOf(
                     Text(bagSummary, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } }
-            if (search.isEmpty()) item { Text("Local closures, gear restrictions and species limits can change. Open MPI for the complete current rules at your exact spot.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            matchingSections.forEach { (index, section) ->
-                item(key = "rule-section-$index") {
-                    RuleSectionCard(section.heading, section.text, search.isNotEmpty() || index in expandedSections) {
-                        expandedSections = if (index in expandedSections) expandedSections - index else expandedSections + index
-                    }
-                }
+            if (matchingSpecies.isNotEmpty()) item { Text(if (search.isEmpty()) "Common species" else "Species and limits", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            matchingSpecies.forEach { rule -> item(key = "species-${rule.id}") { RuleSpeciesCard(rule) } }
+            if (matchingSpecies.isEmpty()) item {
+                Text(if (search.isEmpty()) "Search for a species to see its saved limits."
+                    else "No simple saved limit matches “$search” in ${rules.areaName}. Check MPI for other species and local rules.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (matchingTables.isNotEmpty()) item { Text("Species and limits", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            matchingTables.forEach { (index, table) ->
-                item(key = "rule-table-$index") {
-                    val headerMatches = table.firstOrNull()?.any { it.contains(search, ignoreCase = true) } == true
-                    val rows = table.drop(1).filter { search.isEmpty() || headerMatches || it.any { cell -> cell.contains(search, ignoreCase = true) } }
-                    RuleTableCard(table.firstOrNull().orEmpty(), rows, search.isNotEmpty() || index in expandedTables, compact = search.isEmpty()) {
-                        expandedTables = if (index in expandedTables) expandedTables - index else expandedTables + index
-                    }
-                }
-            }
-            if (search.isNotEmpty() && matchingSections.isEmpty() && matchingTables.isEmpty()) item {
-                Text("No saved rules match “$search” in ${rules.areaName}. Try a species or another term.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            item { Text("Local closures, gear restrictions and subarea rules can change what applies. Check MPI for your exact fishing spot.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             item { Button(onClick = { uriHandler.openUri(rules.sourceUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See all rules on MPI") } }
             }
         }
@@ -858,37 +862,82 @@ private val fishingRulesAreas = listOf(
         item { Spacer(Modifier.height(12.dp)) }
     }
 }
-@Composable private fun RuleSectionCard(title: String, body: String, expanded: Boolean, onToggle: () -> Unit) {
-    Card(onClick = onToggle, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(body.trim(), maxLines = if (expanded) Int.MAX_VALUE else 3, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (expanded) "Show less" else "Read section", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
+private data class RuleSpeciesRow(val id: String, val species: String, val facts: List<Pair<String, String>>, val note: String?)
+
+private fun cleanRuleText(value: String): String = value
+    .replace(Regex("\\(Fisheries Management Area\\s*(\\d+)[^)]*\\)", RegexOption.IGNORE_CASE), "(FMA $1)")
+    .replace(Regex("\\[PDF[^]]*]", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("\\*+"), "")
+    .replace(Regex("\\s+"), " ")
+    .trim(' ', '–', '-', ':')
+
+private fun ruleFactLabel(header: String): String? {
+    val text = header.lowercase()
+    return when {
+        text.contains("daily limit") && text.contains("outside fiord") -> "Daily limit · outer area"
+        text.contains("daily limit") && text.contains("the fiords") -> "Daily limit · inner fiords"
+        text.contains("daily limit") && text.contains("auckland coromandel") -> "Daily limit · Auckland/Coromandel"
+        text.contains("daily limit") -> "Daily limit"
+        text.contains("fish length") -> "Minimum length"
+        text.contains("min size") || text.contains("minimum size") -> "Minimum size"
+        text.contains("tail width") -> "Minimum tail width"
+        else -> null
     }
 }
 
-@Composable private fun RuleTableCard(headers: List<String>, rows: List<List<String>>, expanded: Boolean, compact: Boolean, onToggle: () -> Unit) {
-    if (rows.isEmpty()) return
-    val visibleColumns = headers.indices.drop(1).filter { index ->
-        if (!compact) true
-        else headers[index].lowercase().let { heading ->
-            listOf("limit", "size", "length", "area", "fiord", "coast", "fma", "daily").any(heading::contains)
+private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page.tables.flatMapIndexed { tableIndex, table ->
+    val headers = table.firstOrNull().orEmpty()
+    if (headers.size < 2 || !headers.first().contains("species", ignoreCase = true)) return@flatMapIndexed emptyList()
+    val factColumns = headers.indices.drop(1).mapNotNull { index -> ruleFactLabel(headers[index])?.let { index to it } }
+    if (factColumns.isEmpty()) return@flatMapIndexed emptyList()
+    val hasMultipleDailyColumns = factColumns.count { it.second.startsWith("Daily limit") } > 1
+    table.drop(1).mapIndexedNotNull { rowIndex, row ->
+        val rawSpecies = row.firstOrNull()?.trim().orEmpty()
+        if (rawSpecies.isEmpty() || rawSpecies.startsWith("*") || rawSpecies.length > 180 || rawSpecies.equals("Finfish species", true)) return@mapIndexedNotNull null
+        val species = cleanRuleText(rawSpecies)
+        if (species.isEmpty()) return@mapIndexedNotNull null
+        val notes = mutableListOf<String>()
+        if (rawSpecies.contains('*') || row.any { it.contains('*') }) notes += "Additional MPI conditions apply."
+        if (rawSpecies.contains("refer to map", true)) notes += "Check the exact area boundary on MPI."
+        val facts = if (hasMultipleDailyColumns && row.size != headers.size) {
+            notes += "The MPI table has merged cells; check its area-specific limit."
+            listOf("Area-specific rule" to "See MPI")
+        } else factColumns.mapNotNull { (index, label) ->
+            val rawValue = row.getOrNull(index)?.trim().orEmpty()
+            if (rawValue.isBlank() || rawValue in listOf("—", "–", "-", "none")) return@mapNotNull null
+            val clean = cleanRuleText(rawValue)
+            val value = when {
+                clean.contains("No take allowed", true) -> "No take"
+                clean.contains("See below", true) -> { notes += "Check the area-specific rule on MPI."; "See MPI" }
+                label == "Minimum tail width" -> clean
+                Regex("\\d+").findAll(clean).count() > 1 -> { notes += "This value covers multiple species or subareas; check MPI."; "Varies — see MPI" }
+                label.startsWith("Minimum") && clean.matches(Regex("^\\d+.*")) -> {
+                    val number = Regex("^\\d+").find(clean)!!.value
+                    val remainder = clean.removePrefix(number).trim()
+                    if (remainder.isNotEmpty()) notes += remainder
+                    "$number ${if (headers[index].contains("(cm)", true)) "cm" else "mm"}"
+                }
+                else -> clean
+            }
+            label to value
         }
+        if (facts.isEmpty()) return@mapIndexedNotNull null
+        RuleSpeciesRow("$tableIndex-$rowIndex", species, facts, notes.distinct().takeIf { it.isNotEmpty() }?.joinToString(" "))
     }
+}
+
+@Composable private fun RuleSpeciesCard(rule: RuleSpeciesRow) {
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(if (compact) "Common species" else headers.firstOrNull().orEmpty().ifBlank { "Rules table" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            (if (expanded && !compact) rows else rows.take(if (compact) 4 else 6)).forEach { row ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Text(row.firstOrNull().orEmpty(), fontWeight = FontWeight.SemiBold)
-                visibleColumns.forEach { index ->
-                    val value = row.getOrNull(index).orEmpty()
-                    if (value.isNotBlank() && value != "—") Text("${headers[index]}: $value",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(rule.species, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Navy)
+            rule.facts.forEach { (label, value) ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                    Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.width(12.dp))
+                    Text(value, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            if (!compact && rows.size > 6) TextButton(onClick = onToggle) { Text(if (expanded) "Show fewer" else "Show all ${rows.size} entries") }
+            rule.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }

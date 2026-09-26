@@ -24,7 +24,7 @@ enum CatchCheckColor {
 }
 
 private enum MoreDestination: String, Identifiable {
-    case trips, rules, account
+    case trips, rules, account, settings
     var id: String { rawValue }
 }
 
@@ -57,6 +57,7 @@ struct CatchCheckRootView: View {
             case .trips: TripsView()
             case .rules: RulesView()
             case .account: AccountView()
+            case .settings: SettingsView()
             }
         }
     }
@@ -64,7 +65,6 @@ struct CatchCheckRootView: View {
 
 private struct MoreView: View {
     @EnvironmentObject private var vm: FishingViewModel
-    @AppStorage("catchcheckAppearance") private var appearance = "system"
     let open: (MoreDestination) -> Void
 
     var body: some View {
@@ -72,23 +72,19 @@ private struct MoreView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("More").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                    Text("Your trips, local rules and account in one place.")
+                    Text("Your account, trips and fishing tools in one place.")
                         .foregroundStyle(.secondary)
                     VStack(spacing: 10) {
-                        destinationRow("Trips", subtitle: "Saved spots and active plans", icon: "calendar", destination: .trips)
-                        destinationRow("Fishing rules", subtitle: "Sizes, limits and local restrictions", icon: "book.closed", destination: .rules)
-                        destinationRow("Account", subtitle: vm.account?.email ?? "Sign in and manage your profile", icon: "person.crop.circle", destination: .account)
+                        MoreNavigationRow(title: "Account", subtitle: vm.account?.email ?? "Sign in and manage your profile", icon: "person.crop.circle") { open(.account) }
                     }
-                    Card {
-                        Label("Appearance", systemImage: "circle.lefthalf.filled")
-                            .font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        Picker("Appearance", selection: $appearance) {
-                            Text("System").tag("system")
-                            Text("Light").tag("light")
-                            Text("Dark").tag("dark")
-                        }
-                        .pickerStyle(.segmented)
-                        Text("System follows your device setting.").font(.caption).foregroundStyle(.secondary)
+                    .padding(.bottom, 6)
+                    VStack(spacing: 10) {
+                        MoreNavigationRow(title: "Trips", subtitle: "Saved spots and active plans", icon: "calendar") { open(.trips) }
+                        MoreNavigationRow(title: "Fishing rules", subtitle: "Sizes, limits and local restrictions", icon: "book.closed") { open(.rules) }
+                    }
+                    .padding(.bottom, 6)
+                    VStack(spacing: 10) {
+                        MoreNavigationRow(title: "Settings", subtitle: "Appearance, feedback, terms and privacy", icon: "gearshape") { open(.settings) }
                     }
                 }.padding(20)
             }
@@ -96,24 +92,195 @@ private struct MoreView: View {
         }
     }
 
-    private func destinationRow(_ title: String, subtitle: String, icon: String, destination: MoreDestination) -> some View {
-        Button { open(destination) } label: {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.title3).foregroundStyle(CatchCheckColor.accent)
-                    .frame(width: 44, height: 44)
-                    .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 13))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.headline).foregroundStyle(CatchCheckColor.navy)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
-            }
-            .padding(16)
-            .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+}
+
+private struct MoreNavigationRow: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            MoreNavigationLabel(title: title, subtitle: subtitle, icon: icon)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct MoreNavigationLabel: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3).foregroundStyle(CatchCheckColor.accent)
+                .frame(width: 44, height: 44)
+                .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 13))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+    }
+}
+
+private struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Settings").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                    NavigationLink { TermsPrivacyView() } label: {
+                        MoreNavigationLabel(title: "Terms & privacy", subtitle: "How the app works and uses your information", icon: "doc.text")
+                    }
+                    NavigationLink { FeedbackView() } label: {
+                        MoreNavigationLabel(title: "Feedback", subtitle: "Report a problem or share an idea", icon: "bubble.left")
+                    }
+                    NavigationLink { AppearanceView() } label: {
+                        MoreNavigationLabel(title: "Appearance", subtitle: "Light, dark or device setting", icon: "circle.lefthalf.filled")
+                    }
+                }.padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+private struct AppearanceView: View {
+    @AppStorage("catchcheckAppearance") private var appearance = "system"
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Appearance").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                Card {
+                    Picker("Appearance", selection: $appearance) {
+                        Text("System").tag("system")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
+                    Text("System follows your device setting.").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }.padding(20)
+        }
+        .background(CatchCheckColor.cream)
+        .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct TermsPrivacyView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Terms & privacy").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text("A short guide to using CatchCheck NZ and understanding the information it uses.")
+                    .foregroundStyle(.secondary)
+                Card {
+                    Text("Terms of use").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text("Fishing windows, tide times, fish identification and rule summaries help you plan. They can be incomplete or out of date. Check the current MPI rules and local access conditions before fishing.")
+                    Text("You are responsible for following applicable fishing and access rules.")
+                }
+                Card {
+                    Text("Privacy").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
+                    Text("If you choose a fish photo, it is sent through CatchCheck’s service to an image analysis provider for identification.")
+                    Text("If you sign in or send feedback, your account details and feedback are sent to CatchCheck’s service. Signing out removes the saved session from this device.")
+                }
+            }.padding(20)
+        }
+        .background(CatchCheckColor.cream)
+        .navigationTitle("Terms & privacy")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct FeedbackView: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @State private var category = "general"
+    @State private var message = ""
+    @State private var rating = 5
+    @State private var showingAccount = false
+    @State private var didSubmit = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Feedback").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text("Report a problem or tell us what would improve your fishing trips.")
+                    .foregroundStyle(.secondary)
+                if vm.account == nil {
+                    Card {
+                        Text("Sign in to send feedback").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+                        Text("Feedback is linked to your CatchCheck account so we can review it.")
+                            .foregroundStyle(.secondary)
+                        if vm.accountLoading {
+                            ProgressView("Checking your account…")
+                        } else {
+                            Button("Go to account") { showingAccount = true }
+                                .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+                        }
+                    }
+                } else {
+                    if vm.accountNotice == "Thanks for your feedback." {
+                        Label("Thanks for your feedback.", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(CatchCheckColor.navy)
+                            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    if didSubmit, let error = vm.accountError {
+                        Label(error, systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    Card {
+                        Picker("Type", selection: $category) {
+                            Text("General").tag("general")
+                            Text("Report a problem").tag("bug")
+                            Text("Idea").tag("idea")
+                        }.pickerStyle(.menu)
+                        TextField("Tell us what you think", text: $message, axis: .vertical)
+                            .lineLimit(4...8).textFieldStyle(.roundedBorder)
+                            .onChange(of: message) { _, value in message = String(value.prefix(4000)) }
+                        Picker("Rating", selection: $rating) {
+                            ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) }
+                        }.pickerStyle(.segmented)
+                        Button {
+                            let submittedMessage = message
+                            didSubmit = true
+                            Task { @MainActor in
+                                if await vm.sendFeedback(category: category, message: submittedMessage, rating: rating), message == submittedMessage {
+                                    message = ""
+                                }
+                            }
+                        } label: {
+                            Label(vm.accountBusy ? "Sending…" : "Send feedback", systemImage: "paperplane.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+                        .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
+                    }
+                }
+            }.padding(20)
+        }
+        .background(CatchCheckColor.cream)
+        .navigationTitle("Feedback")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingAccount) { AccountView() }
     }
 }
 
@@ -295,12 +462,16 @@ private struct FishIdentifierView: View {
                 Button { showCamera = true } label: {
                     Label("Take photo", systemImage: "camera")
                         .frame(maxWidth: .infinity, minHeight: 44)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
                 PhotosPicker(selection: $photoItem, matching: .images) {
                     Label(galleryLabel, systemImage: "photo")
                         .frame(maxWidth: .infinity, minHeight: 44)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
@@ -351,9 +522,6 @@ struct AccountView: View {
     @State private var confirmPassword = ""
     @State private var displayName = ""
     @State private var countryCode = "NZ"
-    @State private var category = "general"
-    @State private var message = ""
-    @State private var rating = 5
 
     private var passwordsMatch: Bool { !confirmPassword.isEmpty && password == confirmPassword }
     private var isEmailValid: Bool {
@@ -384,7 +552,7 @@ struct AccountView: View {
                         Spacer(minLength: 0)
                     }
                     if vm.account == nil {
-                        Text("Save your profile, share feedback, and manage your CatchCheck features in one place.")
+                        Text("Save your profile and manage your CatchCheck account in one place.")
                             .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     if let notice = vm.accountNotice {
@@ -420,22 +588,6 @@ struct AccountView: View {
                                 Label(vm.accountBusy ? "Saving…" : "Save profile", systemImage: "checkmark")
                                     .frame(maxWidth: .infinity)
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
-                        }
-                        accountSection("Send feedback", subtitle: "Help us make fishing trips better.", icon: "bubble.left.and.bubble.right") {
-                            Picker("Type", selection: $category) { Text("General").tag("general"); Text("Report a problem").tag("bug"); Text("Idea").tag("idea") }.pickerStyle(.menu)
-                            TextField("Tell us what you think", text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
-                            Picker("Rating", selection: $rating) { ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) } }.pickerStyle(.segmented)
-                            Button {
-                                let submittedMessage = message
-                                Task { @MainActor in
-                                    if await vm.sendFeedback(category: category, message: submittedMessage, rating: rating), message == submittedMessage {
-                                        message = ""
-                                    }
-                                }
-                            } label: {
-                                Label(vm.accountBusy ? "Sending…" : "Send feedback", systemImage: "paperplane.fill")
-                                    .frame(maxWidth: .infinity)
-                            }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
                         }
                         Button("Sign out", role: .destructive) { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
                     } else if vm.hasStoredSession {

@@ -5,8 +5,24 @@ import EventKit
 import EventKitUI
 
 struct FishingMapView: View {
+    private enum Layer: String, CaseIterable {
+        case map = "Map"
+        case satellite = "Satellite"
+        case hybrid = "Hybrid"
+
+        var style: MapStyle {
+            switch self {
+            case .map: .standard(elevation: .realistic)
+            case .satellite: .imagery(elevation: .realistic)
+            case .hybrid: .hybrid(elevation: .realistic)
+            }
+        }
+    }
+
     @EnvironmentObject private var vm: FishingViewModel
     @State private var filter = "All"
+    @State private var layer: Layer = .map
+    @State private var currentCamera: MapCamera?
     @State private var needsFirstLocationCenter = true
     @State private var recenterOnLocationUpdate = false
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: -41.2, longitude: 174.8), span: MKCoordinateSpan(latitudeDelta: 13, longitudeDelta: 13)))
@@ -27,14 +43,56 @@ struct FishingMapView: View {
                         }
                     }
                 }
-            }.mapStyle(.standard(elevation: .realistic)).overlay(alignment: .bottomTrailing) {
+            }
+            .mapStyle(layer.style)
+            .onMapCameraChange(frequency: .continuous) { context in
+                currentCamera = context.camera
+            }
+            .overlay(alignment: .topTrailing) {
+                VStack(spacing: 12) {
+                    Menu {
+                        ForEach(Layer.allCases, id: \.self) { choice in
+                            Button {
+                                layer = choice
+                            } label: {
+                                if choice == layer {
+                                    Label(choice.rawValue, systemImage: "checkmark")
+                                } else {
+                                    Text(choice.rawValue)
+                                }
+                            }
+                        }
+                    } label: {
+                        mapControlIcon("square.3.layers.3d")
+                    }
+                    .accessibilityLabel("Map layers")
+
+                    Button {
+                        guard let camera = currentCamera else { return }
+                        withAnimation {
+                            position = .camera(MapCamera(centerCoordinate: camera.centerCoordinate,
+                                                         distance: camera.distance,
+                                                         heading: 0,
+                                                         pitch: camera.pitch))
+                        }
+                    } label: {
+                        mapControlIcon("location.north.line.fill")
+                            .rotationEffect(.degrees(-(currentCamera?.heading ?? 0)))
+                    }
+                    .accessibilityLabel("Reset map to north")
+                }
+                .padding(18)
+            }
+            .overlay(alignment: .bottomTrailing) {
                 Button {
                     recenterOnLocationUpdate = true
                     if vm.hasDeviceLocation { centerOnCurrentLocation(); recenterOnLocationUpdate = false }
                     vm.requestLocation()
-                } label: { Image(systemName: "location.fill").padding().background(.white, in: Circle()).shadow(radius: 3) }
-                    .accessibilityLabel("Center map on my location")
-                    .padding(18)
+                } label: {
+                    mapControlIcon("location.fill")
+                }
+                .accessibilityLabel("Center map on my location")
+                .padding(18)
             }
         }.background(CatchCheckColor.cream)
             .onAppear {
@@ -61,6 +119,15 @@ struct FishingMapView: View {
     private func centerOnCurrentLocation() {
         position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude),
                                               span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)))
+    }
+
+    private func mapControlIcon(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(CatchCheckColor.navy)
+            .frame(width: 48, height: 48)
+            .background(.white, in: Circle())
+            .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
     }
 }
 
@@ -697,9 +764,8 @@ private struct SavedRulesSection: Decodable { let heading: String; let text: Str
 private struct SavedRuleQuickRow: Identifiable {
     let id: String
     let species: String
-    let dailyLimit: String?
-    let minimumSize: String?
-    let minimumSizeLabel: String?
+    let facts: [(label: String, value: String)]
+    let note: String?
 }
 
 private extension SavedRulesPage {
@@ -710,7 +776,7 @@ private extension SavedRulesPage {
         let pattern = "combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\."
         for section in sections {
             if let range = section.text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
-                return String(section.text[range])
+                return String(section.text[range]).replacingOccurrences(of: "*", with: "")
             }
         }
         return nil
@@ -719,38 +785,91 @@ private extension SavedRulesPage {
     func quickRows(matching query: String) -> [SavedRuleQuickRow] {
         let preferred = ["snapper", "blue cod", "kingfish", "kahawai", "rock lobster", "pāua", "pauā", "cockle"]
         let rows: [SavedRuleQuickRow] = tables.enumerated().flatMap { tableIndex, table in
-            guard let headers = table.first, !headers.isEmpty else { return [SavedRuleQuickRow]() }
-            let limitIndices = headers.indices.filter { headers[$0].localizedCaseInsensitiveContains("daily limit") }
-            let sizeIndices = headers.indices.filter {
-                let header = headers[$0]
-                return header.localizedCaseInsensitiveContains("min fish length") || header.localizedCaseInsensitiveContains("min size")
+            guard let headers = table.first, headers.count > 1,
+                  headers[0].localizedCaseInsensitiveContains("species") else { return [SavedRuleQuickRow]() }
+            let columns = headers.indices.dropFirst().compactMap { index -> (Int, String)? in
+                guard let label = ruleFactLabel(headers[index]) else { return nil }
+                return (index, label)
             }
-            // A single simplified value would hide subarea differences (notably Fiordland).
-            guard limitIndices.count <= 1, sizeIndices.count <= 1 else { return [SavedRuleQuickRow]() }
-            let limitIndex = limitIndices.first
-            let sizeIndex = sizeIndices.first
-            guard limitIndex != nil || sizeIndex != nil else { return [SavedRuleQuickRow]() }
+            guard !columns.isEmpty else { return [SavedRuleQuickRow]() }
+            let hasMultipleDailyColumns = columns.filter { $0.1.hasPrefix("Daily limit") }.count > 1
             return Array(table.dropFirst()).enumerated().compactMap { rowIndex, row in
-                guard let species = row.first?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !species.isEmpty, species.count < 100 else { return nil }
-                func value(at index: Int?) -> String? {
-                    guard let index, row.indices.contains(index) else { return nil }
-                    let value = row[index].trimmingCharacters(in: .whitespacesAndNewlines)
-                    return value.isEmpty || value == "—" || value == "–" ? nil : value
+                guard let originalSpecies = row.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !originalSpecies.isEmpty, !originalSpecies.hasPrefix("*"),
+                      originalSpecies.count <= 180 else { return nil }
+                let species = cleanRuleText(originalSpecies)
+                guard !species.isEmpty else { return nil }
+                var notes: [String] = []
+                if row.contains(where: { $0.contains("*") }) { notes.append("Additional MPI conditions apply.") }
+                if originalSpecies.localizedCaseInsensitiveContains("refer to map") {
+                    notes.append("Check the exact area boundary on MPI.")
                 }
-                let dailyLimit = value(at: limitIndex)
-                let minimumSize = value(at: sizeIndex)
-                guard dailyLimit != nil || minimumSize != nil else { return nil }
+                var facts: [(label: String, value: String)] = []
+                if hasMultipleDailyColumns && row.count != headers.count {
+                    facts = [("Area-specific rule", "See MPI")]
+                    notes.append("The MPI table has merged cells; check its area-specific limit.")
+                } else {
+                    for (index, label) in columns where row.indices.contains(index) {
+                        let rawValue = row[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                        if rawValue.isEmpty || ["—", "–", "-", "none"].contains(rawValue) { continue }
+                        let clean = cleanRuleText(rawValue)
+                        let numbers = clean.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+                        let value: String
+                        if clean.localizedCaseInsensitiveContains("No take allowed") {
+                            value = "No take"
+                        } else if clean.localizedCaseInsensitiveContains("See below") {
+                            value = "See MPI"
+                            notes.append("Check the area-specific rule on MPI.")
+                        } else if label == "Minimum tail width" {
+                            value = clean
+                        } else if numbers.count > 1 {
+                            value = "Varies — see MPI"
+                            notes.append("This value covers multiple species or subareas; check MPI.")
+                        } else if label.hasPrefix("Minimum"), let range = clean.range(of: "^\\d+", options: .regularExpression) {
+                            let remainder = clean[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !remainder.isEmpty { notes.append(remainder) }
+                            value = "\(clean[range]) \(headers[index].localizedCaseInsensitiveContains("(cm)") ? "cm" : "mm")"
+                        } else {
+                            value = clean
+                        }
+                        facts.append((label, value))
+                    }
+                }
+                guard !facts.isEmpty else { return nil }
                 return SavedRuleQuickRow(id: "\(tableIndex)-\(rowIndex)", species: species,
-                                         dailyLimit: dailyLimit, minimumSize: minimumSize,
-                                         minimumSizeLabel: sizeIndex.map { headers[$0] })
+                                         facts: facts, note: notes.isEmpty ? nil : Array(Set(notes)).sorted().joined(separator: " "))
             }
         }
         if !query.isEmpty {
             return Array(rows.filter { $0.species.localizedStandardContains(query) }.prefix(24))
         }
-        return Array(rows.filter { row in preferred.contains { row.species.localizedCaseInsensitiveContains($0) } }.prefix(12))
+        return Array(rows.filter { row in preferred.contains { row.species.lowercased().hasPrefix($0) } }
+            .sorted { first, second in
+                let firstIndex = preferred.firstIndex { first.species.lowercased().hasPrefix($0) } ?? preferred.count
+                let secondIndex = preferred.firstIndex { second.species.lowercased().hasPrefix($0) } ?? preferred.count
+                return firstIndex < secondIndex
+            }.prefix(8))
     }
+}
+
+private func cleanRuleText(_ text: String) -> String {
+    text.replacingOccurrences(of: "\\(Fisheries Management Area\\s*(\\d+)[^)]*\\)", with: "(FMA $1)", options: .regularExpression)
+        .replacingOccurrences(of: "\\[PDF[^]]*]", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "\\*+", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        .trimmingCharacters(in: CharacterSet(charactersIn: " –-:"))
+}
+
+private func ruleFactLabel(_ heading: String) -> String? {
+    let text = heading.lowercased()
+    if text.contains("daily limit") && text.contains("outside fiord") { return "Daily limit · outer area" }
+    if text.contains("daily limit") && text.contains("the fiords") { return "Daily limit · inner fiords" }
+    if text.contains("daily limit") && text.contains("auckland coromandel") { return "Daily limit · Auckland/Coromandel" }
+    if text.contains("daily limit") { return "Daily limit" }
+    if text.contains("fish length") { return "Minimum length" }
+    if text.contains("min size") || text.contains("minimum size") { return "Minimum size" }
+    if text.contains("tail width") { return "Minimum tail width" }
+    return nil
 }
 
 private struct SavedRuleQuickCard: View {
@@ -758,20 +877,15 @@ private struct SavedRuleQuickCard: View {
     var body: some View {
         Card {
             Text(row.species).font(.headline).foregroundStyle(CatchCheckColor.navy)
-            HStack(alignment: .top, spacing: 14) {
-                if let dailyLimit = row.dailyLimit {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Daily limit").font(.caption).foregroundStyle(.secondary)
-                        Text(dailyLimit).font(.subheadline.bold())
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if let minimumSize = row.minimumSize {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(row.minimumSizeLabel ?? "Minimum size").font(.caption).foregroundStyle(.secondary)
-                        Text(minimumSize).font(.subheadline.bold())
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(Array(row.facts.enumerated()), id: \.offset) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(item.element.label).font(.caption).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(item.element.value).font(.subheadline.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            if let note = row.note { Text(note).font(.caption).foregroundStyle(.secondary) }
         }
     }
 }

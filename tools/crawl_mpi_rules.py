@@ -139,25 +139,15 @@ def request_rules_api(url: str, token: str, payload: object, accept: str) -> byt
         raise RuntimeError(f"Could not reach the Cloudflare rules API: {exc}") from exc
 
 
-def extract(area: Area, body: bytes, fetched_at: str) -> dict[str, object]:
-    soup = BeautifulSoup(body, "html.parser")
-    root = soup.select_one("main, article, #content, .main-content") or soup.body or soup
-    for tag in root.select("script, style, nav, footer, header, noscript, svg"):
-        tag.decompose()
-
-    title = (soup.title.get_text(" ", strip=True) if soup.title else "").strip()
-    if not title:
-        heading = root.find(["h1"])
-        title = heading.get_text(" ", strip=True) if heading else area.name
-
-    reviewed = None
-    match = re.search(r"Last reviewed\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})", root.get_text(" ", strip=True), re.I)
-    if match:
-        reviewed = match.group(1)
-
+def parse_structured_rules(root, title: str) -> tuple[list[dict[str, object]], list[list[list[str]]]]:
+    """Keep prose and table rows separate, including when cells contain paragraphs."""
     sections: list[dict[str, object]] = []
     current: dict[str, object] = {"heading": title, "text": []}
     for node in root.find_all(["h1", "h2", "h3", "h4", "p", "li"]):
+        # Tables are stored separately as structured rows. Including text from
+        # table cells here creates a second, unreadable stream of cell values.
+        if node.find_parent("table") is not None:
+            continue
         text = node.get_text(" ", strip=True)
         if not text:
             continue
@@ -181,6 +171,26 @@ def extract(area: Area, body: bytes, fetched_at: str) -> dict[str, object]:
                 rows.append(cells)
         if rows:
             tables.append(rows)
+    return sections, tables
+
+
+def extract(area: Area, body: bytes, fetched_at: str) -> dict[str, object]:
+    soup = BeautifulSoup(body, "html.parser")
+    root = soup.select_one("main, article, #content, .main-content") or soup.body or soup
+    for tag in root.select("script, style, nav, footer, header, noscript, svg"):
+        tag.decompose()
+
+    title = (soup.title.get_text(" ", strip=True) if soup.title else "").strip()
+    if not title:
+        heading = root.find(["h1"])
+        title = heading.get_text(" ", strip=True) if heading else area.name
+
+    reviewed = None
+    match = re.search(r"Last reviewed\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})", root.get_text(" ", strip=True), re.I)
+    if match:
+        reviewed = match.group(1)
+
+    sections, tables = parse_structured_rules(root, title)
 
     page_text = root.get_text("\n", strip=True)
     if len(page_text) < 500 or not root.find(["h1", "h2"]):
