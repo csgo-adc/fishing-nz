@@ -324,6 +324,7 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Edit fishing plan: \(vm.isBoatFishing ? "boat" : "land"), \(vm.dateSummary), \(vm.timeSummary), \(vm.locationSummary)")
+                        SearchPlaceMenu(compact: true)
                         Button { vm.showRecommendations() } label: {
                             Text("Find fishing windows")
                                 .font(.headline)
@@ -332,10 +333,6 @@ struct HomeView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(CatchCheckColor.accent)
-                        Divider().padding(.top, 8)
-                        SearchPlaceMenu()
-                            .padding(.top, 8)
-                            .padding(.bottom, 10)
                     }
                     Text("Quick forecast").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Card { HStack { Metric(label: "Wind", value: vm.weather?.wind ?? "—"); Spacer(); Metric(label: "Tide", value: vm.currentTide?.nextEvent ?? "—"); Spacer(); Metric(label: "Temp", value: vm.weather?.temperature ?? "—") } }
@@ -827,19 +824,35 @@ struct ResultsView: View {
 private struct SearchPlaceMenu: View {
     @EnvironmentObject private var vm: FishingViewModel
     @State private var showingPicker = false
+    let compact: Bool
+
+    init(compact: Bool = false) { self.compact = compact }
 
     var body: some View {
         Button { showingPicker = true } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "location.fill")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Search from").font(.caption).foregroundStyle(.secondary)
-                    Text(vm.homeCityLabel).font(.headline).foregroundStyle(CatchCheckColor.navy)
+            if compact {
+                HStack(spacing: 6) {
+                    Text(vm.hasDeviceLocation || vm.selectedSearchStationID != nil
+                         ? "From \(vm.homeCityLabel)" : vm.homeCityLabel)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption.bold())
                 }
-                Spacer()
-                Image(systemName: "chevron.down").font(.caption.bold())
+                .foregroundStyle(CatchCheckColor.accent)
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: "location.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Search from").font(.caption).foregroundStyle(.secondary)
+                        Text(vm.homeCityLabel).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down").font(.caption.bold())
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Search location: \(vm.homeCityLabel). Change location")

@@ -184,21 +184,21 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                     val searchScope = if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION)
                         s.selectedSearchStation?.name ?: "Choose location" else "${s.radiusKm} km"
                     Text("$dateSummary  ·  $time  ·  $searchScope", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
-                    Text(s.originName?.let { "From $it" } ?: if (homeLocationLoading && s.searchLocationMode == SearchLocationMode.NEAR_ME) "Finding your location…" else "Choose a location to start", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .8f), style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.selectedSearchStation == null)
-                            "Choose a fishing location" else "Find fishing windows")
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .16f))
                     Row(Modifier.fillMaxWidth().clickable {
                         if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) showSearchStations = true
                         else showCities = true
-                    }.padding(horizontal = 12.dp, vertical = 13.dp),
+                    }.padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(s.originName ?: if (homeLocationLoading && s.searchLocationMode == SearchLocationMode.NEAR_ME) "Finding your location…" else "Choose location",
-                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(s.originName?.let { "From $it" }
+                            ?: if (homeLocationLoading && s.searchLocationMode == SearchLocationMode.NEAR_ME) "Finding your location…" else "Choose location",
+                            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Default.ChevronRight, contentDescription = null,
+                            modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.selectedSearchStation == null)
+                            "Choose a fishing location" else "Find fishing windows")
                     }
                 }
             }
