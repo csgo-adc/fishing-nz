@@ -28,13 +28,13 @@ class WindowSelectionTest {
         assertEquals(List(6) { 80 } + 90, windows.map { it.rating })
     }
 
-    @Test fun equalScoresPreferLongerThenEarlierWindows() {
+    @Test fun equalConditionsPreferEarlierWindowWithoutDurationBonus() {
         val selection = WindowSelection(onePerDay = true)
         selection.consider(firstDay, recommendation(firstDay, 17, rating = 80, duration = 2))
         selection.consider(firstDay, recommendation(firstDay, 19, rating = 80, duration = 3))
-        selection.consider(firstDay, recommendation(firstDay, 7, rating = 80, duration = 3))
+        selection.consider(firstDay, recommendation(firstDay, 7, rating = 80, duration = 2))
 
-        assertEquals(recommendation(firstDay, 7, rating = 80, duration = 3), selection.windows().single())
+        assertEquals(recommendation(firstDay, 7, rating = 80, duration = 2), selection.windows().single())
     }
 
     @Test fun radiusSearchStillKeepsOneBestWindowAcrossDays() {

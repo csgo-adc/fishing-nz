@@ -40,6 +40,7 @@ enum class SearchLocationMode { NEAR_ME, SPECIFIC_LOCATION }
 data class FishingUiState(
     val tab: Int = 0, val boat: Boolean = false, val dateLabel: String = "In 3 days", val dateStart: LocalDate = LocalDate.now(nzZone).plusDays(3), val dateEnd: LocalDate = LocalDate.now(nzZone).plusDays(3),
     val radiusKm: Int = 100, val preferredTime: PreferredTimeRange? = suggestedHours, val preferredTimeIsSuggested: Boolean = true,
+    val preference: WindowPriority = WindowPriority.WEATHER,
     val searchLocationMode: SearchLocationMode = SearchLocationMode.NEAR_ME, val selectedSearchStation: TideStation? = null,
     val manualOriginSelected: Boolean = false,
     val location: GeoPoint = GeoPoint(-36.85, 174.76), val deviceLocation: GeoPoint? = null, val hasDeviceLocation: Boolean = false,
@@ -104,6 +105,10 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         }
     }
     fun setBoat(value: Boolean) { _state.value = _state.value.copy(boat = value, recommendationSearch = null); if (_state.value.showResults) refreshRecommendations() }
+    fun setWindowPriority(value: WindowPriority) {
+        _state.value = _state.value.copy(preference = value, recommendationSearch = null)
+        if (_state.value.showResults) refreshRecommendations()
+    }
     fun setDate(value: String) {
         val today = LocalDate.now(nzZone)
         val range = presetFishingDates(value, today) ?: return
@@ -294,7 +299,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         recommendationJob = viewModelScope.launch {
             try {
                 val result = recommendationEngine.search(query.location, query.radiusKm, query.dateStart, query.dateEnd, query.boat,
-                    query.preferredTime, query.selectedSearchStation.takeIf { query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION })
+                    query.preferredTime, query.selectedSearchStation.takeIf { query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION },
+                    priority = query.preference)
                 _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false)
             } catch (cancelled: CancellationException) {
                 throw cancelled

@@ -190,7 +190,7 @@ struct FishingRepository {
         return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [])
     }
 
-    private static let tideStore = LINZTideStore()
+    private static let tideStore = LINZTideStore.shared
     private static let tideCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
@@ -251,62 +251,3 @@ private extension DateFormatter {
     }
 }
 private struct WeatherResponse: Decodable { let current: Current; struct Current: Decodable { let temperature2m: Double; let windSpeed10m: Double; let precipitation: Double; enum CodingKeys: String, CodingKey { case temperature2m = "temperature_2m", windSpeed10m = "wind_speed_10m", precipitation } } }
-
-private enum TideDataError: LocalizedError {
-    case noPredictions
-    var errorDescription: String? { "LINZ tide predictions are unavailable for this station and date." }
-}
-
-private struct LINZTidePrediction: Sendable {
-    let time: Date
-    let height: Double
-}
-
-private actor LINZTideStore {
-    private var annualCache: [String: [LINZTidePrediction]] = [:]
-
-    func load(stationName: String, year: Int) async throws -> [LINZTidePrediction] {
-        let key = "\(stationName)-\(year)"
-        if let cached = annualCache[key] { return cached }
-        guard let stationPath = stationName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/\(stationPath)%20\(year).csv")
-        else { throw URLError(.badURL) }
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-        guard let csv = String(data: data, encoding: .utf8) else { throw TideDataError.noPredictions }
-
-        let timeZone = TimeZone(identifier: "Pacific/Auckland")!
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        var predictions: [LINZTidePrediction] = []
-        for line in csv.split(whereSeparator: \.isNewline) {
-            let fields = line.split(separator: ",", omittingEmptySubsequences: false)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            guard fields.count >= 6,
-                  let day = Int(fields[0]), let month = Int(fields[2]), let rowYear = Int(fields[3]),
-                  rowYear == year, (1...12).contains(month), (1...31).contains(day)
-            else { continue }
-            for index in stride(from: 4, to: fields.count - 1, by: 2) {
-                let clock = fields[index].split(separator: ":")
-                guard clock.count == 2, let hour = Int(clock[0]), let minute = Int(clock[1]),
-                      let height = Double(fields[index + 1]), height.isFinite
-                else { continue }
-                var components = DateComponents()
-                components.timeZone = timeZone
-                components.year = rowYear
-                components.month = month
-                components.day = day
-                components.hour = hour
-                components.minute = minute
-                if let time = calendar.date(from: components) {
-                    predictions.append(LINZTidePrediction(time: time, height: height))
-                }
-            }
-        }
-        predictions.sort { $0.time < $1.time }
-        guard !predictions.isEmpty else { throw TideDataError.noPredictions }
-        annualCache[key] = predictions
-        return predictions
-    }
-}

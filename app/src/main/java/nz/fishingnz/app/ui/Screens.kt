@@ -184,6 +184,8 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                     val searchScope = if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION)
                         s.selectedSearchStation?.name ?: "Choose location" else "${s.radiusKm} km"
                     Text("$dateSummary  ·  $time  ·  $searchScope", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                    Text(if (s.preference == WindowPriority.LATE_INCOMING) "Late incoming tide" else "Weather balance",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().clickable {
                         if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) showSearchStations = true
                         else showCities = true
@@ -212,8 +214,8 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Metric("Wind", s.weather?.wind ?: "—"); Metric("Tide", s.tide?.nextEvent ?: "—"); Metric("Temp", s.weather?.temperature ?: "—") }
             }
         } }
-        item { Text("Your next best window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { s.recommendationSearch?.items?.firstOrNull()?.let { RecommendationCard(it) { vm.showResults() } } ?: Text("Choose a date and search to see forecast-based scores.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text("Your next planning window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
+        item { s.recommendationSearch?.items?.firstOrNull()?.let { RecommendationCard(it) { vm.showResults() } } ?: Text("Choose a date and search to compare fishing conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showPlan) ModalBottomSheet(onDismissRequest = { showPlan = false }) {
@@ -274,7 +276,18 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
                 if (s.preferredTime.end.isBefore(s.preferredTime.start)) " (ends next day)" else "",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
-        Text("Only full 2–3 hour windows within these hours are shown. Each selected day is a window's start day.",
+        Text("Only complete two-hour sessions within these hours are shown. Each selected day is a session's start day.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Text("What matters most?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = s.preference == WindowPriority.WEATHER,
+                onClick = { vm.setWindowPriority(WindowPriority.WEATHER) }, label = { Text("Weather balance") })
+            FilterChip(selected = s.preference == WindowPriority.LATE_INCOMING,
+                onClick = { vm.setWindowPriority(WindowPriority.LATE_INCOMING) }, label = { Text("Late incoming tide") })
+        }
+        Text(if (s.preference == WindowPriority.LATE_INCOMING)
+            "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot."
+        else "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Text("Find windows by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -684,15 +697,14 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
 @Composable private fun RecommendationCard(item: Recommendation, click: () -> Unit = {}) {
     Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                Column { Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy); Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Text("${item.rating}/100", color = Orange, fontWeight = FontWeight.Bold)
-            }
+            Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
+            Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold)
             Text(item.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            item.reasons.forEach { Text("• $it", color = Navy, style = MaterialTheme.typography.bodySmall) }
-            if (item.warning != null) Text("Partial forecast · ${item.coveragePercent}% of score factors available", color = Orange, style = MaterialTheme.typography.bodySmall)
-            item.warnings.firstOrNull { it.startsWith("Long-range") || it.startsWith("Strong gusts") || it.startsWith("Elevated waves") }?.let {
+            Text("Why this time", color = Navy, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+            Text(item.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." },
+                color = Navy, style = MaterialTheme.typography.bodyMedium)
+            (item.warnings + listOfNotNull(item.warning)).distinct().forEach {
                 Text(it, color = Orange, style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -782,13 +794,14 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         s.preferredTimeIsSuggested -> "7 AM–9 PM"
                         else -> "${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}"
                     }
-                    Text(hours, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text("$hours · ${if (s.preference == WindowPriority.LATE_INCOMING) "Late incoming tide" else "Weather balance"}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } }
             if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) s.recommendationSearch?.let { search ->
                 item {
                     val selectedDays = java.time.temporal.ChronoUnit.DAYS.between(s.dateStart, s.dateEnd) + 1
-                    Text("${search.items.size} of $selectedDays selected days have a suitable 2–3 hour window.",
+                    Text("Planning windows on ${search.items.size} of $selectedDays selected days. Local site checks are still needed.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -808,15 +821,16 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 s.recommendationSearch?.items?.isEmpty() == true -> item {
                     Text(when {
                         s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
-                        s.dateLabel == "Today" -> "No safe 2–3 hour window remains today within your selected hours. Try In 3 days, wider hours or Anytime."
-                        else -> "No safe 2–3 hour windows fit these dates and hours. Try wider hours, Anytime or another date."
+                        s.preference == WindowPriority.LATE_INCOMING -> "No two-hour window matches the late-incoming preference with the available tide and weather data. Try Weather balance or another date."
+                        s.dateLabel == "Today" -> "No two-hour planning window remains today within your selected hours and the available forecasts. Try another date or adjust your hours."
+                        else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
                     }, color = Navy)
                 }
                 else -> items(s.recommendationSearch?.items ?: emptyList()) { RecommendationCard(it) { vm.openSpot(it) } }
             }
-            if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); those spots have no score.", color = Orange, style = MaterialTheme.typography.bodySmall) }
-            item { Text("Scores use forecast-based 2–3 hour windows. Check local access, marine warnings and MPI fishing rules before you go.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            item { Text("Weather: Open-Meteo. Tide estimates are not for navigation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); no planning windows are shown for those spots.", color = Orange, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Planning windows compare forecast conditions. Local access, wave exposure, marine warnings and current MPI rules still need checking.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Weather and offshore waves: Open-Meteo. Tide predictions, where verified: LINZ. See each window for its sources and limitations.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -828,25 +842,32 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }
             Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("${spot.rating}/100 · ${spot.time}", color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Score breakdown", fontWeight = FontWeight.Bold, color = Navy)
-                    spot.factors.forEach { factor ->
-                        Text("${factor.name}: ${factor.score}/100 × ${factor.weight}%", color = Navy, fontWeight = FontWeight.SemiBold)
-                        Text(factor.explanation, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text("Why this time", fontWeight = FontWeight.Bold, color = Navy)
+                    Text(spot.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." }, color = Navy)
+                    spot.alternative?.takeIf { it.isNotBlank() }?.let {
+                        Text("Another option", fontWeight = FontWeight.SemiBold, color = Navy)
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    spot.warning?.let { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) }
-                    Text("Available weights are normalized to 100. Scores with missing marine factors are capped at 79; forecasts more than seven days away are capped at 89.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (spot.warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+            if (spot.conditions.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Conditions during your session", fontWeight = FontWeight.Bold, color = Navy)
+                    spot.conditions.forEach { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
+            val warnings = (spot.warnings + listOfNotNull(spot.warning)).distinct()
+            if (warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Check before you go", fontWeight = FontWeight.Bold, color = Navy)
-                    spot.warnings.forEach { Text("• $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                    warnings.forEach { Text("• $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                 }
             }
+            if (spot.sourceNote.isNotBlank()) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { vm.toggleSaved(spot) }, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Remove saved spot" else "Save spot") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = addToCalendar, onCheckedChange = { addToCalendar = it })
@@ -876,6 +897,10 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     Text("Active trip", color = Navy, fontWeight = FontWeight.Bold)
                     Text(trip.name, style = MaterialTheme.typography.titleLarge, color = Navy)
                     if (trip.time.isNotBlank()) Text(trip.time, color = Navy)
+                    if (trip.summary.isNotBlank()) Text(trip.summary, color = Navy)
+                    (trip.warnings + listOfNotNull(trip.warning)).distinct().forEach {
+                        Text(it, color = Orange, style = MaterialTheme.typography.bodySmall)
+                    }
                     if (trip.startsAtEpochSeconds <= 0 || trip.durationHours <= 0)
                         Text("Choose the date and time in your calendar.", style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = {

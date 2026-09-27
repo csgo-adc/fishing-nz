@@ -9,15 +9,12 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.cos
 
@@ -26,8 +23,6 @@ class AccountRequestException(val statusCode: Int, val code: String?, message: S
 class FishingRepository {
     private val accountBaseUrl: String get() = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/').ifBlank { "https://fishing.fishnz.space" }
     private val nzZone = ZoneId.of("Pacific/Auckland")
-    private val annualTides = ConcurrentHashMap<String, List<TidePrediction>>()
-    private data class TidePrediction(val at: LocalDateTime, val height: Double)
 
     suspend fun conditions(point: GeoPoint): Pair<WeatherState, TideState?> = withContext(Dispatchers.IO) {
         val connection = get("https://api.open-meteo.com/v1/forecast?latitude=${point.latitude}&longitude=${point.longitude}&current=temperature_2m,wind_speed_10m,precipitation&timezone=auto")
@@ -45,72 +40,42 @@ class FishingRepository {
     suspend fun tide(station: TideStation, date: LocalDate): TideState = withContext(Dispatchers.IO) {
         // LINZ publishes these highs and lows above the station's Chart Datum.
         // The curve between events is only a visual interpolation, never an official prediction.
-        val predictions = buildList {
-            if (date.dayOfYear == 1) addAll(runCatching { annualPredictions(station, date.year - 1) }.getOrDefault(emptyList()))
-            addAll(annualPredictions(station, date.year))
-            if (date.dayOfYear == date.lengthOfYear()) addAll(runCatching { annualPredictions(station, date.year + 1) }.getOrDefault(emptyList()))
-        }.sortedBy { it.at }
-        val selected = predictions.withIndex().filter { it.value.at.toLocalDate() == date }
+        val predictions = LinzTideSource.predictions(station, date, date)
+        val selected = predictions.filter { it.at.atZone(nzZone).toLocalDate() == date }
         require(selected.isNotEmpty()) { "No LINZ tide predictions for ${station.name} on $date." }
         val timeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
         val eventFormat = DateTimeFormatter.ofPattern("EEE d MMM · h:mm a", Locale.US)
-        fun typeAt(index: Int): String {
-            val current = predictions[index].height
-            val neighbour = predictions.getOrNull(index - 1)?.height ?: predictions.getOrNull(index + 1)?.height ?: current
-            return if (current >= neighbour) "High" else "Low"
-        }
-        val events = selected.map { (index, item) ->
-            TideEvent(item.at.format(timeFormat), "%.2f m".format(Locale.US, item.height), typeAt(index))
+        fun typeOf(item: LinzPrediction) = if (item.high) "High" else "Low"
+        val events = selected.map { item ->
+            TideEvent(item.at.atZone(nzZone).format(timeFormat), "%.2f m".format(Locale.US, item.height), typeOf(item))
         }
         val start = date.atStartOfDay()
-        val sampleMinutes = (0..1440 step 15).toMutableSet().apply {
-            selected.forEach { (_, item) -> add(Duration.between(start, item.at).toMinutes().toInt()) }
+        val samples = (0..1440 step 15).mapNotNull { minute ->
+            val local = start.plusMinutes(minute.toLong())
+            // Do not silently shift nonexistent clocks or choose one occurrence of a repeated clock.
+            nzZone.rules.getValidOffsets(local).singleOrNull()?.let { local.toInstant(it) }
+        }.toMutableSet().apply {
+            selected.forEach { item -> add(item.at) }
         }
-        val points = sampleMinutes.sorted().mapNotNull { minute ->
-            val at = start.plusMinutes(minute.toLong())
-            interpolatedHeight(predictions, at)?.let { height -> TidePoint(at.format(timeFormat), height, minute) }
+        val points = samples.sorted().mapNotNull { at ->
+            val local = at.atZone(nzZone)
+            val minute = if (local.toLocalDate().isAfter(date)) 1440 else local.hour * 60 + local.minute
+            interpolatedHeight(predictions, at)?.let { height -> TidePoint(local.format(timeFormat), height, minute) }
         }
-        val now = LocalDateTime.now(nzZone)
-        val shownAt = if (date == now.toLocalDate()) now else start.plusHours(12)
+        val now = Instant.now()
+        val isToday = date == now.atZone(nzZone).toLocalDate()
+        val shownAt = if (isToday) now else start.plusHours(12).atZone(nzZone).toInstant()
         val shownHeight = interpolatedHeight(predictions, shownAt)
-        val nextIndex = if (date == now.toLocalDate()) predictions.indexOfFirst { it.at.isAfter(now) }
-            else selected.first().index
-        val next = predictions.getOrNull(nextIndex)
+        val next = if (isToday) predictions.firstOrNull { it.at > now } else selected.first()
         TideState(
             shownHeight?.let { "%.2f m".format(Locale.US, it) } ?: "—",
-            next?.let { typeAt(nextIndex) } ?: "—",
-            next?.at?.format(eventFormat) ?: "No upcoming event",
+            next?.let(::typeOf) ?: "—",
+            next?.at?.atZone(nzZone)?.format(eventFormat) ?: "No upcoming event",
             events, points, station.name
         )
     }
 
-    private fun annualPredictions(station: TideStation, year: Int): List<TidePrediction> {
-        val key = "${station.id}:$year"
-        annualTides[key]?.let { return it }
-        val filename = URLEncoder.encode("${station.csvName} $year.csv", Charsets.UTF_8.name()).replace("+", "%20")
-        val connection = get("https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/$filename")
-        val text = try {
-            if (connection.responseCode !in 200..299) error("LINZ tide table unavailable for ${station.name} in $year.")
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } finally { connection.disconnect() }
-        val parsed = text.lineSequence().mapNotNull { line ->
-            val fields = line.trimStart('\uFEFF').trimEnd('\r').split(',')
-            if (fields.size < 6) return@mapNotNull null
-            val day = fields[0].trim().toIntOrNull() ?: return@mapNotNull null
-            val month = fields[2].trim().toIntOrNull() ?: return@mapNotNull null
-            val rowYear = fields[3].trim().toIntOrNull() ?: return@mapNotNull null
-            val date = runCatching { LocalDate.of(rowYear, month, day) }.getOrNull() ?: return@mapNotNull null
-            (4 until fields.size - 1 step 2).mapNotNull { index ->
-                val time = runCatching { LocalTime.parse(fields[index].trim()) }.getOrNull()
-                val height = fields[index + 1].trim().toDoubleOrNull()
-                if (time == null || height == null) null else TidePrediction(date.atTime(time), height)
-            }
-        }.flatten().sortedBy { it.at }.toList()
-        require(parsed.isNotEmpty()) { "LINZ tide table was empty for ${station.name} in $year." }
-        return annualTides.putIfAbsent(key, parsed) ?: parsed
-    }
-
-    private fun interpolatedHeight(predictions: List<TidePrediction>, at: LocalDateTime): Double? {
+    private fun interpolatedHeight(predictions: List<LinzPrediction>, at: Instant): Double? {
         val afterIndex = predictions.indexOfFirst { !it.at.isBefore(at) }
         if (afterIndex < 0) return null
         val after = predictions[afterIndex]

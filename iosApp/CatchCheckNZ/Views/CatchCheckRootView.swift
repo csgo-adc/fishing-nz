@@ -320,6 +320,8 @@ struct HomeView: View {
                                 Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary)\(vm.selectedSearchStationID == nil ? " · \(vm.radiusKm) km" : "")")
                                     .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
                                     .lineLimit(2)
+                                Text(vm.preference == .lateIncoming ? "Late incoming tide" : "Weather balance")
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         .buttonStyle(.plain)
@@ -338,13 +340,13 @@ struct HomeView: View {
                     Card { HStack { Metric(label: "Wind", value: vm.weather?.wind ?? "—"); Spacer(); Metric(label: "Tide", value: vm.currentTide?.nextEvent ?? "—"); Spacer(); Metric(label: "Temp", value: vm.weather?.temperature ?? "—") } }
                     if let conditionsError = vm.conditionsError { Text(conditionsError).font(.caption).foregroundStyle(.secondary) }
                     FishIdentifierView(photoItem: $photoItem, showCamera: $showCamera, openAccount: openAccount)
-                    Text("Your next best window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text("Your next planning window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     if let best = vm.recommendations.first {
                         RecommendationCard(spot: best) { vm.showingResults = true }
                     } else {
                         Card { Text("Choose a distance and dates, then search for live fishing windows.").foregroundStyle(.secondary) }
                     }
-                    Text("Forecast scores are estimates. Check local hazards and fishing rules before you go.")
+                    Text("Planning windows compare forecast conditions. Local access, wave exposure and current warnings still need checking.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(20)
             }.background(CatchCheckColor.cream)
@@ -418,12 +420,23 @@ private struct PlanningSheet: View {
                             }.pickerStyle(.menu)
                             Text(vm.preferredStartMinute > vm.preferredEndMinute
                                  ? "This range continues after midnight."
-                                 : "Only complete 2–3 hour windows within these hours appear.")
+                                 : "Only complete two-hour sessions within these hours appear.")
                                 .font(.caption).foregroundStyle(.secondary)
                         } else if vm.timeMode == .comfortable {
                             Text("Suggestions fit between 7 AM and 9 PM.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
+                    }
+                    Card {
+                        Text("What matters most?").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                        Picker("Window preference", selection: $vm.preference) {
+                            Text("Weather balance").tag(WindowPriority.weather)
+                            Text("Late incoming tide").tag(WindowPriority.lateIncoming)
+                        }.pickerStyle(.segmented)
+                        Text(vm.preference == .lateIncoming
+                             ? "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot."
+                             : "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Card {
                         Text("Search from").font(.headline).foregroundStyle(CatchCheckColor.navy)
@@ -757,11 +770,12 @@ struct ResultsView: View {
                              ? "\(vm.timeSummary) · within \(vm.radiusKm) km"
                              : vm.timeSummary)
                         Text(vm.locationSummary)
+                        Text(vm.preference == .lateIncoming ? "Late incoming tide" : "Weather balance")
                     }.font(.subheadline).foregroundStyle(.secondary)
                     if vm.selectedSearchStationID != nil, vm.hasSearchedRecommendations,
                        !vm.isResolvingRecommendationLocation, !vm.isLoadingRecommendations,
                        vm.recommendationError == nil {
-                        Text("Suitable windows on \(vm.recommendations.count) of \(vm.recommendationDays().count) selected days.")
+                        Text("Planning windows on \(vm.recommendations.count) of \(vm.recommendationDays().count) selected days. Local site checks are still needed.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     if vm.isResolvingRecommendationLocation {
@@ -783,13 +797,15 @@ struct ResultsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(vm.nearbySpotCount == 0
                                  ? "No catalogued \(vm.isBoatFishing ? "boat" : "land") areas are within this radius."
-                                 : "No suitable 2–3 hour forecast window fits these dates, hours and conditions.")
+                                 : vm.preference == .lateIncoming
+                                 ? "No two-hour window matches the late-incoming preference with the available tide and weather data. Try Weather balance or another date."
+                                 : "No two-hour planning window matches these dates, hours and the available forecasts.")
                                 .foregroundStyle(.secondary)
                             if vm.nearbySpotCount == 0, let hint = vm.nearestSpotHint {
                                 Text(hint).font(.subheadline).foregroundStyle(.secondary)
                             }
                             if vm.nearbySpotCount > 0, vm.datePreset == .today {
-                                Text("Today may have too little time left for a 2–3 hour window. Try another date in your fishing plan.")
+                                Text("Today may have too little time left for a two-hour session. Try another date in your fishing plan.")
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                             if !vm.nearbyPlacesWithoutWindows.isEmpty {
@@ -803,14 +819,16 @@ struct ResultsView: View {
                                 .listRowInsets(EdgeInsets())
                         }
                         if !vm.nearbyPlacesWithoutWindows.isEmpty {
-                            Text("No suitable scored window at: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
+                            Text("No planning window available at: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                 } footer: {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Scores compare forecast conditions, not fish abundance. Check local hazards, marine forecasts and current fishing rules before you go.")
-                        Link("Forecast data: Open-Meteo", destination: URL(string: "https://open-meteo.com/")!)
+                        Text("Planning windows compare forecast conditions. Local access, wave exposure, marine warnings and current MPI rules still need checking.")
+                        Link("Weather and offshore waves: Open-Meteo", destination: URL(string: "https://open-meteo.com/")!)
+                        Link("Tide predictions, where verified: LINZ", destination: URL(string: "https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions")!)
+                        Text("See each window for its sources and limitations.")
                     }
                 }
             }
@@ -925,20 +943,40 @@ struct SpotDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text(spot.area).foregroundStyle(.secondary)
-                    Text("Area marker only. Check public access, safe conditions and any local fishing closures before going.")
+                    Text("Area marker only. Local access, wave exposure and fishing closures still need checking.")
                         .font(.subheadline).foregroundStyle(.secondary)
-                    if spot.rating > 0 {
-                        Text("\(spot.rating)/100 · \(spot.time)").font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
+                    if !spot.time.isEmpty {
+                        Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
                         Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
                         Card(background: CatchCheckColor.seafoam) {
-                            Text("Why this window?").bold().foregroundStyle(CatchCheckColor.navy)
-                            ForEach(spot.reasons, id: \.self) { Text("✓  \($0)") }
+                            Text("Why this time").bold().foregroundStyle(CatchCheckColor.navy)
+                            Text(spot.summary.isEmpty
+                                 ? "Search again to get the latest explanation and conditions for this session."
+                                 : spot.summary)
+                            if let alternative = spot.alternative, !alternative.isEmpty {
+                                Text("Another option").font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
+                                Text(alternative).foregroundStyle(.secondary)
+                            }
+                        }
+                        if !spot.conditions.isEmpty {
+                            Card {
+                                Text("Conditions during your session").bold().foregroundStyle(CatchCheckColor.navy)
+                                ForEach(spot.conditions, id: \.self) { Text($0).foregroundStyle(.secondary) }
+                            }
                         }
                         if !spot.warnings.isEmpty {
-                            Card { ForEach(spot.warnings, id: \.self) { warning in Label(warning, systemImage: "exclamationmark.triangle").font(.subheadline) } }
+                            Card {
+                                Text("Check before you go").bold().foregroundStyle(CatchCheckColor.navy)
+                                ForEach(spot.warnings, id: \.self) { warning in
+                                    Label(warning, systemImage: "exclamationmark.triangle").font(.subheadline)
+                                }
+                            }
+                        }
+                        if !spot.sourceNote.isEmpty {
+                            Text(spot.sourceNote).font(.caption).foregroundStyle(.secondary)
                         }
                     } else {
-                        Card { Text("Search from Home to see a live forecast score for this spot.").foregroundStyle(.secondary) }
+                        Card { Text("Search from Home to compare forecast conditions and find a planning window for this spot.").foregroundStyle(.secondary) }
                     }
                     Button(vm.savedSpotNames.contains(spot.id) ? "Remove saved spot" : "Save spot") { vm.toggleSaved(spot) }.buttonStyle(.bordered).frame(maxWidth: .infinity)
                     Toggle("Add this trip to my calendar", isOn: $addToCalendar)
@@ -969,23 +1007,18 @@ struct RecommendationCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(spot.name).font(.headline)
-                        Text(spot.area).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if spot.rating > 0 { Text("\(spot.rating)/100").bold().foregroundStyle(CatchCheckColor.orange) }
-                }
-                if spot.rating > 0 { Text(spot.time).bold() }
+                Text(spot.name).font(.headline)
+                Text("\(spot.area) · \(spot.boat ? "Boat" : "Land")").foregroundStyle(.secondary)
+                if !spot.time.isEmpty { Text(spot.time).bold() }
                 Text(spot.distance).font(.caption).foregroundStyle(.secondary)
-                if !spot.reasons.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack { ForEach(spot.reasons.prefix(3), id: \.self) { reason in Text(reason).font(.caption2).padding(7).background(CatchCheckColor.seafoam, in: Capsule()) } }
-                    }
+                if !spot.time.isEmpty {
+                    Text("Why this time").font(.subheadline.bold())
+                    Text(spot.summary.isEmpty
+                         ? "Search again to get the latest explanation and conditions for this session."
+                         : spot.summary).font(.subheadline)
                 }
-                if !spot.warnings.isEmpty {
-                    Label(spot.warnings[0], systemImage: "exclamationmark.triangle")
+                ForEach(spot.warnings, id: \.self) { warning in
+                    Label(warning, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(CatchCheckColor.orange)
                 }
             }

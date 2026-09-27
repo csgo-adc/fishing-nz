@@ -54,4 +54,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    // Real JSON parsing for frozen provider-response regression tests (Android stubs cannot parse).
+    testImplementation("org.json:json:20180813")
 }

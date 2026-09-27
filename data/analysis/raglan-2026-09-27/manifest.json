@@ -1,0 +1,92 @@
+{
+  "method_version": "raglan-window-diagnostic-1",
+  "capture_started_utc": "2026-09-27T00:17:37.468812+00:00",
+  "requested_coordinate": {
+    "latitude": -37.8,
+    "longitude": 174.883333
+  },
+  "coordinate_role": "Raglan LINZ tide station; not a verified fishing access point",
+  "sources": {
+    "weather": {
+      "file": "weather.json",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=-37.8&longitude=174.883333&forecast_days=8&timezone=Pacific%2FAuckland&timeformat=unixtime&hourly=wind_speed_10m%2Cwind_direction_10m%2Cwind_gusts_10m%2Cprecipitation%2Cprecipitation_probability%2Cweather_code&daily=sunrise%2Csunset&cell_selection=land&wind_speed_unit=kmh&precipitation_unit=mm",
+      "retrieved_at_utc": "2026-09-27T00:17:39.486336+00:00",
+      "sha256": "e475d9848b87cd0b04200cef8b89fce0f415d8a3a0f55f0abd3f6ebdfde73a58",
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "http_last_modified": null,
+      "http_date": "Sun, 27 Sep 2026 00:17:39 GMT",
+      "returned_grid_coordinate": {
+        "latitude": -37.785587,
+        "longitude": 174.93976,
+        "elevation": 21.0
+      },
+      "units": {
+        "hourly": {
+          "time": "unixtime",
+          "wind_speed_10m": "km/h",
+          "wind_direction_10m": "\u00b0",
+          "wind_gusts_10m": "km/h",
+          "precipitation": "mm",
+          "precipitation_probability": "%",
+          "weather_code": "wmo code"
+        },
+        "daily": {
+          "time": "unixtime",
+          "sunrise": "unixtime",
+          "sunset": "unixtime"
+        }
+      },
+      "timezone": "Pacific/Auckland",
+      "forecast_issue_time": "not provided by this response; retrieval time is not model issue time",
+      "model_selection": "provider default/best match; not identified per value in response"
+    },
+    "marine": {
+      "file": "marine.json",
+      "url": "https://marine-api.open-meteo.com/v1/marine?latitude=-37.8&longitude=174.883333&forecast_days=8&timezone=Pacific%2FAuckland&timeformat=unixtime&hourly=wave_height%2Cwave_period%2Cwave_direction%2Cswell_wave_height%2Cswell_wave_period%2Cswell_wave_direction%2Csea_level_height_msl&cell_selection=sea&length_unit=metric",
+      "retrieved_at_utc": "2026-09-27T00:17:41.411885+00:00",
+      "sha256": "e251a54319ee6f97d17ef25010b359efb67e8532ecc29a396ddea06a5f07dd25",
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "http_last_modified": null,
+      "http_date": "Sun, 27 Sep 2026 00:17:41 GMT",
+      "returned_grid_coordinate": {
+        "latitude": -37.791668,
+        "longitude": 174.79167,
+        "elevation": 21.0
+      },
+      "units": {
+        "hourly": {
+          "time": "unixtime",
+          "wave_height": "m",
+          "wave_period": "s",
+          "wave_direction": "\u00b0",
+          "swell_wave_height": "m",
+          "swell_wave_period": "s",
+          "swell_wave_direction": "\u00b0",
+          "sea_level_height_msl": "m"
+        },
+        "daily": null
+      },
+      "timezone": "Pacific/Auckland",
+      "forecast_issue_time": "not provided by this response; retrieval time is not model issue time",
+      "model_selection": "provider default/best match; not identified per value in response"
+    },
+    "tides": {
+      "file": "raglan-2026.csv",
+      "url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Raglan%202026.csv",
+      "retrieved_at_utc": "2026-09-27T00:17:41.559680+00:00",
+      "sha256": "dbe486d9934ac6bbed5e6e6c9fb6ed9683a529234baab1b8f989a06701986f4a",
+      "http_status": 200,
+      "content_type": "text/csv",
+      "http_last_modified": "Sun, 09 Jun 2024 22:11:23 GMT",
+      "http_date": "Sat, 26 Sep 2026 01:28:17 GMT",
+      "units": {
+        "height": "metres above Chart Datum",
+        "time": "NZ local time including published daylight saving"
+      },
+      "station": "Raglan"
+    }
+  },
+  "capture_completed_utc": "2026-09-27T00:17:41.560566+00:00"
+}

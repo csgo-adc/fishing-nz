@@ -1,0 +1,1283 @@
+{
+  "method_version": "raglan-window-diagnostic-2",
+  "snapshot": {
+    "method_version": "raglan-window-diagnostic-1",
+    "capture_started_utc": "2026-09-27T00:17:37.468812+00:00",
+    "requested_coordinate": {
+      "latitude": -37.8,
+      "longitude": 174.883333
+    },
+    "coordinate_role": "Raglan LINZ tide station; not a verified fishing access point",
+    "sources": {
+      "weather": {
+        "file": "weather.json",
+        "url": "https://api.open-meteo.com/v1/forecast?latitude=-37.8&longitude=174.883333&forecast_days=8&timezone=Pacific%2FAuckland&timeformat=unixtime&hourly=wind_speed_10m%2Cwind_direction_10m%2Cwind_gusts_10m%2Cprecipitation%2Cprecipitation_probability%2Cweather_code&daily=sunrise%2Csunset&cell_selection=land&wind_speed_unit=kmh&precipitation_unit=mm",
+        "retrieved_at_utc": "2026-09-27T00:17:39.486336+00:00",
+        "sha256": "e475d9848b87cd0b04200cef8b89fce0f415d8a3a0f55f0abd3f6ebdfde73a58",
+        "http_status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "http_last_modified": null,
+        "http_date": "Sun, 27 Sep 2026 00:17:39 GMT",
+        "returned_grid_coordinate": {
+          "latitude": -37.785587,
+          "longitude": 174.93976,
+          "elevation": 21.0
+        },
+        "units": {
+          "hourly": {
+            "time": "unixtime",
+            "wind_speed_10m": "km/h",
+            "wind_direction_10m": "\u00b0",
+            "wind_gusts_10m": "km/h",
+            "precipitation": "mm",
+            "precipitation_probability": "%",
+            "weather_code": "wmo code"
+          },
+          "daily": {
+            "time": "unixtime",
+            "sunrise": "unixtime",
+            "sunset": "unixtime"
+          }
+        },
+        "timezone": "Pacific/Auckland",
+        "forecast_issue_time": "not provided by this response; retrieval time is not model issue time",
+        "model_selection": "provider default/best match; not identified per value in response"
+      },
+      "marine": {
+        "file": "marine.json",
+        "url": "https://marine-api.open-meteo.com/v1/marine?latitude=-37.8&longitude=174.883333&forecast_days=8&timezone=Pacific%2FAuckland&timeformat=unixtime&hourly=wave_height%2Cwave_period%2Cwave_direction%2Cswell_wave_height%2Cswell_wave_period%2Cswell_wave_direction%2Csea_level_height_msl&cell_selection=sea&length_unit=metric",
+        "retrieved_at_utc": "2026-09-27T00:17:41.411885+00:00",
+        "sha256": "e251a54319ee6f97d17ef25010b359efb67e8532ecc29a396ddea06a5f07dd25",
+        "http_status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "http_last_modified": null,
+        "http_date": "Sun, 27 Sep 2026 00:17:41 GMT",
+        "returned_grid_coordinate": {
+          "latitude": -37.791668,
+          "longitude": 174.79167,
+          "elevation": 21.0
+        },
+        "units": {
+          "hourly": {
+            "time": "unixtime",
+            "wave_height": "m",
+            "wave_period": "s",
+            "wave_direction": "\u00b0",
+            "swell_wave_height": "m",
+            "swell_wave_period": "s",
+            "swell_wave_direction": "\u00b0",
+            "sea_level_height_msl": "m"
+          },
+          "daily": null
+        },
+        "timezone": "Pacific/Auckland",
+        "forecast_issue_time": "not provided by this response; retrieval time is not model issue time",
+        "model_selection": "provider default/best match; not identified per value in response"
+      },
+      "tides": {
+        "file": "raglan-2026.csv",
+        "url": "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Raglan%202026.csv",
+        "retrieved_at_utc": "2026-09-27T00:17:41.559680+00:00",
+        "sha256": "dbe486d9934ac6bbed5e6e6c9fb6ed9683a529234baab1b8f989a06701986f4a",
+        "http_status": 200,
+        "content_type": "text/csv",
+        "http_last_modified": "Sun, 09 Jun 2024 22:11:23 GMT",
+        "http_date": "Sat, 26 Sep 2026 01:28:17 GMT",
+        "units": {
+          "height": "metres above Chart Datum",
+          "time": "NZ local time including published daylight saving"
+        },
+        "station": "Raglan"
+      }
+    },
+    "capture_completed_utc": "2026-09-27T00:17:41.560566+00:00"
+  },
+  "preference": "Illustrative planning preference, inferred from the user's interest in late incoming tide: high tide minus 150 minutes through high tide plus 30 minutes. Not a confirmed trip setting or a catch, current or safety model.",
+  "windows": [
+    {
+      "start_local": "2026-09-30T07:00:00+13:00",
+      "end_local": "2026-09-30T09:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 6.6,
+          "known_min": 2.7,
+          "mean": 5.475,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 14.0,
+          "known_total_hour_equivalents": 25.9,
+          "total_hour_equivalents": 25.9,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790708400.0,
+            1790712000.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.0,
+          "known_total_hour_equivalents": 0.0,
+          "total_hour_equivalents": 0.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790708400.0,
+            1790712000.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 0.0,
+          "known_total_hour_equivalents": 0.0,
+          "total_hour_equivalents": 0.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790708400.0,
+            1790712000.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 2.8,
+          "known_min": 2.72,
+          "mean": 2.76,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 12.05,
+          "known_min": 12.0,
+          "mean": 12.0375,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 120.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-09-30T00:57:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.3
+        },
+        {
+          "local_time": "2026-09-30T07:02:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.2
+        },
+        {
+          "local_time": "2026-09-30T13:23:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.2
+        },
+        {
+          "local_time": "2026-09-30T19:24:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.4
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 0.0,
+        "fraction": 0.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-09-30T11:00:00+13:00",
+      "end_local": "2026-09-30T13:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 10.6,
+          "known_min": 3.5,
+          "mean": 7.475,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 22.0,
+          "known_total_hour_equivalents": 40.7,
+          "total_hour_equivalents": 40.7,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790722800.0,
+            1790726400.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.3,
+          "known_total_hour_equivalents": 0.5,
+          "total_hour_equivalents": 0.5,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790722800.0,
+            1790726400.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 76.0,
+          "known_total_hour_equivalents": 133.0,
+          "total_hour_equivalents": 133.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790722800.0,
+            1790726400.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 2.64,
+          "known_min": 2.58,
+          "mean": 2.615,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 12.05,
+          "known_min": 12.0,
+          "mean": 12.0125,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 120.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-09-30T00:57:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.3
+        },
+        {
+          "local_time": "2026-09-30T07:02:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.2
+        },
+        {
+          "local_time": "2026-09-30T13:23:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.2
+        },
+        {
+          "local_time": "2026-09-30T19:24:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.4
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 120.0,
+        "fraction": 1.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-09-30T10:45:00+13:00",
+      "end_local": "2026-09-30T13:45:00+13:00",
+      "duration_minutes": 180.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 11.65,
+          "known_min": 3.5,
+          "mean": 8.058333333333334,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 24.1,
+          "known_total_hour_equivalents": 62.025,
+          "total_hour_equivalents": 62.025,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790719200.0,
+            1790722800.0,
+            1790726400.0,
+            1790730000.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.3,
+          "known_total_hour_equivalents": 0.7,
+          "total_hour_equivalents": 0.7,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790719200.0,
+            1790722800.0,
+            1790726400.0,
+            1790730000.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 76.0,
+          "known_total_hour_equivalents": 192.25,
+          "total_hour_equivalents": 192.25,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790719200.0,
+            1790722800.0,
+            1790726400.0,
+            1790730000.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 2.6500000000000004,
+          "known_min": 2.55,
+          "mean": 2.605,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 12.05,
+          "known_min": 12.0,
+          "mean": 12.0125,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 180.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-09-30T00:57:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.3
+        },
+        {
+          "local_time": "2026-09-30T07:02:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.2
+        },
+        {
+          "local_time": "2026-09-30T13:23:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.2
+        },
+        {
+          "local_time": "2026-09-30T19:24:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.4
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 172.0,
+        "fraction": 0.9555555555555556
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-01T08:00:00+13:00",
+      "end_local": "2026-10-01T10:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 14.6,
+          "known_min": 4.1,
+          "mean": 9.575,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 27.0,
+          "known_total_hour_equivalents": 47.2,
+          "total_hour_equivalents": 47.2,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790798400.0,
+            1790802000.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.0,
+          "known_total_hour_equivalents": 0.0,
+          "total_hour_equivalents": 0.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790798400.0,
+            1790802000.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 6.0,
+          "known_total_hour_equivalents": 9.0,
+          "total_hour_equivalents": 9.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790798400.0,
+            1790802000.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.98,
+          "known_min": 1.94,
+          "mean": 1.96,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 11.85,
+          "known_min": 11.75,
+          "mean": 11.8,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 120.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-01T01:41:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.2
+        },
+        {
+          "local_time": "2026-10-01T07:46:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.4
+        },
+        {
+          "local_time": "2026-10-01T14:08:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.1
+        },
+        {
+          "local_time": "2026-10-01T20:12:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.5
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 0.0,
+        "fraction": 0.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-01T12:00:00+13:00",
+      "end_local": "2026-10-01T14:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 19.8,
+          "known_min": 18.8,
+          "mean": 19.5,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 37.8,
+          "known_total_hour_equivalents": 74.2,
+          "total_hour_equivalents": 74.2,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790812800.0,
+            1790816400.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.0,
+          "known_total_hour_equivalents": 0.0,
+          "total_hour_equivalents": 0.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790812800.0,
+            1790816400.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 19.0,
+          "known_total_hour_equivalents": 37.0,
+          "total_hour_equivalents": 37.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790812800.0,
+            1790816400.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.9,
+          "known_min": 1.86,
+          "mean": 1.88,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 11.6,
+          "known_min": 11.45,
+          "mean": 11.5125,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 120.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-01T01:41:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.2
+        },
+        {
+          "local_time": "2026-10-01T07:46:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.4
+        },
+        {
+          "local_time": "2026-10-01T14:08:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.1
+        },
+        {
+          "local_time": "2026-10-01T20:12:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.5
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 120.0,
+        "fraction": 1.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-01T11:15:00+13:00",
+      "end_local": "2026-10-01T14:15:00+13:00",
+      "duration_minutes": 180.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 19.8,
+          "known_min": 17.525000000000002,
+          "mean": 19.186458333333334,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 38.2,
+          "known_total_hour_equivalents": 109.4,
+          "total_hour_equivalents": 109.4,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790809200.0,
+            1790812800.0,
+            1790816400.0,
+            1790820000.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.0,
+          "known_total_hour_equivalents": 0.0,
+          "total_hour_equivalents": 0.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790809200.0,
+            1790812800.0,
+            1790816400.0,
+            1790820000.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 20.0,
+          "known_total_hour_equivalents": 53.25,
+          "total_hour_equivalents": 53.25,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790809200.0,
+            1790812800.0,
+            1790816400.0,
+            1790820000.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.915,
+          "known_min": 1.855,
+          "mean": 1.885,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 11.6375,
+          "known_min": 11.424999999999999,
+          "mean": 11.5328125,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 180.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-01T01:41:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.2
+        },
+        {
+          "local_time": "2026-10-01T07:46:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.4
+        },
+        {
+          "local_time": "2026-10-01T14:08:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.1
+        },
+        {
+          "local_time": "2026-10-01T20:12:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.5
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 157.0,
+        "fraction": 0.8722222222222222
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-02T05:00:00+13:00",
+      "end_local": "2026-10-02T07:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 15.9,
+          "known_min": 12.1,
+          "mean": 14.05,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 28.1,
+          "known_total_hour_equivalents": 52.9,
+          "total_hour_equivalents": 52.9,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790874000.0,
+            1790877600.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.0,
+          "known_total_hour_equivalents": 0.0,
+          "total_hour_equivalents": 0.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790874000.0,
+            1790877600.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 2.0,
+          "known_total_hour_equivalents": 4.0,
+          "total_hour_equivalents": 4.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790874000.0,
+            1790877600.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.64,
+          "known_min": 1.64,
+          "mean": 1.64,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 9.95,
+          "known_min": 9.6,
+          "mean": 9.7625,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 5.016666666666667,
+          "fraction": 0.041805555555555554,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-02T02:29:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.0
+        },
+        {
+          "local_time": "2026-10-02T08:33:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.5
+        },
+        {
+          "local_time": "2026-10-02T14:59:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.0
+        },
+        {
+          "local_time": "2026-10-02T21:05:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.7
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 0.0,
+        "fraction": 0.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-02T13:00:00+13:00",
+      "end_local": "2026-10-02T15:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 26.5,
+          "known_min": 25.3,
+          "mean": 26.05,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 47.2,
+          "known_total_hour_equivalents": 93.3,
+          "total_hour_equivalents": 93.3,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790902800.0,
+            1790906400.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.1,
+          "known_total_hour_equivalents": 0.2,
+          "total_hour_equivalents": 0.2,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790902800.0,
+            1790906400.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 45.0,
+          "known_total_hour_equivalents": 87.0,
+          "total_hour_equivalents": 87.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790902800.0,
+            1790906400.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.68,
+          "known_min": 1.66,
+          "mean": 1.675,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 9.0,
+          "known_min": 8.8,
+          "mean": 8.9,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 120.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-02T02:29:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.0
+        },
+        {
+          "local_time": "2026-10-02T08:33:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.5
+        },
+        {
+          "local_time": "2026-10-02T14:59:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.0
+        },
+        {
+          "local_time": "2026-10-02T21:05:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.7
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 120.0,
+        "fraction": 1.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-02T11:30:00+13:00",
+      "end_local": "2026-10-02T14:45:00+13:00",
+      "duration_minutes": 195.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 26.425,
+          "known_min": 22.6,
+          "mean": 25.095192307692308,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 47.2,
+          "known_total_hour_equivalents": 146.85,
+          "total_hour_equivalents": 146.85,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790895600.0,
+            1790899200.0,
+            1790902800.0,
+            1790906400.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.1,
+          "known_total_hour_equivalents": 0.325,
+          "total_hour_equivalents": 0.325,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790895600.0,
+            1790899200.0,
+            1790902800.0,
+            1790906400.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 45.0,
+          "known_total_hour_equivalents": 126.25,
+          "total_hour_equivalents": 126.25,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790895600.0,
+            1790899200.0,
+            1790902800.0,
+            1790906400.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.68,
+          "known_min": 1.65,
+          "mean": 1.666923076923077,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 9.125,
+          "known_min": 8.825000000000001,
+          "mean": 8.985576923076923,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 195.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-02T02:29:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.0
+        },
+        {
+          "local_time": "2026-10-02T08:33:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.5
+        },
+        {
+          "local_time": "2026-10-02T14:59:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 3.0
+        },
+        {
+          "local_time": "2026-10-02T21:05:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.7
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 136.0,
+        "fraction": 0.6974358974358974
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-03T06:00:00+13:00",
+      "end_local": "2026-10-03T08:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 18.3,
+          "known_min": 17.2,
+          "mean": 17.625,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 34.6,
+          "known_total_hour_equivalents": 67.7,
+          "total_hour_equivalents": 67.7,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790964000.0,
+            1790967600.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.1,
+          "known_total_hour_equivalents": 0.1,
+          "total_hour_equivalents": 0.1,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790964000.0,
+            1790967600.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 8.0,
+          "known_total_hour_equivalents": 12.0,
+          "total_hour_equivalents": 12.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790964000.0,
+            1790967600.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.76,
+          "known_min": 1.74,
+          "mean": 1.755,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 8.65,
+          "known_min": 8.55,
+          "mean": 8.6,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 66.56666666666666,
+          "fraction": 0.5547222222222222,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-03T03:23:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 2.8
+        },
+        {
+          "local_time": "2026-10-03T09:26:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.7
+        },
+        {
+          "local_time": "2026-10-03T16:00:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 2.8
+        },
+        {
+          "local_time": "2026-10-03T22:07:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.9
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 0.0,
+        "fraction": 0.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-03T14:00:00+13:00",
+      "end_local": "2026-10-03T16:00:00+13:00",
+      "duration_minutes": 120.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 22.8,
+          "known_min": 20.7,
+          "mean": 21.825,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 44.6,
+          "known_total_hour_equivalents": 88.9,
+          "total_hour_equivalents": 88.9,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790992800.0,
+            1790996400.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.1,
+          "known_total_hour_equivalents": 0.2,
+          "total_hour_equivalents": 0.2,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790992800.0,
+            1790996400.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 37.0,
+          "known_total_hour_equivalents": 74.0,
+          "total_hour_equivalents": 74.0,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790992800.0,
+            1790996400.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.78,
+          "known_min": 1.76,
+          "mean": 1.765,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 8.85,
+          "known_min": 8.7,
+          "mean": 8.7875,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 120.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-03T03:23:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 2.8
+        },
+        {
+          "local_time": "2026-10-03T09:26:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.7
+        },
+        {
+          "local_time": "2026-10-03T16:00:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 2.8
+        },
+        {
+          "local_time": "2026-10-03T22:07:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.9
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 120.0,
+        "fraction": 1.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    },
+    {
+      "start_local": "2026-10-03T14:15:00+13:00",
+      "end_local": "2026-10-03T16:30:00+13:00",
+      "duration_minutes": 135.0,
+      "facts": {
+        "wind_kmh": {
+          "known_max": 22.575,
+          "known_min": 19.95,
+          "mean": 21.39583333333333,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "gust_kmh": {
+          "known_max": 44.6,
+          "known_total_hour_equivalents": 99.975,
+          "total_hour_equivalents": 99.975,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790992800.0,
+            1790996400.0,
+            1791000000.0
+          ]
+        },
+        "rain_mm": {
+          "known_max": 0.1,
+          "known_total_hour_equivalents": 0.225,
+          "total_hour_equivalents": 0.225,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790992800.0,
+            1790996400.0,
+            1791000000.0
+          ]
+        },
+        "hourly_rain_probability_percent": {
+          "known_max": 37.0,
+          "known_total_hour_equivalents": 82.75,
+          "total_hour_equivalents": 82.75,
+          "coverage_fraction": 1.0,
+          "complete": true,
+          "contributing_timestamps": [
+            1790992800.0,
+            1790996400.0,
+            1791000000.0
+          ]
+        },
+        "wave_height_m": {
+          "known_max": 1.775,
+          "known_min": 1.75,
+          "mean": 1.761388888888889,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "wave_period_s": {
+          "known_max": 8.899999999999999,
+          "known_min": 8.725,
+          "mean": 8.815277777777778,
+          "coverage_fraction": 1.0,
+          "complete": true
+        },
+        "daylight": {
+          "minutes": 135.0,
+          "fraction": 1.0,
+          "complete": true
+        }
+      },
+      "incomplete_fields": [],
+      "official_tide_events": [
+        {
+          "local_time": "2026-10-03T03:23:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 2.8
+        },
+        {
+          "local_time": "2026-10-03T09:26:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.7
+        },
+        {
+          "local_time": "2026-10-03T16:00:00+13:00",
+          "type": "High",
+          "height_m_chart_datum": 2.8
+        },
+        {
+          "local_time": "2026-10-03T22:07:00+13:00",
+          "type": "Low",
+          "height_m_chart_datum": 0.9
+        }
+      ],
+      "declared_preference_overlap": {
+        "minutes": 135.0,
+        "fraction": 1.0
+      },
+      "known_wave_meets_legacy_3m_exclusion": false,
+      "site_suitability": "unassessed: tide-station coordinate; exact site/exposure/access unknown",
+      "official_warnings": "unassessed: no warnings service queried",
+      "catch_potential": "unassessed: no validated species/site catch model"
+    }
+  ]
+}

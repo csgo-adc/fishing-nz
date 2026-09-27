@@ -31,6 +31,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var customStartDate = Date.now { didSet { if oldValue != customStartDate { invalidateRecommendations() } } }
     @Published var customEndDate = Date.now { didSet { if oldValue != customEndDate { invalidateRecommendations() } } }
     @Published var timeMode: FishingTimeMode = .comfortable { didSet { if oldValue != timeMode { invalidateRecommendations() } } }
+    @Published var preference: WindowPriority = .weather { didSet { if oldValue != preference { invalidateRecommendations() } } }
     @Published var preferredStartMinute = 8 * 60 { didSet { if oldValue != preferredStartMinute { invalidateRecommendations() } } }
     @Published var preferredEndMinute = 18 * 60 { didSet { if oldValue != preferredEndMinute { invalidateRecommendations() } } }
     @Published var radiusKm = 100 {
@@ -184,7 +185,11 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 boat: window.boat,
                 warnings: window.warnings,
                 startsAt: window.start,
-                endsAt: window.end
+                endsAt: window.end,
+                summary: window.summary,
+                conditions: window.conditions,
+                sourceNote: window.sourceNote,
+                alternative: window.alternative
             )
         }
     }
@@ -386,6 +391,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         let days = recommendationDays()
         let boat = isBoatFishing
         let hours = preferredHours
+        let priority = preference
         scoredWindows = []
         recommendationError = nil
         hasSearchedRecommendations = true
@@ -393,7 +399,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         recommendationTask = Task {
             do {
                 let windows = try await scoringService.rank(origin: origin, radiusKm: radius, selectedStation: station,
-                                                            days: days, boat: boat, preferredHours: hours)
+                                                            days: days, boat: boat, preferredHours: hours, priority: priority)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
                 scoredWindows = windows
             } catch is CancellationError {

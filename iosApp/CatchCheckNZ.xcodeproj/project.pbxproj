@@ -14,6 +14,7 @@
 		AA000005 /* CatchCheckRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100005 /* CatchCheckRootView.swift */; };
 		AA000006 /* FeatureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100006 /* FeatureViews.swift */; };
 		AA000007 /* FishingScoringService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100009 /* FishingScoringService.swift */; };
+		AA000008 /* LinzTideSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100010 /* LinzTideSource.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 		AA100007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA100008 /* CatchCheckNZ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CatchCheckNZ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA100009 /* FishingScoringService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FishingScoringService.swift; sourceTree = "<group>"; };
+		AA100010 /* LinzTideSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinzTideSource.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +91,7 @@
 			children = (
 				AA100003 /* FishingRepository.swift */,
 				AA100009 /* FishingScoringService.swift */,
+				AA100010 /* LinzTideSource.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -193,6 +196,7 @@
 				AA000005 /* CatchCheckRootView.swift in Sources */,
 				AA000006 /* FeatureViews.swift in Sources */,
 				AA000007 /* FishingScoringService.swift in Sources */,
+				AA000008 /* LinzTideSource.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

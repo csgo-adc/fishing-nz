@@ -507,7 +507,11 @@ struct TripsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedSavedSpot: Recommendation?
     @State private var calendarTrip: Recommendation?
-    private var saved: [Recommendation] { vm.savedRecommendations.values.sorted { $0.rating > $1.rating } }
+    private var saved: [Recommendation] {
+        vm.savedRecommendations.values.sorted {
+            ($0.startsAt ?? .distantFuture, $0.name) < ($1.startsAt ?? .distantFuture, $1.name)
+        }
+    }
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -519,6 +523,11 @@ struct TripsView: View {
                             Text("Active trip").bold().foregroundStyle(CatchCheckColor.navy)
                             Text(active.name).font(.title2).foregroundStyle(CatchCheckColor.navy)
                             if !active.time.isEmpty { Text(active.time).foregroundStyle(.secondary) }
+                            if !active.summary.isEmpty { Text(active.summary).foregroundStyle(CatchCheckColor.navy) }
+                            ForEach(active.warnings, id: \.self) { warning in
+                                Label(warning, systemImage: "exclamationmark.triangle")
+                                    .font(.caption).foregroundStyle(CatchCheckColor.orange)
+                            }
                             if active.startsAt == nil {
                                 Text("Choose the date and time in your calendar.").font(.caption).foregroundStyle(.secondary)
                             }

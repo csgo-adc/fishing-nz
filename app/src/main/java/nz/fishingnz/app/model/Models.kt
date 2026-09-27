@@ -12,6 +12,7 @@ data class FishingSpot(val name: String, val area: String, val latitude: Double,
 data class SearchOrigin(val name: String, val point: GeoPoint)
 /** A daily interval; an end before the start means it continues into the next day. */
 data class PreferredTimeRange(val start: LocalTime, val end: LocalTime)
+enum class WindowPriority { WEATHER, LATE_INCOMING }
 data class ScoreFactor(val name: String, val score: Int, val weight: Int, val explanation: String)
 data class Recommendation(
     val name: String,
@@ -27,7 +28,16 @@ data class Recommendation(
     val warnings: List<String> = emptyList(),
     val distanceKm: Double = Double.NaN,
     val startsAtEpochSeconds: Long = 0,
-    val durationHours: Int = 0
+    val durationHours: Int = 0,
+    val summary: String = "",
+    val conditions: List<String> = emptyList(),
+    val sourceNote: String = "",
+    val alternative: String? = null,
+    // Internal planning order, never a catch probability or a user-facing score.
+    val rankingValue: Double = rating.toDouble(),
+    val dataComplete: Boolean = true,
+    val daylightFraction: Double = 1.0,
+    val tidePreferenceFit: Double = 0.0
 )
 fun recommendationKey(item: Recommendation): String = "${if (item.boat) "boat" else "land"}:${item.name}"
 data class RecommendationSearch(
