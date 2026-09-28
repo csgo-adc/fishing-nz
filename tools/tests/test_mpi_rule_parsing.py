@@ -32,6 +32,29 @@ class RuleParsingTest(unittest.TestCase):
         self.assertFalse(any("Snapper" in section["text"] for section in sections))
         self.assertTrue(any("precise boundary" in section["text"] for section in sections))
 
+    def test_row_and_column_spans_keep_limits_under_the_right_headings(self):
+        html = """
+        <main><table>
+          <tr><th>Species</th><th>Daily limit</th><th>Minimum length</th></tr>
+          <tr><td>Groper (Kermadecs)</td><td rowspan="2">5 combined; no more than 3 kingfish</td><td>—</td></tr>
+          <tr><td>Kingfish (Kermadecs)</td><td>75</td></tr>
+          <tr><td colspan="3">** Read the subarea note.</td></tr>
+        </table></main>
+        """
+        _, tables = parse_structured_rules(BeautifulSoup(html, "html.parser").main, "Auckland")
+        self.assertEqual(tables[0][2], ["Kingfish (Kermadecs)", "5 combined; no more than 3 kingfish", "75"])
+        self.assertEqual(tables[0][3], ["** Read the subarea note."])
+
+    def test_inconsistent_table_stops_the_import(self):
+        html = """
+        <main><table>
+          <tr><th>Species</th><th>Daily limit</th><th>Minimum length</th></tr>
+          <tr><td>Kingfish</td><td>75</td></tr>
+        </table></main>
+        """
+        with self.assertRaisesRegex(RuntimeError, "inconsistent row widths"):
+            parse_structured_rules(BeautifulSoup(html, "html.parser").main, "Area")
+
 
 if __name__ == "__main__":
     unittest.main()

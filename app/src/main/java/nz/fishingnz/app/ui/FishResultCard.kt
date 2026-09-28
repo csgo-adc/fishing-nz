@@ -39,28 +39,30 @@ internal fun FishResultCard(result: FishCheck, state: FishingUiState, retryRules
     val westSnapperRows = result.fishRules.filter { it.species.contains("Auckland West", ignoreCase = true) }
     val shownRules = if (nearRaglanWest && result.commonName.equals("Snapper", ignoreCase = true) && westSnapperRows.isNotEmpty())
         westSnapperRows else result.fishRules
+    val officialUrl = area?.officialUrl ?: result.rulesSourceUrl
+        ?: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules"
 
     Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("IDENTIFICATION", color = Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Text(result.commonName, color = Navy, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (result.scientificName.isNotBlank()) Text(result.scientificName, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Text(cleanIdentificationText(result.commonName), color = Navy, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (result.scientificName.isNotBlank()) Text(cleanIdentificationText(result.scientificName), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium)
             }
             Text(if (result.isFish) "${result.confidence}% AI confidence" else "Not a fish",
                 color = Orange, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 6.dp))
 
-            if (result.visibleClues.isNotBlank()) FishDescription("VISIBLE CLUES", result.visibleClues)
+            if (result.visibleClues.isNotBlank()) FishDescription("VISIBLE CLUES", cleanIdentificationText(result.visibleClues))
             if (result.otherPossibilities.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("OTHER POSSIBILITIES", color = Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    Text(result.otherPossibilities.joinToString(" · "), color = Navy, style = MaterialTheme.typography.bodyMedium)
+                    Text(result.otherPossibilities.joinToString(" · ") { cleanIdentificationText(it) }, color = Navy, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             if (result.identificationNote.isNotBlank() && !result.identificationNote.equals("This is not a fish.", ignoreCase = true))
-                FishDescription("IDENTIFICATION NOTE", result.identificationNote, highlighted = true)
+                FishDescription("IDENTIFICATION NOTE", cleanIdentificationText(result.identificationNote), highlighted = true)
 
             if (result.isFish) {
                 HorizontalDivider()
@@ -80,13 +82,11 @@ internal fun FishResultCard(result: FishCheck, state: FishingUiState, retryRules
                     }
                     result.rulesNeedsReview -> FishRulesMessage("MPI has updated this area's rules. Check the official page for current limits.")
                     state.fishRulesAreaId == null -> FishRulesMessage("Choose the MPI area where this fish was caught to see local limits.")
-                    shownRules.isEmpty() -> FishRulesMessage("No species-specific size or daily limit was found in this area's saved summary. Check the official MPI rules before keeping this fish.")
-                    else -> shownRules.forEach { FishRuleRow(it) }
+                    shownRules.isEmpty() -> FishRulesMessage("No reliable simple limit can be shown from this saved table. Check MPI for this species and exact subarea before keeping it.")
+                    else -> shownRules.forEach { FishRuleRow(it, officialUrl) }
                 }
                 Text("Check local closures before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall)
-                val officialUrl = area?.officialUrl ?: result.rulesSourceUrl
-                    ?: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules"
                 TextButton(onClick = { uriHandler.openUri(officialUrl) }) { Text("See official MPI rules") }
             }
         }
@@ -118,16 +118,22 @@ private fun FishRulesMessage(message: String) {
 }
 
 @Composable
-private fun FishRuleRow(rule: FishRuleMatch) {
+private fun FishRuleRow(rule: FishRuleMatch, officialUrl: String) {
+    val uriHandler = LocalUriHandler.current
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(rule.species, color = Navy, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(cleanMpiRuleText(rule.species), color = Navy, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         if (rule.details.any { it.label.contains("daily limit", ignoreCase = true) || it.label.contains("bag limit", ignoreCase = true) }) {
             Text("Limits vary by subarea. Check the exact catch spot on MPI.", color = Navy,
                 style = MaterialTheme.typography.bodySmall)
         } else {
-            rule.minimumSize?.let { FishRuleValue(rule.minimumSizeLabel ?: "Minimum size", it) }
-            rule.dailyLimit?.let { FishRuleValue("Daily limit", it) }
+            rule.minimumSize?.let { FishRuleValue(cleanMpiRuleText(rule.minimumSizeLabel ?: "Minimum size"), cleanMpiLimitValue(it)) }
+            rule.dailyLimit?.let { FishRuleValue("Daily limit", cleanMpiLimitValue(it)) }
+        }
+        if (hasMpiFootnote(rule)) {
+            Text("MPI footnote applies. Read the full condition before keeping this fish.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { uriHandler.openUri(officialUrl) }) { Text("Read MPI footnote") }
         }
     }
 }

@@ -721,7 +721,7 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("WIND & RAIN OUTLOOK", color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text("WINDOW OUTLOOK", color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             Text(label, color = Navy, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
@@ -729,29 +729,18 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
     }
 }
 
-@Composable private fun WindowConditions(conditions: List<String>) {
+@Composable private fun WindowConditions(item: Recommendation) {
     val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
-    conditions.forEachIndexed { index, detail ->
+    item.conditions.forEachIndexed { index, detail ->
         if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val label = labels.getOrElse(index) { "Other" }
-        val emoji = when (label) {
-            "Tide" -> "🌊"
-            "Wind" -> "💨"
-            "Rain" -> when {
-                detail.startsWith("Little or no rain") -> "☀️"
-                detail.startsWith("No rain accumulation") -> "🌦️"
-                else -> "🌧️"
-            }
-            "Waves" -> "🌊"
-            "Daylight" -> if (detail.contains("entirely in daylight")) "☀️" else "🌙"
-            else -> "📍"
-        }
+        val mood = item.conditionMood(index)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(label, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelLarge)
-                Text(emoji, style = MaterialTheme.typography.titleMedium)
+                Text("${mood.emoji} ${mood.label}", style = MaterialTheme.typography.labelMedium)
             }
             Text(detail, color = Navy, style = MaterialTheme.typography.bodySmall)
         }
@@ -777,7 +766,7 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
             }
             if (item.conditions.isNotEmpty()) {
                 Text("Conditions", color = Navy, fontWeight = FontWeight.SemiBold)
-                WindowConditions(item.conditions)
+                WindowConditions(item)
             }
             val warnings = (item.warnings + listOfNotNull(item.warning)).distinct()
             if (warnings.isNotEmpty()) Column(
@@ -786,7 +775,7 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
                 Text("CHECK BEFORE YOU GO", color = MaterialTheme.colorScheme.tertiary,
                     fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                 warnings.forEach {
-                    Text("• $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
+                    Text("${warningMood(it).emoji} $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -953,14 +942,14 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             if (spot.conditions.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Conditions during your session", fontWeight = FontWeight.Bold, color = Navy)
-                    WindowConditions(spot.conditions)
+                    WindowConditions(spot)
                 }
             }
             val warnings = (spot.warnings + listOfNotNull(spot.warning)).distinct()
             if (warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiary.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Check before you go", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
-                    warnings.forEach { Text("• $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall) }
+                    warnings.forEach { Text("${warningMood(it).emoji} $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall) }
                 }
             }
             if (spot.sourceNote.isNotBlank()) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -1133,7 +1122,9 @@ internal val fishingRulesAreas = listOf(
         "Daily limits differ between the outer Fiordland Marine Area and the inner Fiords. Check the exact subarea on MPI."
     else page?.sections?.firstNotNullOfOrNull { section ->
         Regex("combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\.", RegexOption.IGNORE_CASE)
-            .find(section.text)?.value?.replace("*", "")
+            .find(section.text)?.value?.let { source ->
+                cleanMpiRuleText(source) + if (hasMpiFootnoteMarker(source)) " See MPI's definition of finfish." else ""
+            }
     } ?: "Daily limits vary by species and location. Check the MPI page for the exact fishing spot."
     val nearRaglanWest = s.fishRulesAreaIsSuggested && selectedAreaId == "auckland-kermadec" && isNearRaglan(s.deviceLocation)
     val speciesRules = page?.let(::ruleSpeciesRows).orEmpty().let { rows ->
@@ -1208,10 +1199,10 @@ internal val fishingRulesAreas = listOf(
                 }
             } }
             if (matchingSpecies.isNotEmpty()) item { Text(if (search.isEmpty()) "Common species" else "Species and limits", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            matchingSpecies.forEach { rule -> item(key = "species-${rule.id}") { RuleSpeciesCard(rule) } }
+            matchingSpecies.forEach { rule -> item(key = "species-${rule.id}") { RuleSpeciesCard(rule, area?.officialUrl ?: rules.sourceUrl) } }
             if (matchingSpecies.isEmpty()) item {
                 Text(if (search.isEmpty()) "Search for a species to see its saved limits."
-                    else "No simple saved limit matches “$search” in ${rules.areaName}. Check MPI for other species and local rules.",
+                    else "No reliable simple limit can be shown for “$search” in ${rules.areaName}. Check MPI for this species and exact subarea.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item { Text("Local closures, gear restrictions and subarea rules can change what applies. Check MPI for your exact fishing spot.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
@@ -1222,14 +1213,7 @@ internal val fishingRulesAreas = listOf(
         item { Spacer(Modifier.height(12.dp)) }
     }
 }
-private data class RuleSpeciesRow(val id: String, val species: String, val facts: List<Pair<String, String>>, val note: String?)
-
-private fun cleanRuleText(value: String): String = value
-    .replace(Regex("\\(Fisheries Management Area\\s*(\\d+)[^)]*\\)", RegexOption.IGNORE_CASE), "(FMA $1)")
-    .replace(Regex("\\[PDF[^]]*]", RegexOption.IGNORE_CASE), "")
-    .replace(Regex("\\*+"), "")
-    .replace(Regex("\\s+"), " ")
-    .trim(' ', '–', '-', ':')
+private data class RuleSpeciesRow(val id: String, val species: String, val facts: List<Pair<String, String>>, val note: String?, val hasFootnote: Boolean)
 
 private fun ruleFactLabel(header: String): String? {
     val text = header.lowercase()
@@ -1250,22 +1234,27 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
     if (headers.size < 2 || !headers.first().contains("species", ignoreCase = true)) return@flatMapIndexed emptyList()
     val factColumns = headers.indices.drop(1).mapNotNull { index -> ruleFactLabel(headers[index])?.let { index to it } }
     if (factColumns.isEmpty()) return@flatMapIndexed emptyList()
-    val hasMultipleDailyColumns = factColumns.count { it.second.startsWith("Daily limit") } > 1
     table.drop(1).mapIndexedNotNull { rowIndex, row ->
         val rawSpecies = row.firstOrNull()?.trim().orEmpty()
         if (rawSpecies.isEmpty() || rawSpecies.startsWith("*") || rawSpecies.length > 180 || rawSpecies.equals("Finfish species", true)) return@mapIndexedNotNull null
-        val species = cleanRuleText(rawSpecies)
+        val qualifier = if (row.size == headers.size && headers.getOrNull(1)?.equals(headers.first(), true) == true)
+            row.getOrNull(1)?.trim().orEmpty() else ""
+        val species = cleanMpiRuleText(rawSpecies).let { name ->
+            if (qualifier.isNotBlank() && !qualifier.equals(rawSpecies, true))
+                "$name — ${cleanMpiRuleText(qualifier)}" else name
+        }
         if (species.isEmpty()) return@mapIndexedNotNull null
         val notes = mutableListOf<String>()
-        if (rawSpecies.contains('*') || row.any { it.contains('*') }) notes += "Additional MPI conditions apply."
+        val hasFootnote = row.any(::hasMpiFootnoteMarker)
+        if (hasFootnote) notes += "MPI footnote applies. Read the full condition on the official page."
         if (rawSpecies.contains("refer to map", true)) notes += "Check the exact area boundary on MPI."
-        val facts = if (hasMultipleDailyColumns && row.size != headers.size) {
-            notes += "The MPI table has merged cells; check its area-specific limit."
+        val facts = if (row.size != headers.size) {
+            notes += "This saved row cannot be matched safely to its columns. Check the official MPI limit."
             listOf("Area-specific rule" to "See MPI")
         } else factColumns.mapNotNull { (index, label) ->
             val rawValue = row.getOrNull(index)?.trim().orEmpty()
             if (rawValue.isBlank() || rawValue in listOf("—", "–", "-", "none")) return@mapNotNull null
-            val clean = cleanRuleText(rawValue)
+            val clean = cleanMpiRuleText(rawValue)
             val value = when {
                 clean.contains("No take allowed", true) -> "No take"
                 clean.contains("See below", true) -> { notes += "Check the area-specific rule on MPI."; "See MPI" }
@@ -1282,11 +1271,12 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
             label to value
         }
         if (facts.isEmpty()) return@mapIndexedNotNull null
-        RuleSpeciesRow("$tableIndex-$rowIndex", species, facts, notes.distinct().takeIf { it.isNotEmpty() }?.joinToString(" "))
+        RuleSpeciesRow("$tableIndex-$rowIndex", species, facts, notes.distinct().takeIf { it.isNotEmpty() }?.joinToString(" "), hasFootnote)
     }
 }
 
-@Composable private fun RuleSpeciesCard(rule: RuleSpeciesRow) {
+@Composable private fun RuleSpeciesCard(rule: RuleSpeciesRow, officialUrl: String) {
+    val uriHandler = LocalUriHandler.current
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(rule.species, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Navy)
@@ -1298,6 +1288,11 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
                 }
             }
             rule.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (rule.hasFootnote || rule.facts.any { (_, value) -> value.contains("MPI") }) {
+                TextButton(onClick = { uriHandler.openUri(officialUrl) }) {
+                    Text(if (rule.hasFootnote) "Read MPI footnote" else "Check official MPI rule")
+                }
+            }
         }
     }
 }

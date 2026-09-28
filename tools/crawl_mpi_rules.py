@@ -140,7 +140,7 @@ def request_rules_api(url: str, token: str, payload: object, accept: str) -> byt
 
 
 def parse_structured_rules(root, title: str) -> tuple[list[dict[str, object]], list[list[list[str]]]]:
-    """Keep prose and table rows separate, including when cells contain paragraphs."""
+    """Keep prose separate and map merged table cells to their actual columns."""
     sections: list[dict[str, object]] = []
     current: dict[str, object] = {"heading": title, "text": []}
     for node in root.find_all(["h1", "h2", "h3", "h4", "p", "li"]):
@@ -164,14 +164,62 @@ def parse_structured_rules(root, title: str) -> tuple[list[dict[str, object]], l
 
     tables = []
     for table in root.find_all("table"):
-        rows = []
-        for row in table.find_all("tr"):
-            cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["th", "td"], recursive=False)]
-            if cells:
-                rows.append(cells)
+        rows = expand_table_grid(table)
         if rows:
             tables.append(rows)
     return sections, tables
+
+
+def expand_table_grid(table) -> list[list[str]]:
+    """Expand HTML spans without guessing which header a shifted value belongs to.
+
+    A full-width note remains one cell so rule UIs can show it once instead of
+    repeating a legal footnote in every column. Invalid grids stop the import.
+    """
+    expanded: list[tuple[list[str], bool]] = []
+    active: dict[int, tuple[str, int]] = {}
+    expected_width = 0
+    for row in table.find_all("tr"):
+        if row.find_parent("table") is not table:
+            continue
+        cells = row.find_all(["th", "td"], recursive=False)
+        if not cells:
+            continue
+        occupied = {column: value for column, (value, _) in active.items()}
+        next_active = {
+            column: (value, remaining - 1)
+            for column, (value, remaining) in active.items() if remaining > 1
+        }
+        cursor = 0
+        for cell in cells:
+            try:
+                columns = int(cell.get("colspan", 1))
+                rows = int(cell.get("rowspan", 1))
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("MPI rule table has an invalid cell span") from exc
+            if not 1 <= columns <= 50 or not 1 <= rows <= 100:
+                raise RuntimeError("MPI rule table has an invalid cell span")
+            while any(column in occupied for column in range(cursor, cursor + columns)):
+                cursor += 1
+            if cursor + columns > 50:
+                raise RuntimeError("MPI rule table has excessive columns")
+            value = cell.get_text(" ", strip=True)
+            for column in range(cursor, cursor + columns):
+                occupied[column] = value
+                if rows > 1:
+                    next_active[column] = (value, rows - 1)
+            cursor += columns
+        width = max(occupied) + 1
+        if any(column not in occupied for column in range(width)):
+            raise RuntimeError("MPI rule table has a gap between cells")
+        expected_width = max(expected_width, width)
+        full_width_cell = len(cells) == 1 and not active and int(cells[0].get("colspan", 1)) == width
+        expanded.append(([occupied[column] for column in range(width)], full_width_cell))
+        active = next_active
+
+    if active or any(len(values) != expected_width for values, _ in expanded):
+        raise RuntimeError("MPI rule table has inconsistent row widths or an unfinished row span")
+    return [[values[0]] if full_width_cell else values for values, full_width_cell in expanded]
 
 
 def extract(area: Area, body: bytes, fetched_at: str) -> dict[str, object]:

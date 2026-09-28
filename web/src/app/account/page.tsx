@@ -5,12 +5,53 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type User = { id: string; email: string; display_name: string; country_code: string; plan: "free" | "paid"; created_at: string };
 type FeedbackCategory = "general" | "bug" | "idea";
+type FishRule = {
+  species: string; dailyLimit: string | null; minimumSize: string | null;
+  minimumSizeLabel?: string | null; details?: Array<{ label: string; value: string }>;
+};
 type FishResult = {
   isFish?: boolean; commonName: string; scientificName: string; confidence: number;
   otherPossibilities?: string[]; visibleClues?: string; identificationNote?: string;
-  areaName: string; fishRules: Array<{ species: string; dailyLimit: string | null; minimumSize: string | null }>;
+  areaName: string; rulesSourceUrl?: string | null; fishRules: FishRule[];
 };
 const supportedFishPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function formatAiText(value: string) {
+  const text = value.replace(/\r\n?/g, "\n")
+    .replace(/(^|\n)\s*#{1,6}\s+/g, "$1")
+    .replace(/(^|\n)\s*[-*]\s+/g, "$1• ");
+  return text.split(/(\*\*[^*]+?\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : part.replace(/\*/g, "")
+  );
+}
+
+// MPI uses suffix symbols for footnotes; keep separators and arithmetic signs intact.
+function ruleField(value: string): { text: string; hasFootnote: boolean } {
+  let hasFootnote = false;
+  let text = value.replace(/([\p{L})])(?:\*+|†|‡|\+|\^|#)+(?=$|[\s,.;:!?()–—-])/gu, (match) => {
+    hasFootnote = true; return match[0];
+  }).replace(/(\d)(?:\*+|†|‡|\^|#)+(?=$|[\s,.;:!?()–—-])/g, (match) => {
+    hasFootnote = true; return match[0];
+  }).replace(/\s+•(?=\s*$)/g, () => {
+    hasFootnote = true; return "";
+  });
+  if (text.includes("*")) { hasFootnote = true; text = text.replace(/\*+/g, ""); }
+  return { text: text.replace(/\s+/g, " ").trim(), hasFootnote };
+}
+
+function ruleText(value: string): string {
+  return ruleField(value).text;
+}
+
+function officialMpiUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && (url.hostname === "mpi.govt.nz" || url.hostname.endsWith(".mpi.govt.nz")) ? url.href : null;
+  } catch { return null; }
+}
 
 function isHeicPhoto(file: File): boolean {
   return ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(file.type.toLowerCase()) || /\.hei(?:c|f)$/i.test(file.name);
@@ -208,15 +249,7 @@ export default function AccountPage() {
               <h2>Identify a fish</h2><p>Choose a clear photo. The result is an AI suggestion; confirm the species and local rules before keeping a fish.</p>
               <label>Fish photo<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={(event) => { const file = event.target.files?.[0] || null; const problem = file && file.size > 20 * 1024 * 1024 ? "Choose an image smaller than 20 MB." : file && !supportedFishPhotoTypes.has(file.type.toLowerCase()) && !isHeicPhoto(file) ? "Choose a JPEG, PNG, WebP, or HEIC photo." : ""; setFishPhoto(problem ? null : file); setFishResult(null); setError(problem); }} /></label>
               <button className="button button-primary" disabled={fishBusy || !fishPhoto}>{fishBusy ? "Checking photo…" : "Identify fish"}</button>
-              {fishResult && <div className="plan-card" role="status">
-                <strong>{fishResult.commonName}</strong>
-                <p>{fishResult.isFish !== false ? `${Math.round(fishResult.confidence * 100)}% AI confidence · ${fishResult.areaName}` : "This is not a fish."}</p>
-                {fishResult.scientificName && <p>{fishResult.scientificName}</p>}
-                {fishResult.visibleClues && <p><b>Visible clues:</b> {fishResult.visibleClues}</p>}
-                {(fishResult.otherPossibilities?.length ?? 0) > 0 && <p><b>Could also be:</b> {fishResult.otherPossibilities?.join(", ")}</p>}
-                {fishResult.identificationNote && <p>{fishResult.identificationNote}</p>}
-                {fishResult.isFish !== false && fishResult.fishRules.map((rule, index) => <p key={`${rule.species}-${index}`}><b>{rule.species}</b>{rule.minimumSize ? ` · Minimum size: ${rule.minimumSize}` : ""}{rule.dailyLimit ? ` · Daily limit: ${rule.dailyLimit}` : ""}</p>)}
-              </div>}
+              {fishResult && <FishResultDisplay result={fishResult} />}
             </form>
             <form className="account-form" onSubmit={saveProfile}>
               <h2>Profile</h2><label>Email<input value={user.email} readOnly /></label><label>Name<input autoComplete="name" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><label>Country code<input maxLength={2} value={countryCode} onChange={(event) => setCountryCode(event.target.value.toUpperCase().slice(0, 2))} /></label><button className="button button-primary" disabled={busy}>Save profile</button>
@@ -230,4 +263,34 @@ export default function AccountPage() {
       </section>
     </main>
   );
+}
+
+function FishResultDisplay({ result }: { result: FishResult }) {
+  const sourceUrl = officialMpiUrl(result.rulesSourceUrl);
+  return <section className="plan-card fish-result" role="status" aria-label="Fish identification result">
+    <h3>{formatAiText(result.commonName)}</h3>
+    <p>{result.isFish !== false ? <>{Math.round(result.confidence * 100)}% AI confidence · {ruleText(result.areaName)}</> : "This is not a fish."}</p>
+    {result.scientificName && <p>{formatAiText(result.scientificName)}</p>}
+    {result.visibleClues && <p><b>Visible clues:</b> {formatAiText(result.visibleClues)}</p>}
+    {(result.otherPossibilities?.length ?? 0) > 0 && <p><b>Could also be:</b> {formatAiText(result.otherPossibilities?.join(", ") || "")}</p>}
+    {result.identificationNote && <p>{formatAiText(result.identificationNote)}</p>}
+    {result.isFish !== false && result.fishRules.length > 0 && <div className="fish-rules">
+      <h4>Saved MPI rules</h4>
+      {result.fishRules.map((rule, index) => {
+        const fields = [rule.species, rule.minimumSizeLabel, rule.minimumSize, rule.dailyLimit,
+          ...(rule.details || []).flatMap((detail) => [detail.label, detail.value])];
+        const hasFootnote = fields.some((field) => field && ruleField(field).hasFootnote);
+        return <div className="fish-rule" key={`${rule.species}-${index}`}>
+          <h5>{ruleText(rule.species)}</h5>
+          <dl>
+            {rule.minimumSize && <div><dt>{ruleText(rule.minimumSizeLabel || "Minimum size")}</dt><dd>{ruleText(rule.minimumSize)}</dd></div>}
+            {rule.dailyLimit && <div><dt>Daily limit</dt><dd>{ruleText(rule.dailyLimit)}</dd></div>}
+            {rule.details?.map((detail, detailIndex) => <div key={`${detail.label}-${detailIndex}`}><dt>{ruleText(detail.label)}</dt><dd>{ruleText(detail.value)}</dd></div>)}
+          </dl>
+          {hasFootnote && <p className="fish-rule-footnote">MPI footnote applies. {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer">Read the official rule and footnote ↗</a> : "Check the official MPI rules for details."}</p>}
+        </div>;
+      })}
+      {sourceUrl && <a className="fish-rule-source" href={sourceUrl} target="_blank" rel="noopener noreferrer">Check current MPI rules ↗</a>}
+    </div>}
+  </section>;
 }

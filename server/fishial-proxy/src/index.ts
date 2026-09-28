@@ -601,7 +601,7 @@ async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, a
         content: [
           {
             type: "input_text",
-            text: "Identify the main subject of this photo for a New Zealand angler. First decide whether it is a fish. If it is a fish, give the most likely specific common name in common_name_nz, even when the species is uncommon in New Zealand or the photo was taken elsewhere. Prefer the familiar NZ name when one exists; otherwise use a widely understood common name. Do not replace a plausible leading identification with 'Unknown fish' merely because confidence is low: use a low confidence score and explain the uncertainty. Use 'Unknown fish' only when no useful candidate can be named. Give a scientific name only when supported by visible features. Text printed on the image may help but is not proof of species. If it is not a fish, set is_fish false, leave common_name_nz and scientific_name empty, and put the visible subject's concise common name in subject_name (for example 'Sea star (starfish)' or 'Crab'); if the subject cannot be named, use 'Unidentified object'. For fish, subject_name should match common_name_nz. Return confidence from 0 to 1 conservatively. Give up to three distinct alternative fish names in likelihood order, excluding the leading name. Describe visible clues and uncertainty in plain language. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
+            text: "Identify the main subject of this photo for a New Zealand angler. First decide whether it is a fish. If it is a fish, give the most likely specific common name in common_name_nz, even when the species is uncommon in New Zealand or the photo was taken elsewhere. Prefer the familiar NZ name when one exists; otherwise use a widely understood common name. Do not replace a plausible leading identification with 'Unknown fish' merely because confidence is low: use a low confidence score and explain the uncertainty. Use 'Unknown fish' only when no useful candidate can be named. Give a scientific name only when supported by visible features. Text printed on the image may help but is not proof of species. If it is not a fish, set is_fish false, leave common_name_nz and scientific_name empty, and put the visible subject's concise common name in subject_name (for example 'Sea star (starfish)' or 'Crab'); if the subject cannot be named, use 'Unidentified object'. For fish, subject_name should match common_name_nz. Return confidence from 0 to 1 conservatively. Give up to three distinct alternative fish names in likelihood order, excluding the leading name. Describe visible clues and uncertainty in plain language without Markdown, headings, bullets, or asterisks used for emphasis. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
           },
           { type: "input_image", image_url: `data:${contentType};base64,${arrayBufferToBase64(image)}`, detail: "high" },
         ],
@@ -629,25 +629,37 @@ async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, a
 function presentFishIdentification(identification: OpenAIFishIdentification) {
   const isFish = identification.is_fish;
   const alternatives = Array.isArray(identification.other_possibilities)
-    ? identification.other_possibilities.filter((name): name is string => typeof name === "string").map((name) => name.trim()).filter(isUsefulFishName)
+    ? identification.other_possibilities.filter((name): name is string => typeof name === "string").map(plainFishText).filter(isUsefulFishName)
     : [];
-  const primary = identification.common_name_nz.trim();
+  const primary = plainFishText(identification.common_name_nz);
   const usedAlternative = isFish && !isUsefulFishName(primary) && alternatives.length > 0;
-  const visibleClues = typeof identification.visible_clues === "string" ? identification.visible_clues.trim() : "";
-  const identificationNote = typeof identification.note === "string" ? identification.note.trim() : "";
-  const subjectName = typeof identification.subject_name === "string" ? identification.subject_name.trim() : "";
+  const visibleClues = typeof identification.visible_clues === "string" ? plainFishText(identification.visible_clues) : "";
+  const identificationNote = typeof identification.note === "string" ? plainFishText(identification.note) : "";
+  const subjectName = typeof identification.subject_name === "string" ? plainFishText(identification.subject_name) : "";
   const commonName = isFish
     ? (usedAlternative ? alternatives[0] : isUsefulFishName(primary) ? primary : "Unknown fish")
     : (isUsefulNonFishName(subjectName) ? subjectName : subjectFromVisibleClues(visibleClues) || "Not a fish");
   return {
     isFish,
     commonName,
-    scientificName: isFish && typeof identification.scientific_name === "string" ? identification.scientific_name.trim() : "",
+    scientificName: isFish && typeof identification.scientific_name === "string" ? plainFishText(identification.scientific_name) : "",
     confidence: Math.max(0, Math.min(1, Number.isFinite(identification.confidence) ? identification.confidence : 0)),
     otherPossibilities: isFish ? (usedAlternative ? alternatives.slice(1) : alternatives.filter((name) => name.toLowerCase() !== commonName.toLowerCase())) : [],
     visibleClues,
     identificationNote,
   };
+}
+
+// The image model returns plain-text JSON fields, but may still add Markdown.
+// Apply this only to model-generated text: MPI's asterisks are legal footnote markers.
+function plainFishText(value: string): string {
+  return value
+    .replace(/(^|\n)[ \t]*#{1,6}[ \t]+/g, "$1")
+    .replace(/(^|\n)[ \t]*[-*][ \t]+/g, "$1")
+    .replace(/\*+/g, "")
+    .replace(/_{2,}/g, "")
+    .replace(/`+/g, "")
+    .trim();
 }
 
 function isUsefulFishName(value: string): boolean {
@@ -750,6 +762,10 @@ async function getFishRules(request: Request, env: Env): Promise<Response> {
 function findFishRules(tablesJson: string, commonName: string): FishRuleMatch[] {
   const tables = JSON.parse(tablesJson) as string[][][];
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const meaningfulCell = (value?: string): string | null => {
+    const trimmed = value?.trim();
+    return trimmed && !/^(?:-|–|—)$/.test(trimmed) ? trimmed : null;
+  };
   const target = normalize(commonName);
   if (!target) return [];
   const found = new Map<string, FishRuleMatch>();
@@ -757,19 +773,29 @@ function findFishRules(tablesJson: string, commonName: string): FishRuleMatch[] 
     const headers = table[0];
     if (!headers || table.length < 2) continue;
     const dailyIndex = headers.findIndex((header) => /daily|bag|catch/i.test(header) && /limit|maximum|take/i.test(header));
-    const sizeIndex = headers.findIndex((header) => /min(imum)?.*(size|length)|legal.*(size|length)/i.test(header));
+    const sizeIndex = headers.findIndex((header) =>
+      !/\b(?:mesh|net)\b/i.test(header) && /min(imum)?.*(size|length)|legal.*(size|length)/i.test(header));
+    if (!/species/i.test(headers[0] || "") || (dailyIndex < 0 && sizeIndex < 0)) continue;
+    const subareaIndex = headers.findIndex((header, index) => index > 0 &&
+      (normalize(header) === normalize(headers[0]) || /^(?:fishing )?(?:subarea|area|location|region)$/i.test(header.trim())));
     for (const row of table.slice(1)) {
-      const species = row[0] || "";
-      const candidate = normalize(species);
+      const sourceSpecies = row[0] || "";
+      // MPI uses full-width footnotes inside tables, and some source rows have
+      // merged cells. Their values cannot safely be mapped to these headers.
+      if (row.length !== headers.length || /^\s*\*+/.test(sourceSpecies)) continue;
+      const candidate = normalize(sourceSpecies);
       if (!candidate || !(candidate === target || candidate.startsWith(`${target} `) || candidate.includes(` ${target} `))) continue;
-      const dailyLimit = dailyIndex >= 0 ? row[dailyIndex]?.trim() || null : null;
-      const minimumSize = sizeIndex >= 0 ? row[sizeIndex]?.trim() || null : null;
+      const subarea = subareaIndex >= 0 ? row[subareaIndex]?.trim() || "" : "";
+      const species = subarea && normalize(subarea) !== candidate ? `${sourceSpecies} — ${subarea}` : sourceSpecies;
+      const dailyLimit = dailyIndex >= 0 ? meaningfulCell(row[dailyIndex]) : null;
+      const minimumSize = sizeIndex >= 0 ? meaningfulCell(row[sizeIndex]) : null;
       const minimumSizeLabel = minimumSize ? headers[sizeIndex]?.trim() || null : null;
       const details = headers.flatMap((header, index) => {
-        if (index === 0 || index === dailyIndex || index === sizeIndex) return [];
-        const value = row[index]?.trim();
-        return value && value !== "—" ? [{ label: header.trim(), value }] : [];
+        if (index === 0 || index === dailyIndex || index === sizeIndex || index === subareaIndex) return [];
+        const value = meaningfulCell(row[index]);
+        return value ? [{ label: header.trim(), value }] : [];
       });
+      if (!dailyLimit && !minimumSize) continue;
       const item = { species, dailyLimit, minimumSize, minimumSizeLabel, details };
       found.set(JSON.stringify(item), item);
     }

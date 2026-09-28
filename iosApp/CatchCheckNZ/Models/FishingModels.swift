@@ -12,6 +12,25 @@ enum WindowPriority: String, CaseIterable, Identifiable, Sendable {
     var title: String { self == .weather ? "Weather balance" : "Late incoming tide" }
 }
 
+/// A subjective planning reaction, not a catch probability or safety clearance.
+struct WindowMood {
+    let emoji: String
+    let label: String
+
+    static let excellent = WindowMood(emoji: "😄", label: "Excellent")
+    static let good = WindowMood(emoji: "🙂", label: "Good")
+    static let mixed = WindowMood(emoji: "😐", label: "Fair")
+    static let concern = WindowMood(emoji: "😟", label: "Concerning")
+    static let unknown = WindowMood(emoji: "🤔", label: "Unverified")
+}
+
+private func numberAfter(_ marker: String, in text: String) -> Double? {
+    guard let range = text.range(of: marker, options: .caseInsensitive) else { return nil }
+    let value = text[range.upperBound...].drop(while: \.isWhitespace)
+        .prefix { $0.isNumber || $0 == "." }
+    return Double(String(value))
+}
+
 struct Recommendation: Identifiable, Equatable {
     let name: String; let area: String; let rating: Int; let time: String; let distance: String
     let reasons: [String]; let boat: Bool
@@ -23,24 +42,63 @@ struct Recommendation: Identifiable, Equatable {
     var sourceNote: String = ""
     var alternative: String? = nil
     var dataComplete: Bool = true
+    var tidePreferenceFit: Double = 0
     var id: String { "\(boat ? "boat" : "land"):\(name)" }
     var windowID: String { "\(id):\(startsAt?.timeIntervalSince1970 ?? 0)" }
-    /// A wind-and-rain outlook, not a catch or safety rating.
-    var windowOutlook: String {
-        if !dataComplete { return "🔎 Forecast incomplete" }
-        let cautionWarnings = ["Part or all of this session is after dark", "Strong gusts",
-                               "Elevated offshore waves", "Long-period waves", "Rain could affect",
-                               "Fog may reduce visibility"]
-        if warnings.contains(where: { warning in cautionWarnings.contains { warning.hasPrefix($0) } }) {
-            return "⚠️ Check conditions"
-        }
-        switch rating {
-        case 85...: return "🌤️ Excellent"
-        case 70...: return "👍 Good"
-        case 50...: return "🙂 Fair"
-        default: return "🌧️ Challenging"
+    var windowMood: WindowMood {
+        let seriousWarnings = ["Strong gusts", "Elevated offshore waves", "Long-period waves", "Fog may reduce visibility"]
+        let serious = warnings.contains { warning in seriousWarnings.contains { warning.hasPrefix($0) } }
+        let mixed = warnings.contains { $0.hasPrefix("Part or all of this session is after dark") || $0.hasPrefix("Rain could affect") }
+        switch (serious, dataComplete, rating, mixed) {
+        case (true, _, _, _): return WindowMood(emoji: "😟", label: "Check conditions")
+        case (_, false, _, _): return WindowMood(emoji: "🤔", label: "Forecast incomplete")
+        case (_, _, ..<50, _): return WindowMood(emoji: "😟", label: "Challenging")
+        case (_, _, _, true): return WindowMood(emoji: "😐", label: "Mixed conditions")
+        case (_, _, 85..., _): return .excellent
+        case (_, _, 70..., _): return .good
+        default: return WindowMood(emoji: "😐", label: "Fair")
         }
     }
+
+    var windowOutlook: String { "\(windowMood.emoji) \(windowMood.label)" }
+
+    func conditionMood(_ index: Int) -> WindowMood {
+        let detail = conditions.indices.contains(index) ? conditions[index] : ""
+        func warned(_ prefixes: String...) -> Bool {
+            warnings.contains { warning in prefixes.contains { warning.hasPrefix($0) } }
+        }
+        switch index {
+        case 0: // Wind
+            if warned("Strong gusts") { return .concern }
+            if (numberAfter("gusts up to", in: detail) ?? .greatestFiniteMagnitude) <= (boat ? 25 : 30) { return .good }
+            return .mixed
+        case 1: // Rain
+            if warned("Rain could affect") { return WindowMood(emoji: "😕", label: "Unfavourable") }
+            if detail.hasPrefix("0.0 mm rain"), (numberAfter("highest hourly rain chance", in: detail) ?? 100) <= 30 { return .good }
+            return .mixed
+        case 2: // Tide
+            if detail.hasPrefix("No verified") || detail.hasPrefix("Local tide coverage") || detail.hasPrefix("Local tide events") { return .unknown }
+            return tidePreferenceFit >= 0.8 ? .good : .mixed
+        case 3: // Daylight
+            return detail.contains("whole fishing session is in daylight") ? .good : WindowMood(emoji: "😕", label: "Limited daylight")
+        case 4: // Waves
+            if warned("Elevated offshore waves", "Long-period waves") { return .concern }
+            if detail.contains("unavailable") || warned("Wave data is incomplete") { return .unknown }
+            if (numberAfter("wave height up to", in: detail) ?? .greatestFiniteMagnitude) <= 0.5 { return .good }
+            return .mixed
+        default: return .unknown
+        }
+    }
+}
+
+func warningMood(_ warning: String) -> WindowMood {
+    if warning.hasPrefix("Wave data is incomplete") || warning.hasPrefix("Verified local tide coverage is unavailable") ||
+        warning.hasPrefix("Long-range forecast") { return .unknown }
+    if warning.hasPrefix("The tide station is a reference") || warning.hasPrefix("Local access, shelter") { return .mixed }
+    if warning.hasPrefix("Part or all of this session is after dark") || warning.hasPrefix("Rain could affect") {
+        return WindowMood(emoji: "😕", label: "Unfavourable")
+    }
+    return .concern
 }
 struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let minimumSizeLabel: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }

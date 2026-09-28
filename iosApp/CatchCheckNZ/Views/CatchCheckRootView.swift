@@ -1102,7 +1102,7 @@ private struct WindowOutlook: View {
         let parts = outlook.split(separator: " ", maxSplits: 1).map(String.init)
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("WIND & RAIN OUTLOOK").font(.caption2.bold()).foregroundStyle(.secondary)
+                Text("WINDOW OUTLOOK").font(.caption2.bold()).foregroundStyle(.secondary)
                 Text(parts.count > 1 ? parts[1] : outlook)
                     .font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
             }
@@ -1112,7 +1112,7 @@ private struct WindowOutlook: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Wind and rain outlook: \(outlook)")
+        .accessibilityLabel("Window outlook: \(outlook)")
     }
 }
 
@@ -1120,28 +1120,16 @@ private struct WindowConditions: View {
     let spot: Recommendation
     private let labels = ["Wind", "Rain", "Tide", "Daylight", "Waves"]
 
-    private func emoji(for label: String, detail: String) -> String {
-        switch label {
-        case "Wind": return "💨"
-        case "Rain":
-            if detail.hasPrefix("0.0 mm rain") { return "🌦️" }
-            return "🌧️"
-        case "Tide": return "🌊"
-        case "Daylight": return detail.contains("whole fishing session is in daylight") ? "☀️" : "🌙"
-        case "Waves": return "🌊"
-        default: return "📍"
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(spot.conditions.enumerated()), id: \.offset) { index, detail in
                 if index > 0 { Divider().padding(.vertical, 8) }
                 let label = index < labels.count ? labels[index] : "Other"
+                let mood = spot.conditionMood(index)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         Text(label).font(.caption.bold()).foregroundStyle(CatchCheckColor.accent)
-                        Text(emoji(for: label, detail: detail)).font(.title3).accessibilityHidden(true)
+                        Text("\(mood.emoji) \(mood.label)").font(.caption)
                     }
                     Text(detail).font(.subheadline).foregroundStyle(CatchCheckColor.navy)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1159,8 +1147,7 @@ private struct WindowWarnings: View {
         VStack(alignment: .leading, spacing: 9) {
             ForEach(warnings, id: \.self) { warning in
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption).padding(.top, 2)
+                    Text(warningMood(warning).emoji).font(.subheadline).padding(.top, 2)
                     Text(warning).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -1193,10 +1180,10 @@ private struct FishCheckCard: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("IDENTIFICATION").font(.caption2.bold()).foregroundStyle(CatchCheckColor.accent)
-                Text(result.commonName).font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text(cleanIdentificationText(result.commonName)).font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
                     .fixedSize(horizontal: false, vertical: true)
                 if !result.scientificName.isEmpty {
-                    Text(result.scientificName).font(.subheadline).foregroundStyle(.secondary)
+                    Text(cleanIdentificationText(result.scientificName)).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             Text(result.isFish ? "\(result.confidence)% AI confidence" : "Not a fish")
@@ -1204,17 +1191,17 @@ private struct FishCheckCard: View {
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(CatchCheckColor.surface, in: Capsule())
             if !result.visibleClues.isEmpty {
-                FishDescriptionSection(title: "VISIBLE CLUES", detail: result.visibleClues)
+                FishDescriptionSection(title: "VISIBLE CLUES", detail: cleanIdentificationText(result.visibleClues))
                     .id(result.visibleClues)
             }
             if !result.otherPossibilities.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("OTHER POSSIBILITIES").font(.caption2.bold()).foregroundStyle(CatchCheckColor.accent)
-                    Text(result.otherPossibilities.joined(separator: " · ")).font(.subheadline).foregroundStyle(CatchCheckColor.navy)
+                    Text(result.otherPossibilities.map(cleanIdentificationText).joined(separator: " · ")).font(.subheadline).foregroundStyle(CatchCheckColor.navy)
                 }
             }
             if !result.identificationNote.isEmpty && result.identificationNote.localizedCaseInsensitiveCompare("This is not a fish.") != .orderedSame {
-                FishDescriptionSection(title: "IDENTIFICATION NOTE", detail: result.identificationNote, highlighted: true)
+                FishDescriptionSection(title: "IDENTIFICATION NOTE", detail: cleanIdentificationText(result.identificationNote), highlighted: true)
                     .id(result.identificationNote)
             }
             if result.isFish {
@@ -1250,17 +1237,22 @@ private struct FishCheckCard: View {
         } else if vm.selectedRulesAreaID == nil {
             message("Choose the MPI area where this fish was caught to see local limits.")
         } else if shownRules.isEmpty {
-            message("No species-specific size or daily limit was found in this area's saved summary. Check the official MPI rules before keeping this fish.")
+            message("No reliable simple limit can be shown from this saved table. Check MPI for this species and exact subarea before keeping it.")
         } else {
             ForEach(shownRules) { rule in
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(rule.species).font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text(cleanMPIRuleText(rule.species)).font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
                     if rule.details.contains(where: { $0.label.localizedCaseInsensitiveContains("daily limit") || $0.label.localizedCaseInsensitiveContains("bag limit") }) {
                         Text("Limits vary by subarea. Check the exact catch spot on MPI.")
                             .font(.caption).foregroundStyle(CatchCheckColor.navy)
                     } else {
-                        if let minimumSize = rule.minimumSize { FishRuleValueRow(label: rule.minimumSizeLabel ?? "Minimum size", value: minimumSize) }
-                        if let dailyLimit = rule.dailyLimit { FishRuleValueRow(label: "Daily limit", value: dailyLimit) }
+                        if let minimumSize = rule.minimumSize { FishRuleValueRow(label: cleanMPIRuleText(rule.minimumSizeLabel ?? "Minimum size"), value: cleanMPILimitValue(minimumSize)) }
+                        if let dailyLimit = rule.dailyLimit { FishRuleValueRow(label: "Daily limit", value: cleanMPILimitValue(dailyLimit)) }
+                    }
+                    if hasMPIFootnote(rule) {
+                        Text("MPI footnote applies. Read the full condition before keeping this fish.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Link("Read MPI footnote", destination: officialURL).font(.subheadline.weight(.semibold))
                     }
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)

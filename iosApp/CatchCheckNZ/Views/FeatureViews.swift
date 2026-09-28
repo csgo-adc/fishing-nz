@@ -707,8 +707,11 @@ struct TripsView: View {
                             if !active.time.isEmpty { Text(active.time).foregroundStyle(.secondary) }
                             if !active.summary.isEmpty { Text(active.summary).foregroundStyle(CatchCheckColor.navy) }
                             ForEach(active.warnings, id: \.self) { warning in
-                                Label(warning, systemImage: "exclamationmark.triangle")
-                                    .font(.caption).foregroundStyle(CatchCheckColor.orange)
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text(warningMood(warning).emoji)
+                                    Text(warning)
+                                }
+                                .font(.caption).foregroundStyle(CatchCheckColor.orange)
                             }
                             if active.startsAt == nil {
                                 Text("Choose the date and time in your calendar.").font(.caption).foregroundStyle(.secondary)
@@ -874,9 +877,9 @@ struct RulesView: View {
                         Text(query.isEmpty ? "Common species" : "Matching species")
                             .font(.title2.bold())
                         if quickRows.isEmpty {
-                            Card { Text(query.isEmpty ? "Search for a species to see its saved size and daily limits." : "No saved species limits match “\(query)”. Check the MPI page for other rules.").foregroundStyle(.secondary) }
+                            Card { Text(query.isEmpty ? "Search for a species to see its saved size and daily limits." : "No reliable simple limit can be shown for “\(query)”. Check MPI for this species and exact subarea.").foregroundStyle(.secondary) }
                         } else {
-                            ForEach(quickRows) { row in SavedRuleQuickCard(row: row) }
+                            ForEach(quickRows) { row in SavedRuleQuickCard(row: row, officialURL: selectedArea?.officialURL ?? page.sourceURL) }
                         }
                         Card {
                             Label("Check local restrictions", systemImage: "exclamationmark.triangle").font(.headline)
@@ -988,6 +991,7 @@ private struct SavedRuleQuickRow: Identifiable {
     let species: String
     let facts: [(label: String, value: String)]
     let note: String?
+    let hasFootnote: Bool
 }
 
 private extension SavedRulesPage {
@@ -998,7 +1002,8 @@ private extension SavedRulesPage {
         let pattern = "combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\."
         for section in sections {
             if let range = section.text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
-                return String(section.text[range]).replacingOccurrences(of: "*", with: "")
+                let source = String(section.text[range])
+                return cleanMPIRuleText(source) + (hasMPIFootnoteMarker(source) ? " See MPI's definition of finfish." : "")
             }
         }
         return nil
@@ -1014,27 +1019,31 @@ private extension SavedRulesPage {
                 return (index, label)
             }
             guard !columns.isEmpty else { return [SavedRuleQuickRow]() }
-            let hasMultipleDailyColumns = columns.filter { $0.1.hasPrefix("Daily limit") }.count > 1
             return Array(table.dropFirst()).enumerated().compactMap { rowIndex, row in
                 guard let originalSpecies = row.first?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !originalSpecies.isEmpty, !originalSpecies.hasPrefix("*"),
                       originalSpecies.count <= 180 else { return nil }
-                let species = cleanRuleText(originalSpecies)
+                let qualifier = row.count == headers.count && headers[1].localizedCaseInsensitiveCompare(headers[0]) == .orderedSame
+                    ? row[1].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+                let name = cleanMPIRuleText(originalSpecies)
+                let species = !qualifier.isEmpty && qualifier.localizedCaseInsensitiveCompare(originalSpecies) != .orderedSame
+                    ? "\(name) — \(cleanMPIRuleText(qualifier))" : name
                 guard !species.isEmpty else { return nil }
                 var notes: [String] = []
-                if row.contains(where: { $0.contains("*") }) { notes.append("Additional MPI conditions apply.") }
+                let hasFootnote = row.contains(where: hasMPIFootnoteMarker)
+                if hasFootnote { notes.append("MPI footnote applies. Read the full condition on the official page.") }
                 if originalSpecies.localizedCaseInsensitiveContains("refer to map") {
                     notes.append("Check the exact area boundary on MPI.")
                 }
                 var facts: [(label: String, value: String)] = []
-                if hasMultipleDailyColumns && row.count != headers.count {
+                if row.count != headers.count {
                     facts = [("Area-specific rule", "See MPI")]
-                    notes.append("The MPI table has merged cells; check its area-specific limit.")
+                    notes.append("This saved row cannot be matched safely to its columns. Check the official MPI limit.")
                 } else {
                     for (index, label) in columns where row.indices.contains(index) {
                         let rawValue = row[index].trimmingCharacters(in: .whitespacesAndNewlines)
                         if rawValue.isEmpty || ["—", "–", "-", "none"].contains(rawValue) { continue }
-                        let clean = cleanRuleText(rawValue)
+                        let clean = cleanMPIRuleText(rawValue)
                         let numbers = clean.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
                         let value: String
                         if clean.localizedCaseInsensitiveContains("No take allowed") {
@@ -1059,7 +1068,8 @@ private extension SavedRulesPage {
                 }
                 guard !facts.isEmpty else { return nil }
                 return SavedRuleQuickRow(id: "\(tableIndex)-\(rowIndex)", species: species,
-                                         facts: facts, note: notes.isEmpty ? nil : Array(Set(notes)).sorted().joined(separator: " "))
+                                         facts: facts, note: notes.isEmpty ? nil : Array(Set(notes)).sorted().joined(separator: " "),
+                                         hasFootnote: hasFootnote)
             }
         }
         if !query.isEmpty {
@@ -1074,12 +1084,47 @@ private extension SavedRulesPage {
     }
 }
 
-private func cleanRuleText(_ text: String) -> String {
+func cleanMPIRuleText(_ text: String) -> String {
+    // MPI's shellfish tables also use a literal "^+" footnote marker.
     text.replacingOccurrences(of: "\\(Fisheries Management Area\\s*(\\d+)[^)]*\\)", with: "(FMA $1)", options: .regularExpression)
         .replacingOccurrences(of: "\\[PDF[^]]*]", with: "", options: .regularExpression)
         .replacingOccurrences(of: "\\*+", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "^+", with: "")
+        .replacingOccurrences(of: "(?<=[\\p{L}\\p{N}])\\+(?![\\p{L}\\p{N}])", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "(?<=[\\p{L}\\p{N}])#(?![\\p{L}\\p{N}])", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "†", with: "")
+        .replacingOccurrences(of: "‡", with: "")
+        .replacingOccurrences(of: "\\s*•\\s*$", with: "", options: .regularExpression)
         .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         .trimmingCharacters(in: CharacterSet(charactersIn: " –-:"))
+}
+
+func cleanMPILimitValue(_ text: String) -> String {
+    let clean = cleanMPIRuleText(text)
+    let numbers = clean.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+    return numbers.count > 1 ? "Varies — see MPI" : clean
+}
+
+func hasMPIFootnoteMarker(_ text: String) -> Bool {
+    text.contains("*") || text.contains("†") || text.contains("‡") || text.contains("^+") ||
+        text.range(of: "\\s*•\\s*$", options: .regularExpression) != nil ||
+        text.range(of: "(?<=[\\p{L}\\p{N}])\\+(?![\\p{L}\\p{N}])", options: .regularExpression) != nil ||
+        text.range(of: "(?<=[\\p{L}\\p{N}])#(?![\\p{L}\\p{N}])", options: .regularExpression) != nil
+}
+
+func hasMPIFootnote(_ rule: FishRuleMatch) -> Bool {
+    hasMPIFootnoteMarker(rule.species) || rule.dailyLimit.map(hasMPIFootnoteMarker) == true ||
+        rule.minimumSize.map(hasMPIFootnoteMarker) == true || rule.minimumSizeLabel.map(hasMPIFootnoteMarker) == true ||
+        rule.details.contains(where: { hasMPIFootnoteMarker($0.label) || hasMPIFootnoteMarker($0.value) })
+}
+
+func cleanIdentificationText(_ text: String) -> String {
+    text.replacingOccurrences(of: "(?m)^[ \\t]*#{1,6}[ \\t]+", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "(?m)^[ \\t]*[-*][ \\t]+", with: "• ", options: .regularExpression)
+        .replacingOccurrences(of: "\\*{1,2}", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "__(.*?)__", with: "$1", options: .regularExpression)
+        .replacingOccurrences(of: "`", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 private func ruleFactLabel(_ heading: String) -> String? {
@@ -1096,6 +1141,7 @@ private func ruleFactLabel(_ heading: String) -> String? {
 
 private struct SavedRuleQuickCard: View {
     let row: SavedRuleQuickRow
+    let officialURL: URL
     var body: some View {
         Card {
             Text(row.species).font(.headline).foregroundStyle(CatchCheckColor.navy)
@@ -1108,6 +1154,10 @@ private struct SavedRuleQuickCard: View {
                 }
             }
             if let note = row.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+            if row.hasFootnote || row.facts.contains(where: { $0.value.contains("MPI") }) {
+                Link(row.hasFootnote ? "Read MPI footnote" : "Check official MPI rule", destination: officialURL)
+                    .font(.subheadline.weight(.semibold))
+            }
         }
     }
 }

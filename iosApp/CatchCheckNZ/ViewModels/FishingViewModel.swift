@@ -236,7 +236,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 conditions: window.conditions,
                 sourceNote: window.sourceNote,
                 alternative: window.alternative,
-                dataComplete: window.dataComplete
+                dataComplete: window.dataComplete,
+                tidePreferenceFit: window.tidePreferenceFit
             )
         }
     }

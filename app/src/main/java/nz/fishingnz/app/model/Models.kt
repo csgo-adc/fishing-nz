@@ -39,19 +39,78 @@ data class Recommendation(
     val daylightFraction: Double = 1.0,
     val tidePreferenceFit: Double = 0.0
 )
-/** A short wind-and-rain outlook. This is not a catch or safety rating. */
-val Recommendation.windowOutlook: String
-    get() = when {
-        !dataComplete -> "🔎 Forecast incomplete"
-        warnings.any { warning -> listOf(
-            "Part of this session is outside daylight", "Strong gusts", "Elevated offshore waves",
-            "Long wave periods", "Rain could affect", "Fog may reduce visibility"
-        ).any(warning::startsWith) } -> "⚠️ Check conditions"
-        rating >= 85 -> "🌤️ Excellent"
-        rating >= 70 -> "👍 Good"
-        rating >= 50 -> "🙂 Fair"
-        else -> "🌧️ Challenging"
+/** Subjective planning reactions, never a catch probability or a safety clearance. */
+data class WindowMood(val emoji: String, val label: String)
+
+private val excellentMood = WindowMood("😄", "Excellent")
+private val goodMood = WindowMood("🙂", "Good")
+private val mixedMood = WindowMood("😐", "Fair")
+private val concernMood = WindowMood("😟", "Concerning")
+private val unknownMood = WindowMood("🤔", "Unverified")
+
+val Recommendation.windowMood: WindowMood
+    get() {
+        val serious = warnings.any { warning -> listOf(
+            "Strong gusts", "Elevated offshore waves", "Long wave periods", "Fog may reduce visibility"
+        ).any(warning::startsWith) }
+        val mixed = warnings.any { it.startsWith("Part of this session is outside daylight") || it.startsWith("Rain could affect") }
+        return when {
+            serious -> WindowMood("😟", "Check conditions")
+            !dataComplete -> WindowMood("🤔", "Forecast incomplete")
+            rating < 50 -> WindowMood("😟", "Challenging")
+            mixed -> WindowMood("😐", "Mixed conditions")
+            rating >= 85 -> excellentMood
+            rating >= 70 -> goodMood
+            else -> WindowMood("😐", "Fair")
+        }
     }
+
+val Recommendation.windowOutlook: String get() = "${windowMood.emoji} ${windowMood.label}"
+
+private fun numberAfter(text: String, marker: String): Double? {
+    val at = text.indexOf(marker, ignoreCase = true)
+    if (at < 0) return null
+    return text.substring(at + marker.length).trimStart().takeWhile { it.isDigit() || it == '.' }.toDoubleOrNull()
+}
+
+fun Recommendation.conditionMood(index: Int): WindowMood {
+    val detail = conditions.getOrNull(index).orEmpty()
+    fun warned(vararg starts: String) = warnings.any { warning -> starts.any(warning::startsWith) }
+    return when (index) {
+        0 -> when {
+            detail.contains("unverified", ignoreCase = true) -> unknownMood
+            tidePreferenceFit >= 0.8 -> goodMood
+            else -> mixedMood
+        }
+        1 -> when {
+            warned("Strong gusts") -> concernMood
+            (numberAfter(detail, "gusts up to") ?: Double.MAX_VALUE) <= (if (boat) 25 else 30) -> goodMood
+            else -> mixedMood
+        }
+        2 -> when {
+            warned("Rain could affect") -> WindowMood("😕", "Unfavourable")
+            detail.startsWith("Little or no rain") -> goodMood
+            else -> mixedMood
+        }
+        3 -> when {
+            warned("Elevated offshore waves", "Long wave periods") -> concernMood
+            detail.contains("unavailable", ignoreCase = true) || warned("Wave forecast is incomplete") -> unknownMood
+            (numberAfter(detail, "wave height up to") ?: Double.MAX_VALUE) <= 0.5 -> goodMood
+            else -> mixedMood
+        }
+        4 -> if (detail.contains("entirely in daylight")) goodMood else WindowMood("😕", "Limited daylight")
+        else -> unknownMood
+    }
+}
+
+fun warningMood(warning: String): WindowMood = when {
+    warning.startsWith("Local tide timing is unverified") || warning.startsWith("Wave forecast is incomplete") ||
+        warning.startsWith("Long-range forecast") -> unknownMood
+    warning.startsWith("Access, local wave exposure") -> mixedMood
+    warning.startsWith("Part of this session is outside daylight") || warning.startsWith("Rain could affect") ->
+        WindowMood("😕", "Unfavourable")
+    else -> concernMood
+}
 fun recommendationKey(item: Recommendation): String = "${if (item.boat) "boat" else "land"}:${item.name}"
 data class RecommendationSearch(
     val items: List<Recommendation>,

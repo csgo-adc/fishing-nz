@@ -23,15 +23,27 @@
     .rules h2 { font-size:1.35rem }.rules h3 { font-size:1.15rem }
     .rules p { margin:.4em 0 .9em }
     .rules ul { padding-left:1.5em }
-    .rules table { width:100%; border-collapse:collapse; display:block; overflow-x:auto; margin:12px 0 20px; white-space:normal }
-    .rules th,.rules td { border:1px solid #d4dfdb; padding:8px 10px; text-align:left; vertical-align:top }
+    .rules .table-scroll { max-width:100%; overflow-x:auto; margin:12px 0 20px }
+    .rules table { width:100%; min-width:680px; border-collapse:collapse; white-space:normal; overflow-wrap:normal }
+    .rules th,.rules td { border:1px solid #d4dfdb; min-width:96px; padding:8px 10px; text-align:left; vertical-align:top }
+    .rules th:first-child,.rules td:first-child { min-width:170px }
     .rules th { background:var(--foam); color:var(--navy) }
+    .rules .table-footnotes { background:#f4f8f5; border-left:3px solid #6e9b8f; border-radius:0 8px 8px 0; font-size:.9rem; margin:-10px 0 20px; padding:10px 13px; overflow-wrap:break-word }
+    .rules .table-footnotes p { margin:.2em 0 .55em }
+    .rules tr.unverified-row td { background:#fff5ed; color:#563e31 }
+    .rules tr.context { background:#f3f7f5 }
+    .rules .table-context { color:#526d71; font-size:.8rem; margin:0 0 10px }
+    .table-swipe-hint { display:none }
+    .footnote-cue { color:#125763; display:inline-block; font-size:.78rem; font-weight:700; margin-left:.25em; text-decoration:underline; white-space:nowrap }
     .fish-focus { background:#fff2e8; border-left:4px solid var(--orange); padding:12px 14px; border-radius:8px; margin:12px 0 }
     .rules tr.match { background:#fff2e8 }
     a { color:#145c65; font-weight:650 }
     .meta,.small { color:#627579; font-size:.87rem }
     .error { color:#7f291b }
     [hidden] { display:none!important }
+    @media (max-width:700px) {
+      .rules .table-swipe-hint { color:#627579; display:block; font-size:.78rem; margin:12px 0 -7px }
+    }
   </style>
 </head>
 <body>
@@ -80,12 +92,99 @@
     const fish = (params.get("fish") || params.get("species") || "").trim();
     const officialUrl = id => `https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/${slugs[id]}`;
 
+    function readableRuleText(value) {
+      let hasFootnote = false;
+      // MPI uses these as footnote suffixes in species names and limits. A plus between
+      // numbers or a bullet between phrases can carry ordinary meaning, so keep those.
+      let text = value.replace(/([\p{L})])(?:\*+|†|‡|\+|\^|#)+(?=$|[\s,.;:!?()–—-])/gu, match => {
+        hasFootnote = true; return match[0];
+      }).replace(/(\d)(?:\*+|†|‡|\^|#)+(?=$|[\s,.;:!?()–—-])/g, match => {
+        hasFootnote = true; return match[0];
+      }).replace(/\s+•(?=\s*$)/g, () => {
+        hasFootnote = true; return "";
+      });
+      if (text.includes("*")) { hasFootnote = true; text = text.replace(/\*+/g, ""); }
+      return { text: text.replace(/[ \t]{2,}/g, " ").trim(), hasFootnote };
+    }
+
+    function setRuleText(element, value) {
+      const formatted = readableRuleText(value.trim());
+      element.textContent = formatted.text;
+      if (!formatted.hasFootnote) return;
+      const cue = document.createElement("a");
+      cue.className = "footnote-cue";
+      cue.href = officialUrl(picker.value);
+      cue.target = "_blank";
+      cue.rel = "noopener noreferrer";
+      cue.textContent = "MPI footnote ↗";
+      cue.setAttribute("aria-label", "Footnote applies. Read the official MPI rule and note.");
+      element.append(" ", cue);
+    }
+
+    function footnoteLines(value) {
+      return value.split(/\n+/).map(line => line.trim()).filter(Boolean)
+        .map(line => readableRuleText(line.replace(/^(?:\*+|†|‡|\+|\^|#)\s*/, "")).text);
+    }
+
+    function sourceCells(row) {
+      return [...row.children].filter(cell => cell.matches("th,td"));
+    }
+
+    function tableLayout(sourceTable) {
+      const rows = [...sourceTable.querySelectorAll("tr")].filter(row => row.closest("table") === sourceTable);
+      let carry = [];
+      let ambiguous = false;
+      const layout = rows.map(row => {
+        const occupied = carry.map(count => count > 0);
+        const nextCarry = carry.map(count => Math.max(0, count - 1));
+        const cells = sourceCells(row);
+        let column = 0;
+        for (const cell of cells) {
+          const colSpan = Number(cell.getAttribute("colspan") || 1);
+          const rowSpan = Number(cell.getAttribute("rowspan") || 1);
+          if (!Number.isInteger(colSpan) || colSpan < 1 || colSpan > 50 ||
+              !Number.isInteger(rowSpan) || rowSpan < 1 || rowSpan > 50) { ambiguous = true; continue; }
+          while (occupied.slice(column, column + colSpan).some(Boolean)) column++;
+          if (column + colSpan > 50) { ambiguous = true; continue; }
+          for (let index = column; index < column + colSpan; index++) {
+            occupied[index] = true;
+            if (rowSpan > 1) nextCarry[index] = Math.max(nextCarry[index] || 0, rowSpan - 1);
+          }
+          column += colSpan;
+        }
+        carry = nextCarry;
+        return { row, cells, width: occupied.lastIndexOf(true) + 1 };
+      });
+      const headers = layout.filter(item => item.cells.some(cell => cell.tagName === "TH") && item.cells.length > 1);
+      const expectedWidth = Math.max(1, ...(headers.length ? headers : layout).map(item => item.width));
+      if (headers.some(item => item.width !== expectedWidth)) ambiguous = true;
+      return { layout, expectedWidth, ambiguous };
+    }
+
+    function officialTableLink() {
+      const link = document.createElement("a");
+      link.href = officialUrl(picker.value);
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Check the official MPI table ↗";
+      return link;
+    }
+
     function addRulesContent(target, rule) {
       target.replaceChildren();
       const stamp = document.createElement("p");
       stamp.className = "meta";
       stamp.textContent = `MPI last reviewed: ${rule.reviewed_at || "date not available"} · Saved: ${new Date(rule.fetched_at).toLocaleString()}`;
       target.append(stamp);
+      const source = document.createElement("p");
+      source.className = "meta";
+      const sourceLink = document.createElement("a");
+      sourceLink.href = officialUrl(picker.value);
+      sourceLink.target = "_blank";
+      sourceLink.rel = "noopener noreferrer";
+      sourceLink.textContent = "Read the current rules on MPI ↗";
+      source.append(sourceLink);
+      target.append(source);
 
       if (rule.page_html) {
         const parsed = new DOMParser().parseFromString(rule.page_html, "text/html");
@@ -94,7 +193,7 @@
         const sourceTitle = content.querySelector("h1");
         if (sourceTitle) {
           const heading = document.createElement("h2");
-          heading.textContent = sourceTitle.textContent.trim();
+          setRuleText(heading, sourceTitle.textContent);
           target.append(heading);
         }
         const blocks = content.querySelectorAll("h2,h3,h4,p,ul,ol,table");
@@ -105,33 +204,83 @@
           if (block.parentElement?.closest("ul,ol,table")) continue;
           if (/^H[234]$/.test(block.tagName)) {
             const heading = document.createElement(block.tagName.toLowerCase());
-            heading.textContent = block.textContent.trim();
+            setRuleText(heading, block.textContent);
             target.append(heading);
           } else if (block.tagName === "TABLE") {
+            const sourceLayout = tableLayout(block);
+            if (sourceLayout.ambiguous) {
+              const warning = document.createElement("p");
+              warning.textContent = "The saved table layout needs verification. ";
+              warning.append(officialTableLink());
+              target.append(warning);
+              continue;
+            }
+            const group = document.createElement("div");
+            group.className = "rule-table-group";
+            const hint = document.createElement("p");
+            hint.className = "table-swipe-hint";
+            hint.textContent = "Swipe table sideways for more columns.";
+            group.append(hint);
+            const contextHint = document.createElement("p");
+            contextHint.className = "table-context";
+            contextHint.textContent = "Nearby rows share a limit cell in MPI’s table and are shown for context.";
+            contextHint.hidden = true;
+            group.append(contextHint);
+            const scroller = document.createElement("div");
+            scroller.className = "table-scroll";
             const table = document.createElement("table");
-            for (const row of block.querySelectorAll("tr")) {
+            const footnotes = document.createElement("aside");
+            footnotes.className = "table-footnotes";
+            footnotes.setAttribute("aria-label", "MPI footnotes for this table");
+            for (const { row, cells, width } of sourceLayout.layout) {
               const tr = document.createElement("tr");
-              for (const cell of row.querySelectorAll("th,td")) {
+              if (row.closest("thead") || (cells.length > 0 && cells.every(cell => cell.tagName === "TH")))
+                tr.classList.add("table-header");
+              if (cells.length === 1 && /^(?:\*+|†|‡|\+|\^|#)\s+/.test(cells[0].textContent.trim())) {
+                for (const line of footnoteLines(cells[0].textContent)) {
+                  const note = document.createElement("p");
+                  note.textContent = `MPI footnote: ${line}`;
+                  footnotes.append(note);
+                }
+                continue;
+              }
+              if (width !== sourceLayout.expectedWidth) {
+                tr.className = "unverified-row";
+                const td = document.createElement("td");
+                td.colSpan = sourceLayout.expectedWidth;
+                const species = cells[0]?.textContent.trim();
+                td.textContent = `${species ? readableRuleText(species).text + ": " : ""}saved values cannot be placed under the correct headings. `;
+                td.append(officialTableLink());
+                tr.append(td);
+                table.append(tr);
+                continue;
+              }
+              for (const cell of cells) {
                 const td = document.createElement(cell.tagName.toLowerCase());
-                td.textContent = cell.textContent.trim();
+                if (cell.hasAttribute("colspan")) td.colSpan = cell.colSpan;
+                if (cell.hasAttribute("rowspan")) td.rowSpan = cell.rowSpan;
+                setRuleText(td, cell.textContent);
                 tr.append(td);
               }
               table.append(tr);
             }
-            target.append(table);
+            scroller.append(table);
+            group.append(scroller);
+            if (footnotes.childNodes.length) group.append(footnotes);
+            target.append(group);
           } else if (block.tagName === "UL" || block.tagName === "OL") {
             const list = document.createElement(block.tagName.toLowerCase());
             for (const item of block.querySelectorAll(":scope > li")) {
-              const li = document.createElement("li"); li.textContent = item.textContent.trim(); list.append(li);
+              const li = document.createElement("li"); setRuleText(li, item.textContent); list.append(li);
             }
             target.append(list);
           } else if (block.textContent.trim()) {
-            const p = document.createElement("p"); p.textContent = block.textContent.trim(); target.append(p);
+            const p = document.createElement("p"); setRuleText(p, block.textContent); target.append(p);
           }
         }
       } else {
         const text = document.createElement("p");
-        text.textContent = rule.page_text || "The saved rule page has no readable text.";
+        setRuleText(text, rule.page_text || "The saved rule page has no readable text.");
         target.append(text);
       }
       target.hidden = false;
@@ -139,6 +288,24 @@
 
     function normalize(value) {
       return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    }
+
+    function hideEmptyHeadings(target) {
+      for (const heading of target.querySelectorAll(":scope > h2,:scope > h3,:scope > h4")) {
+        const level = Number(heading.tagName[1]);
+        let following = heading.nextElementSibling;
+        let hasVisibleContent = false;
+        while (following) {
+          if (/^H[234]$/.test(following.tagName) && Number(following.tagName[1]) <= level) break;
+          if (!following.hidden && (
+            following.matches(".rule-table-group") ||
+            following.matches("p:not(.meta)") ||
+            (following.matches("ul,ol") && [...following.querySelectorAll("li")].some(item => !item.hidden))
+          )) hasVisibleContent = true;
+          following = following.nextElementSibling;
+        }
+        heading.hidden = !hasVisibleContent;
+      }
     }
 
     function focusFishRules(target) {
@@ -154,28 +321,50 @@
 
       const term = normalize(fish);
       let matches = 0;
-      for (const table of target.querySelectorAll("table")) {
+      for (const group of target.querySelectorAll(".rule-table-group")) {
+        const table = group.querySelector("table");
         const rows = [...table.querySelectorAll("tr")];
-        let tableMatches = 0;
+        const dataRows = rows.filter(row => !row.classList.contains("table-header"));
+        const matchingRows = dataRows.filter(row => normalize(row.textContent).includes(term));
+        const visibleRows = new Set(matchingRows);
         rows.forEach((row, index) => {
-          const isHeader = index === 0 && row.querySelector("th");
-          const hit = normalize(row.textContent).includes(term);
-          row.hidden = !isHeader && !hit;
-          row.classList.toggle("match", hit);
-          if (hit) tableMatches++;
+          for (const cell of row.querySelectorAll(":scope > th,:scope > td")) {
+            if (cell.rowSpan <= 1) continue;
+            const sharedRows = rows.slice(index, index + cell.rowSpan);
+            if (sharedRows.some(sharedRow => matchingRows.includes(sharedRow)))
+              sharedRows.forEach(sharedRow => visibleRows.add(sharedRow));
+          }
         });
-        table.hidden = tableMatches === 0;
+        const notes = group.querySelector(".table-footnotes");
+        const matchingNote = notes && normalize(notes.textContent).includes(term);
+        const showNotes = matchingNote || matchingRows.some(row => row.querySelector(".footnote-cue"));
+        for (const row of rows) {
+          const isHeader = row.classList.contains("table-header");
+          const hit = matchingRows.includes(row);
+          row.hidden = !isHeader && !visibleRows.has(row);
+          row.classList.toggle("match", hit);
+          row.classList.toggle("context", !isHeader && visibleRows.has(row) && !hit);
+        }
+        group.querySelector(".table-context").hidden = !rows.some(row => row.classList.contains("context"));
+        if (notes) notes.hidden = !showNotes;
+        const tableMatches = matchingRows.length + (matchingNote ? 1 : 0);
+        group.hidden = tableMatches === 0;
+        group.querySelector(".table-scroll").hidden = matchingRows.length === 0;
+        group.querySelector(".table-swipe-hint").hidden = matchingRows.length === 0;
         matches += tableMatches;
       }
       for (const block of target.querySelectorAll("p,li")) {
         if (block.classList.contains("meta")) continue;
+        // Tables and their notes control their own content; hiding nested prose could remove a qualifier.
+        if (block.closest(".rule-table-group")) continue;
         block.hidden = !normalize(block.textContent).includes(term);
         if (!block.hidden) matches++;
       }
       if (matches === 0) {
         fishFocus.firstChild.textContent = `No specific ${fish} entry was found in this area’s saved page. Showing all area rules so you can check related limits and restrictions. `;
-        for (const element of target.querySelectorAll("table,p,li")) element.hidden = false;
-      }
+        for (const element of target.querySelectorAll(".rule-table-group,.table-scroll,.table-swipe-hint,.table-footnotes,table,p,li")) element.hidden = false;
+        for (const hint of target.querySelectorAll(".table-context")) hint.hidden = true;
+      } else hideEmptyHeadings(target);
     }
 
     async function loadArea() {
