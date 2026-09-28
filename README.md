@@ -18,7 +18,7 @@ The Tide page selects the nearest supported tide station from your location. You
 
 ## Explore and prepare
 
-- **Map:** Open near your current location, browse named coastal places, and switch between land and boat spots.
+- **Map:** Open near your current location, browse named coastal places, switch between land and boat spots, and choose from standard, LINZ aerial imagery, and LINZ topographic basemaps.
 - **Trips:** Keep a shortlist of spots and an active plan while you are planning.
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location for a short rule summary, then open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
 - **Account:** Confirm your email to manage your profile and send feedback.

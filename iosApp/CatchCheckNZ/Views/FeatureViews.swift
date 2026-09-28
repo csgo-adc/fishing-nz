@@ -4,54 +4,64 @@ import UIKit
 import EventKit
 import EventKitUI
 
-struct FishingMapView: View {
-    private enum Layer: String, CaseIterable {
-        case map = "Map"
-        case satellite = "Satellite"
-        case hybrid = "Hybrid"
+private enum FishingMapLayer: String, CaseIterable {
+    case map = "Map"
+    case satellite = "Satellite"
+    case hybrid = "Hybrid"
+    case linzAerial = "LINZ aerial"
+    case linzTopo = "LINZ topo"
+    case linzTopoGridded = "LINZ topo with grid"
 
-        var style: MapStyle {
-            switch self {
-            case .map: .standard(elevation: .realistic)
-            case .satellite: .imagery(elevation: .realistic)
-            case .hybrid: .hybrid(elevation: .realistic)
-            }
+    var tileURLTemplate: String? {
+        let tileSet: String
+        switch self {
+        case .map, .satellite, .hybrid: return nil
+        case .linzAerial: tileSet = "aerial"
+        case .linzTopo: tileSet = "topo-raster"
+        case .linzTopoGridded: tileSet = "topo-raster-gridded"
         }
+        // LINZ permits this public developer key to be bundled in client applications.
+        let key = "d01m0gkkx31k5jbq695p35xha3w"
+        return "https://basemaps.linz.govt.nz/v1/tiles/\(tileSet)/WebMercatorQuad/{z}/{x}/{y}.jpg?api=\(key)"
     }
+}
+
+private enum MapCameraTarget {
+    case region(MKCoordinateRegion)
+    case camera(MKMapCamera)
+}
+
+private struct MapCameraCommand {
+    let sequence: Int
+    let target: MapCameraTarget
+}
+
+struct FishingMapView: View {
+    private static let initialRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: -41.2, longitude: 174.8),
+        span: MKCoordinateSpan(latitudeDelta: 13, longitudeDelta: 13)
+    )
 
     @EnvironmentObject private var vm: FishingViewModel
     @State private var filter = "All"
-    @State private var layer: Layer = .map
-    @State private var currentCamera: MapCamera?
+    @State private var layer: FishingMapLayer = .map
+    @State private var currentCamera: MKMapCamera?
+    @State private var cameraCommand = MapCameraCommand(sequence: 0, target: .region(initialRegion))
     @State private var needsFirstLocationCenter = true
     @State private var recenterOnLocationUpdate = false
-    @State private var position: MapCameraPosition = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: -41.2, longitude: 174.8), span: MKCoordinateSpan(latitudeDelta: 13, longitudeDelta: 13)))
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) { Text("Fishing map").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Explore named coastal areas · check access and local rules").foregroundStyle(.secondary); Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented) }.padding(20)
-            Map(position: $position) {
-                UserAnnotation()
-                ForEach(visibleSpots, id: \.id) { spot in
-                    Annotation(spot.name, coordinate: CLLocationCoordinate2D(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude)) {
-                        Button {
-                            vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
-                                ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
-                        } label: {
-                            Image(systemName: spot.boat ? "ferry.fill" : "mappin.circle.fill")
-                                .font(.title).foregroundStyle(CatchCheckColor.orange).background(.white, in: Circle())
-                        }
-                    }
-                }
-            }
-            .mapStyle(layer.style)
-            .onMapCameraChange(frequency: .continuous) { context in
-                currentCamera = context.camera
+            FishingMapCanvas(layer: layer, spots: visibleSpots, cameraCommand: cameraCommand,
+                             currentCamera: $currentCamera) { spot in
+                vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
+                    ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
             }
             .overlay(alignment: .topTrailing) {
                 VStack(spacing: 12) {
                     Menu {
-                        ForEach(Layer.allCases, id: \.self) { choice in
+                        ForEach(FishingMapLayer.allCases, id: \.self) { choice in
                             Button {
                                 layer = choice
                             } label: {
@@ -69,12 +79,9 @@ struct FishingMapView: View {
 
                     Button {
                         guard let camera = currentCamera else { return }
-                        withAnimation {
-                            position = .camera(MapCamera(centerCoordinate: camera.centerCoordinate,
-                                                         distance: camera.distance,
-                                                         heading: 0,
-                                                         pitch: camera.pitch))
-                        }
+                        let northFacingCamera = camera.copy() as! MKMapCamera
+                        northFacingCamera.heading = 0
+                        sendCamera(.camera(northFacingCamera))
                     } label: {
                         mapControlIcon("location.north.line.fill")
                             .rotationEffect(.degrees(-(currentCamera?.heading ?? 0)))
@@ -93,6 +100,24 @@ struct FishingMapView: View {
                 }
                 .accessibilityLabel("Center map on my location")
                 .padding(18)
+            }
+            .overlay(alignment: .bottomLeading) {
+                if layer.tileURLTemplate != nil {
+                    HStack(spacing: 4) {
+                        Link("LINZ CC BY 4.0", destination: URL(string: "https://www.linz.govt.nz/copyright")!)
+                        Text("·")
+                        Link(layer == .linzAerial ? "Imagery Basemap contributors" : "Topographic Basemap contributors",
+                             destination: URL(string: "https://www.linz.govt.nz/products-services/data/licensing-and-using-data/attributing-linz-basemaps-data")!)
+                    }
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                    .padding(.leading, 8)
+                    .padding(.bottom, 36)
+                }
             }
         }.background(CatchCheckColor.cream)
             .onAppear {
@@ -117,8 +142,12 @@ struct FishingMapView: View {
     }
 
     private func centerOnCurrentLocation() {
-        position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude),
-                                              span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)))
+        sendCamera(.region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude),
+                                               span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15))))
+    }
+
+    private func sendCamera(_ target: MapCameraTarget) {
+        cameraCommand = MapCameraCommand(sequence: cameraCommand.sequence + 1, target: target)
     }
 
     private func mapControlIcon(_ symbol: String) -> some View {
@@ -128,6 +157,109 @@ struct FishingMapView: View {
             .frame(width: 48, height: 48)
             .background(.white, in: Circle())
             .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+    }
+}
+
+private final class FishingSpotMapAnnotation: NSObject, MKAnnotation {
+    let spot: FishingSpot
+    let coordinate: CLLocationCoordinate2D
+    var title: String? { spot.name }
+
+    init(spot: FishingSpot) {
+        self.spot = spot
+        coordinate = CLLocationCoordinate2D(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude)
+    }
+}
+
+private struct FishingMapCanvas: UIViewRepresentable {
+    let layer: FishingMapLayer
+    let spots: [FishingSpot]
+    let cameraCommand: MapCameraCommand
+    @Binding var currentCamera: MKMapCamera?
+    let onSpotSelected: (FishingSpot) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.delegate = context.coordinator
+        map.showsUserLocation = true
+        map.showsCompass = false
+        return map
+    }
+
+    func updateUIView(_ map: MKMapView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.parent = self
+
+        if coordinator.layer != layer {
+            map.removeOverlays(map.overlays.filter { $0 is MKTileOverlay })
+            coordinator.layer = layer
+            switch layer {
+            case .map: map.mapType = .standard
+            case .satellite: map.mapType = .satellite
+            case .hybrid: map.mapType = .hybrid
+            case .linzAerial, .linzTopo, .linzTopoGridded:
+                map.mapType = .standard
+                if let template = layer.tileURLTemplate {
+                    let tiles = MKTileOverlay(urlTemplate: template)
+                    tiles.canReplaceMapContent = true
+                    if layer == .linzAerial { tiles.maximumZ = 22 }
+                    map.addOverlay(tiles, level: .aboveLabels)
+                }
+            }
+        }
+
+        let displayed = map.annotations.compactMap { $0 as? FishingSpotMapAnnotation }
+        let wantedIDs = Set(spots.map(\.id))
+        let displayedIDs = Set(displayed.map { $0.spot.id })
+        if wantedIDs != displayedIDs {
+            map.removeAnnotations(displayed)
+            map.addAnnotations(spots.map(FishingSpotMapAnnotation.init))
+        }
+
+        if coordinator.lastCameraCommand != cameraCommand.sequence {
+            coordinator.lastCameraCommand = cameraCommand.sequence
+            switch cameraCommand.target {
+            case .region(let region): map.setRegion(region, animated: cameraCommand.sequence != 0)
+            case .camera(let camera): map.setCamera(camera, animated: true)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, MKMapViewDelegate {
+        var parent: FishingMapCanvas
+        var layer: FishingMapLayer?
+        var lastCameraCommand = -1
+
+        init(parent: FishingMapCanvas) { self.parent = parent }
+
+        func mapView(_ mapView: MKMapView, rendererFor overlay: any MKOverlay) -> MKOverlayRenderer {
+            if let tiles = overlay as? MKTileOverlay { return MKTileOverlayRenderer(tileOverlay: tiles) }
+            return MKOverlayRenderer(overlay: overlay)
+        }
+
+        func mapView(_ mapView: MKMapView, viewFor annotation: any MKAnnotation) -> MKAnnotationView? {
+            guard let spotAnnotation = annotation as? FishingSpotMapAnnotation else { return nil }
+            let reuseID = "FishingSpot"
+            let marker = mapView.dequeueReusableAnnotationView(withIdentifier: reuseID) as? MKMarkerAnnotationView
+                ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: reuseID)
+            marker.annotation = annotation
+            marker.markerTintColor = UIColor(CatchCheckColor.orange)
+            marker.glyphImage = UIImage(systemName: spotAnnotation.spot.boat ? "ferry.fill" : "mappin.circle.fill")
+            marker.canShowCallout = false
+            return marker
+        }
+
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            guard let spotAnnotation = view.annotation as? FishingSpotMapAnnotation else { return }
+            parent.onSpotSelected(spotAnnotation.spot)
+            mapView.deselectAnnotation(spotAnnotation, animated: false)
+        }
+
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            parent.currentCamera = mapView.camera.copy() as? MKMapCamera
+        }
     }
 }
 

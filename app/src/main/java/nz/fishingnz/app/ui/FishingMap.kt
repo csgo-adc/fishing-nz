@@ -1,11 +1,13 @@
 package nz.fishingnz.app.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,12 +63,48 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
 import kotlin.math.floor
 
-private enum class BaseMap(val label: String, val description: String, val styleUrl: String) {
-    STANDARD("Standard", "Roads and places", "https://tiles.openfreemap.org/styles/liberty"),
-    LIGHT("Light", "Less detail behind fishing spots", "https://tiles.openfreemap.org/styles/positron"),
-    DARK("Dark", "Easier to read at night", "https://tiles.openfreemap.org/styles/dark")
+// LINZ permits this developer key to be embedded in a public client application.
+private const val LINZ_BASEMAPS_API_KEY = "d01m0gkkx31k5jbq695p35xha3w"
+private const val LINZ_COPYRIGHT_URL = "https://www.linz.govt.nz/copyright"
+private const val LINZ_CONTRIBUTORS_URL =
+    "https://www.linz.govt.nz/products-services/data/licensing-and-using-data/attributing-linz-basemaps-data"
+
+private enum class BaseMap(val label: String, val description: String) {
+    STANDARD("Standard", "Roads and places"),
+    LIGHT("Light", "Less detail behind fishing spots"),
+    DARK("Dark", "Easier to read at night"),
+    AERIAL("LINZ aerial", "New Zealand aerial and satellite imagery"),
+    TOPOGRAPHIC("LINZ topographic", "New Zealand terrain, roads and places");
+
+    val isLinz get() = this == AERIAL || this == TOPOGRAPHIC
+
+    fun style(): Style.Builder = when (this) {
+        STANDARD -> Style.Builder().fromUri("https://tiles.openfreemap.org/styles/liberty")
+        LIGHT -> Style.Builder().fromUri("https://tiles.openfreemap.org/styles/positron")
+        DARK -> Style.Builder().fromUri("https://tiles.openfreemap.org/styles/dark")
+        TOPOGRAPHIC -> Style.Builder().fromUri(
+            "https://basemaps.linz.govt.nz/v1/styles/topographic-v2.json?api=$LINZ_BASEMAPS_API_KEY"
+        )
+        AERIAL -> Style.Builder().fromJson(
+            """{
+                "version":8,
+                "name":"LINZ aerial",
+                "sources":{
+                    "linz-aerial":{
+                        "type":"raster",
+                        "tiles":["https://basemaps.linz.govt.nz/v1/tiles/aerial/WebMercatorQuad/{z}/{x}/{y}.webp?api=$LINZ_BASEMAPS_API_KEY"],
+                        "tileSize":256,
+                        "maxzoom":22,
+                        "attribution":"© <a href='${LINZ_COPYRIGHT_URL}'>LINZ CC BY 4.0</a> © <a href='${LINZ_CONTRIBUTORS_URL}'>Imagery Basemap contributors</a>"
+                    }
+                },
+                "layers":[{"id":"linz-aerial","type":"raster","source":"linz-aerial"}]
+            }""".trimIndent()
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +148,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     .target(s.deviceLocation?.let { LatLng(it.latitude, it.longitude) } ?: LatLng(-41.0, 173.5))
                     .zoom(if (s.deviceLocation != null) 11.0 else 4.7)
                     .build()
-                map.setStyle(baseMap.styleUrl) { nativeMap.value = map; styleRevision++ }
+                map.setStyle(baseMap.style()) { nativeMap.value = map; styleRevision++ }
             }
         }
     }
@@ -213,7 +251,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         mapError = false
         nativeMap.value?.let { map ->
             nativeMap.value = null
-            map.setStyle(option.styleUrl) { nativeMap.value = map; styleRevision++ }
+            map.setStyle(option.style()) { nativeMap.value = map; styleRevision++ }
         }
     }
     // Resolve the position when the map opens, including after a fresh permission grant.
@@ -273,7 +311,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     Text("Map unavailable", color = Navy, fontWeight = FontWeight.Bold)
                     Text("Check your connection, then try again. The fishing spots are available in the list.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { mapError = false; mapLoaded = false; nativeMap.value = null; mapView.getMapAsync { map -> map.setStyle(baseMap.styleUrl) { nativeMap.value = map; styleRevision++ } } }) { Text("Retry map") }
+                        TextButton(onClick = { mapError = false; mapLoaded = false; nativeMap.value = null; mapView.getMapAsync { map -> map.setStyle(baseMap.style()) { nativeMap.value = map; styleRevision++ } } }) { Text("Retry map") }
                         TextButton(onClick = { showList = true }) { Text("Browse spots") }
                     }
                 }
@@ -302,9 +340,22 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     Text(notice, Modifier.padding(12.dp), color = Navy, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Text("© OpenStreetMap contributors · OpenFreeMap", Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = if (selectedSpot != null || locationNotice != null) 180.dp else 32.dp)
-                .background(Color.White.copy(alpha = 0.88f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
-                color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.align(Alignment.BottomStart)
+                .padding(start = 8.dp, bottom = if (selectedSpot != null || locationNotice != null) 180.dp else 32.dp)
+                .background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (baseMap.isLinz) {
+                    AttributionLink("© LINZ CC BY 4.0", LINZ_COPYRIGHT_URL)
+                    AttributionLink(
+                        if (baseMap == BaseMap.AERIAL) "© Imagery contributors" else "© Topographic contributors",
+                        LINZ_CONTRIBUTORS_URL
+                    )
+                } else {
+                    AttributionLink("© OpenStreetMap contributors", "https://www.openstreetmap.org/copyright")
+                    Text("· OpenFreeMap", color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
+                }
+            }
         }
     }
 
@@ -340,12 +391,21 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     BaseMap.STANDARD -> Icons.Default.Map
                     BaseMap.LIGHT -> Icons.Default.LightMode
                     BaseMap.DARK -> Icons.Default.DarkMode
+                    BaseMap.AERIAL, BaseMap.TOPOGRAPHIC -> Icons.Default.Layers
                 }, null) },
                 trailingContent = { RadioButton(selected = baseMap == option, onClick = null) },
                 modifier = Modifier.fillMaxWidth().clickable { selectBaseMap(option) })
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+@Composable
+private fun AttributionLink(label: String, url: String) {
+    val context = LocalContext.current
+    Text(label,
+        Modifier.clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+        color = Color(0xFF154E8A), style = MaterialTheme.typography.labelSmall)
 }
 
 @Composable
