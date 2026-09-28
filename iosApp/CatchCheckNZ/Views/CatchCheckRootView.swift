@@ -21,16 +21,17 @@ enum CatchCheckColor {
     static let outline = adaptive(0xDDE5F0, 0x30415C)
     static let hero = adaptive(0x183862, 0x1B3557)
     static let accent = adaptive(0x2867D9, 0x6197F5)
+    static let warning = adaptive(0xA7442F, 0xFFB09D)
 }
 
 private enum MoreDestination: String, Identifiable {
-    case trips, rules, account, settings
+    case trips, rules, weather, account, settings
     var id: String { rawValue }
 }
 
 struct CatchCheckRootView: View {
     @EnvironmentObject private var vm: FishingViewModel
-    @AppStorage("catchcheckAppearance") private var appearance = "system"
+    @AppStorage("catchcheckAppearance") private var appearance = "light"
     @State private var moreDestination: MoreDestination?
 
     private var preferredAppearance: ColorScheme? {
@@ -56,6 +57,7 @@ struct CatchCheckRootView: View {
             switch destination {
             case .trips: TripsView()
             case .rules: RulesView()
+            case .weather: WeatherView()
             case .account: AccountView()
             case .settings: SettingsView()
             }
@@ -82,6 +84,7 @@ private struct MoreView: View {
                     VStack(spacing: 10) {
                         MoreNavigationRow(title: "Trips", subtitle: "Saved spots and active plans", icon: "calendar") { open(.trips) }
                         MoreNavigationRow(title: "Fishing rules", subtitle: "Sizes, limits and local restrictions", icon: "book.closed") { open(.rules) }
+                        MoreNavigationRow(title: "Weather", subtitle: "Current conditions and forecast near you", icon: "cloud.sun") { open(.weather) }
                     }
                     .padding(.bottom, 6)
                     VStack(spacing: 10) {
@@ -160,7 +163,7 @@ private struct SettingsView: View {
 }
 
 private struct AppearanceView: View {
-    @AppStorage("catchcheckAppearance") private var appearance = "system"
+    @AppStorage("catchcheckAppearance") private var appearance = "light"
 
     var body: some View {
         ScrollView {
@@ -276,8 +279,9 @@ private struct FeedbackView: View {
                         .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
                     }
                 }
-            }.padding(20)
+            }.padding(20).padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(CatchCheckColor.cream)
         .navigationTitle("Feedback")
         .navigationBarTitleDisplayMode(.inline)
@@ -479,7 +483,7 @@ private struct FishIdentifierView: View {
         Card {
             HStack { Image(systemName: "camera.fill").font(.title2).foregroundStyle(CatchCheckColor.navy).frame(width: 44, height: 44).background(CatchCheckColor.seafoam, in: Circle()); VStack(alignment: .leading) { Text("What fish is this?").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy); Text("AI ID + local rules check").font(.caption).foregroundStyle(.secondary) }; Spacer() }
             if let photo = vm.selectedPhoto { Image(uiImage: photo).resizable().scaledToFill().frame(height: 160).clipShape(RoundedRectangle(cornerRadius: 12)) }
-            if let result = vm.fishCheck { FishCheckCard(result: result) }
+            if let result = vm.fishCheck, result.areaID == vm.selectedRulesAreaID { FishCheckCard(result: result) }
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack(spacing: 10) {
@@ -714,8 +718,9 @@ struct AccountView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(.horizontal, 4)
                     }
-                }.padding(20)
+                }.padding(20).padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(CatchCheckColor.cream)
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
@@ -925,6 +930,7 @@ private struct SearchStationPicker: View {
                 }
             }
             .searchable(text: $query, prompt: "Search tide locations")
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Search location")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
@@ -949,10 +955,10 @@ struct SpotDetailView: View {
                         Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
                         Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
                         Card(background: CatchCheckColor.seafoam) {
-                            Text("Why this time").bold().foregroundStyle(CatchCheckColor.navy)
-                            Text(spot.summary.isEmpty
+                            Text("Why this window").bold().foregroundStyle(CatchCheckColor.navy)
+                            Text(spot.reasons.first ?? (spot.summary.isEmpty
                                  ? "Search again to get the latest explanation and conditions for this session."
-                                 : spot.summary)
+                                 : spot.summary))
                             if let alternative = spot.alternative, !alternative.isEmpty {
                                 Text("Another option").font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
                                 Text(alternative).foregroundStyle(.secondary)
@@ -961,15 +967,13 @@ struct SpotDetailView: View {
                         if !spot.conditions.isEmpty {
                             Card {
                                 Text("Conditions during your session").bold().foregroundStyle(CatchCheckColor.navy)
-                                ForEach(spot.conditions, id: \.self) { Text($0).foregroundStyle(.secondary) }
+                                WindowConditions(spot: spot)
                             }
                         }
                         if !spot.warnings.isEmpty {
                             Card {
                                 Text("Check before you go").bold().foregroundStyle(CatchCheckColor.navy)
-                                ForEach(spot.warnings, id: \.self) { warning in
-                                    Label(warning, systemImage: "exclamationmark.triangle").font(.subheadline)
-                                }
+                                WindowWarnings(warnings: spot.warnings)
                             }
                         }
                         if !spot.sourceNote.isEmpty {
@@ -1006,20 +1010,29 @@ struct RecommendationCard: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(spot.name).font(.headline)
-                Text("\(spot.area) · \(spot.boat ? "Boat" : "Land")").foregroundStyle(.secondary)
-                if !spot.time.isEmpty { Text(spot.time).bold() }
-                Text(spot.distance).font(.caption).foregroundStyle(.secondary)
-                if !spot.time.isEmpty {
-                    Text("Why this time").font(.subheadline.bold())
-                    Text(spot.summary.isEmpty
-                         ? "Search again to get the latest explanation and conditions for this session."
-                         : spot.summary).font(.subheadline)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(spot.name).font(.title3.bold())
+                    Text("\(spot.area) · \(spot.boat ? "Boat" : "Land")").font(.subheadline).foregroundStyle(.secondary)
+                    if !spot.time.isEmpty { Text(spot.time).font(.headline) }
+                    Text(spot.distance).font(.caption).foregroundStyle(.secondary)
                 }
-                ForEach(spot.warnings, id: \.self) { warning in
-                    Label(warning, systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(CatchCheckColor.orange)
+                if !spot.time.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("WHY THIS WINDOW").font(.caption2.bold()).foregroundStyle(CatchCheckColor.accent)
+                        Text(spot.reasons.first ?? (spot.summary.isEmpty
+                             ? "Search again to get the latest explanation and conditions for this session."
+                             : spot.summary)).font(.subheadline)
+                    }
+                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
+                    if !spot.conditions.isEmpty {
+                        Text("Conditions").font(.subheadline.bold())
+                        WindowConditions(spot: spot)
+                    }
+                }
+                if !spot.warnings.isEmpty {
+                    WindowWarnings(warnings: spot.warnings)
                 }
             }
             .foregroundStyle(CatchCheckColor.navy)
@@ -1028,15 +1041,66 @@ struct RecommendationCard: View {
         }
     }
 }
+
+private struct WindowConditions: View {
+    let spot: Recommendation
+    private let labels = ["Wind", "Rain", "Tide", "Daylight", "Waves"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(spot.conditions.enumerated()), id: \.offset) { index, detail in
+                if index > 0 { Divider().padding(.vertical, 8) }
+                HStack(alignment: .top, spacing: 12) {
+                    Text(index < labels.count ? labels[index] : "Other")
+                        .font(.caption.bold()).foregroundStyle(CatchCheckColor.accent)
+                        .frame(width: 58, alignment: .leading)
+                    Text(detail).font(.subheadline).foregroundStyle(CatchCheckColor.navy)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+private struct WindowWarnings: View {
+    let warnings: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            ForEach(warnings, id: \.self) { warning in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption).padding(.top, 2)
+                    Text(warning).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .foregroundStyle(CatchCheckColor.warning)
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(CatchCheckColor.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
 private struct FishCheckCard: View {
     @EnvironmentObject private var vm: FishingViewModel
     let result: FishCheck
+    private var nearRaglanWest: Bool {
+        result.areaID == "auckland-kermadec" && vm.isNearRaglan && !vm.rulesAreaSelectionIsManual
+    }
+    private var shownRules: [FishRuleMatch] {
+        let westRows = result.fishRules.filter { $0.species.localizedCaseInsensitiveContains("Auckland West") }
+        return nearRaglanWest && result.commonName.localizedCaseInsensitiveCompare("Snapper") == .orderedSame && !westRows.isEmpty
+            ? westRows : result.fishRules
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { Text(result.commonName).bold(); Spacer(); Text("\(result.confidence)% match").bold().foregroundStyle(CatchCheckColor.orange) }
             Text(result.scientificName).foregroundStyle(.secondary)
-            Text("MPI rules · \(result.areaName)").font(.subheadline.bold())
-            if result.fishRules.isEmpty {
+            Text("MPI rules · \(fishingRulesAreas.first(where: { $0.id == result.areaID })?.name ?? "Area not selected")").font(.subheadline.bold())
+            if nearRaglanWest {
+                Text("Near Raglan: check the Auckland West snapper subarea for the exact catch spot.")
+                    .font(.caption).foregroundStyle(CatchCheckColor.accent)
+            }
+            if shownRules.isEmpty {
                 Text(result.rulesNeedsReview
                      ? "MPI has changed this area's rules. Open the official page for current limits."
                      : vm.selectedRulesAreaID == nil
@@ -1054,7 +1118,7 @@ private struct FishCheckCard: View {
                     }.buttonStyle(.borderedProminent)
                 }
             } else {
-                ForEach(result.fishRules) { rule in
+                ForEach(shownRules) { rule in
                     VStack(alignment: .leading, spacing: 5) {
                         Text(rule.species).font(.subheadline.bold())
                         if rule.details.contains(where: { $0.label.localizedCaseInsensitiveContains("daily limit") || $0.label.localizedCaseInsensitiveContains("bag limit") }) {
@@ -1067,7 +1131,7 @@ private struct FishCheckCard: View {
                     .font(.subheadline).foregroundStyle(CatchCheckColor.navy).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 10))
                 }
             }
-            if let url = result.rulesSourceURL ?? fishingRulesAreas.first(where: { $0.id == vm.selectedRulesAreaID })?.officialURL {
+            if let url = fishingRulesAreas.first(where: { $0.id == result.areaID })?.officialURL ?? result.rulesSourceURL {
                 Link("See full official MPI rules", destination: url).font(.subheadline.weight(.semibold))
             }
             Text("Confirm the species, exact location, closures and current MPI rules before keeping a fish.")

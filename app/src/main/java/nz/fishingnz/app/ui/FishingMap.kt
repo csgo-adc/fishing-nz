@@ -1,6 +1,8 @@
 package nz.fishingnz.app.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -36,7 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path as ComposePath
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -111,9 +115,12 @@ private enum class BaseMap(val label: String, val description: String) {
 @Composable
 fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var filter by remember { mutableStateOf("All") }
     var selectedSpot by remember { mutableStateOf<FishingSpot?>(null) }
+    var navigationError by remember { mutableStateOf(false) }
+    var selectedCardHeightPx by remember { mutableIntStateOf(0) }
     var showList by remember { mutableStateOf(false) }
     var showMapStyles by remember { mutableStateOf(false) }
     var baseMap by remember { mutableStateOf(BaseMap.STANDARD) }
@@ -131,6 +138,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
     val nativeMap = remember { mutableStateOf<MapLibreMap?>(null) }
+    val selectedCardHeight = with(density) { selectedCardHeightPx.toDp() }
     val visibleSpots = remember(filter) { fishingSpots.filter { filter == "All" || (filter == "Boat" && it.boat) || (filter == "Land" && !it.boat) } }
 
     val mapView = remember(context) {
@@ -212,6 +220,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             .icon(icons.fromBitmap(mapPin(context, 0xFF2B8ACB.toInt())))) }
         map.setOnMarkerClickListener { marker ->
             val group = markerGroups[marker.id]
+            navigationError = false
             if (group != null && group.size > 1) {
                 selectedSpot = null
                 map.animateCamera(CameraUpdateFactory.newLatLngZoom(marker.position, (map.cameraPosition.zoom + 2.5).coerceAtMost(12.0)))
@@ -292,7 +301,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             FloatingActionButton(onClick = ::requestLocation,
                 modifier = Modifier.align(Alignment.BottomEnd)
                     .padding(end = 12.dp, bottom = when {
-                        selectedSpot != null -> 196.dp
+                        selectedSpot != null -> maxOf(selectedCardHeight, 196.dp) + 24.dp
                         locationNotice != null -> 84.dp
                         else -> 20.dp
                     }).size(48.dp),
@@ -317,7 +326,9 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 }
             }
             selectedSpot?.let { spot ->
-                Card(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(6.dp)) {
+                Card(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp)
+                    .onSizeChanged { selectedCardHeightPx = it.height },
+                    shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(6.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -327,6 +338,14 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                             IconButton(onClick = { selectedSpot = null }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "Close spot details") }
                         }
                         Text("Approximate fishing area. Confirm access and local rules before leaving.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = {
+                            navigationError = !openSpotInMaps(context, spot)
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.NearMe, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (spot.boat) "View position in map app" else "Navigate in map app")
+                        }
+                        if (navigationError) Text("No map app could open this position.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         Button(onClick = {
                             vm.setBoat(spot.boat)
                             vm.selectManualOrigin(SearchOrigin(spot.name, GeoPoint(spot.latitude, spot.longitude)))
@@ -341,7 +360,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 }
             }
             Row(Modifier.align(Alignment.BottomStart)
-                .padding(start = 8.dp, bottom = if (selectedSpot != null || locationNotice != null) 180.dp else 32.dp)
+                .padding(start = 8.dp, bottom = if (selectedSpot != null) maxOf(selectedCardHeight, 196.dp) + 16.dp else if (locationNotice != null) 84.dp else 32.dp)
                 .background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(4.dp))
                 .padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -367,6 +386,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             items(visibleSpots, key = { "${it.name}:${it.latitude}:${it.longitude}" }) { spot ->
                 Column(Modifier.fillMaxWidth().clickable {
                     selectedSpot = spot
+                    navigationError = false
                     showList = false
                     nativeMap.value?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(spot.latitude, spot.longitude), 11.0))
                 }.padding(horizontal = 10.dp, vertical = 12.dp)) {
@@ -398,6 +418,34 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+private fun openSpotInMaps(context: Context, spot: FishingSpot): Boolean {
+    val coordinates = "${spot.latitude},${spot.longitude}"
+    val intents = if (spot.boat) {
+        listOf(
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:${coordinates}?q=${coordinates}(${Uri.encode(spot.name)})")),
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=$coordinates"))
+        )
+    } else {
+        listOf(
+            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$coordinates"))
+                .setPackage("com.google.android.apps.maps"),
+            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$coordinates")),
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$coordinates"))
+        )
+    }
+    intents.forEach { intent ->
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return true
+        } catch (_: ActivityNotFoundException) {
+            // Try another installed map handler or its web fallback.
+        } catch (_: SecurityException) {
+            // The selected app cannot accept this intent; try the next handler.
+        }
+    }
+    return false
 }
 
 @Composable

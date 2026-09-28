@@ -49,14 +49,14 @@ struct FishingMapView: View {
     @State private var cameraCommand = MapCameraCommand(sequence: 0, target: .region(initialRegion))
     @State private var needsFirstLocationCenter = true
     @State private var recenterOnLocationUpdate = false
+    @State private var selectedMapSpot: FishingSpot?
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) { Text("Fishing map").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Explore named coastal areas · check access and local rules").foregroundStyle(.secondary); Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented) }.padding(20)
             FishingMapCanvas(layer: layer, spots: visibleSpots, cameraCommand: cameraCommand,
                              currentCamera: $currentCamera) { spot in
-                vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
-                    ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
+                selectedMapSpot = spot
             }
             .overlay(alignment: .topTrailing) {
                 VStack(spacing: 12) {
@@ -119,6 +119,44 @@ struct FishingMapView: View {
                     .padding(.bottom, 36)
                 }
             }
+            if let spot = selectedMapSpot {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(spot.name).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                            Text("\(spot.area) · \(spot.boat ? "Boat" : "Land") fishing")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { selectedMapSpot = nil } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title3).foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel("Close selected spot")
+                    }
+                    Text("Approximate fishing area. Check access and local rules before leaving.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Button {
+                            openSpotInMaps(spot)
+                        } label: {
+                            Label(spot.boat ? "View in Maps" : "Directions", systemImage: "map")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Button("Spot details") {
+                            vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
+                                ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
+                        }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(16)
+                .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+            }
         }.background(CatchCheckColor.cream)
             .onAppear {
                 if vm.hasDeviceLocation { centerOnCurrentLocation(); needsFirstLocationCenter = false }
@@ -139,6 +177,7 @@ struct FishingMapView: View {
                     recenterOnLocationUpdate = false
                 }
             }
+            .onChange(of: filter) { _, _ in selectedMapSpot = nil }
     }
 
     private func centerOnCurrentLocation() {
@@ -148,6 +187,17 @@ struct FishingMapView: View {
 
     private func sendCamera(_ target: MapCameraTarget) {
         cameraCommand = MapCameraCommand(sequence: cameraCommand.sequence + 1, target: target)
+    }
+
+    private func openSpotInMaps(_ spot: FishingSpot) {
+        let coordinate = CLLocationCoordinate2D(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude)
+        let destination = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        destination.name = spot.name
+        if spot.boat {
+            destination.openInMaps()
+        } else {
+            destination.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+        }
     }
 
     private func mapControlIcon(_ symbol: String) -> some View {
@@ -739,13 +789,21 @@ let fishingRulesAreas = [
 struct RulesView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedArea: FishingRulesArea?
     @State private var showAreas = false
     @State private var query = ""
     @State private var page: SavedRulesPage?
     @State private var loadError: String?
     @State private var loading = false
-    private var quickRows: [SavedRuleQuickRow] { page?.quickRows(matching: query) ?? [] }
+    private var nearRaglanWest: Bool {
+        selectedArea?.id == "auckland-kermadec" && vm.isNearRaglan && !vm.rulesAreaSelectionIsManual
+    }
+    private var quickRows: [SavedRuleQuickRow] {
+        let rows = page?.quickRows(matching: query) ?? []
+        guard nearRaglanWest, rows.contains(where: { $0.species.localizedCaseInsensitiveContains("Auckland West") }) else { return rows }
+        return rows.filter { !$0.species.lowercased().hasPrefix("snapper") || $0.species.localizedCaseInsensitiveContains("Auckland West") }
+    }
 
     var body: some View {
         NavigationStack {
@@ -760,6 +818,10 @@ struct RulesView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }.buttonStyle(.borderedProminent)
                         if let selectedArea { Text(selectedArea.scope).font(.subheadline).foregroundStyle(.secondary) }
+                        if nearRaglanWest {
+                            Text("Near Raglan: snapper is in the Auckland West subarea. Check the exact catch spot on MPI.")
+                                .font(.subheadline).foregroundStyle(CatchCheckColor.accent)
+                        }
                         Button {
                             vm.useCurrentRulesArea()
                         } label: {
@@ -800,7 +862,7 @@ struct RulesView: View {
                                 Label("Rules changed at MPI", systemImage: "arrow.triangle.2.circlepath").font(.headline)
                                 Text("This area's saved summary is being reviewed. Open the official MPI page for current limits and closures.")
                                     .font(.subheadline)
-                                Link("Open current MPI rules", destination: page.sourceURL).buttonStyle(.borderedProminent)
+                                Link("Open current MPI rules", destination: selectedArea?.officialURL ?? page.sourceURL).buttonStyle(.borderedProminent)
                             }
                         } else {
                         if let summary = page.combinedFinfishSummary {
@@ -820,7 +882,7 @@ struct RulesView: View {
                             Label("Check local restrictions", systemImage: "exclamationmark.triangle").font(.headline)
                             Text("Closures, subareas, methods and recent changes can change what applies at a particular spot. Check the official page before keeping a catch.")
                                 .font(.subheadline).foregroundStyle(.secondary)
-                            Link("See full official MPI rules", destination: page.sourceURL).buttonStyle(.borderedProminent)
+                            Link("See full official MPI rules", destination: selectedArea?.officialURL ?? page.sourceURL).buttonStyle(.borderedProminent)
                             if let reviewedAt = page.reviewedAt { Text("Saved page reviewed by MPI: \(reviewedAt)").font(.caption).foregroundStyle(.secondary) }
                         }
                         }
@@ -829,6 +891,7 @@ struct RulesView: View {
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Rules")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
@@ -870,6 +933,9 @@ struct RulesView: View {
         .onChange(of: vm.selectedRulesAreaID) { _, areaID in
             selectedArea = fishingRulesAreas.first(where: { $0.id == areaID })
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { vm.requestLocation() }
+        }
         .task(id: selectedArea?.id) { await loadRules() }
     }
 
@@ -890,8 +956,13 @@ struct RulesView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
             let envelope = try JSONDecoder().decode(SavedRulesEnvelope.self, from: data)
-            page = envelope.rules.first
-            if page == nil { loadError = "No saved rules are available for this area." }
+            guard self.selectedArea?.id == selectedArea.id else { return }
+            let officialPath = selectedArea.officialURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            page = envelope.rules.first(where: {
+                $0.areaID == selectedArea.id &&
+                $0.sourceURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == officialPath
+            })
+            if page == nil { loadError = "Saved rules do not match this fishing area. Open the official MPI page instead." }
         } catch is CancellationError { return }
         catch { loadError = "Saved rules are unavailable right now. Try again shortly." }
     }
@@ -899,6 +970,7 @@ struct RulesView: View {
 
 private struct SavedRulesEnvelope: Decodable { let rules: [SavedRulesPage] }
 private struct SavedRulesPage: Decodable {
+    let areaID: String
     let areaName: String
     let sourceURL: URL
     let reviewedAt: String?
@@ -906,7 +978,7 @@ private struct SavedRulesPage: Decodable {
     let sections: [SavedRulesSection]
     let tables: [[[String]]]
     enum CodingKeys: String, CodingKey {
-        case areaName = "area_name", sourceURL = "source_url", reviewedAt = "reviewed_at", needsReview, sections, tables
+        case areaID = "area_id", areaName = "area_name", sourceURL = "source_url", reviewedAt = "reviewed_at", needsReview, sections, tables
     }
 }
 private struct SavedRulesSection: Decodable { let heading: String; let text: String }

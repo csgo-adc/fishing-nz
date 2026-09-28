@@ -21,7 +21,7 @@ class RulesRepository {
     private val baseUrl = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/').ifBlank { "https://fishing.fishnz.space" }
 
     suspend fun load(areaId: String): FishingRulesPage = withContext(Dispatchers.IO) {
-        require(areaId in ruleAreaIds) { "Unknown fishing area." }
+        val slug = ruleAreaSlugs[areaId] ?: error("Unknown fishing area.")
         val connection = (URL("$baseUrl/v1/rules?area=$areaId").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
@@ -33,6 +33,10 @@ class RulesRepository {
             if (connection.responseCode !in 200..299) error("Saved rules are unavailable right now. Try again shortly.")
             val item = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
                 .getJSONArray("rules").getJSONObject(0)
+            val officialUrl = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
+            require(item.optString("area_id") == areaId && item.optString("source_url").trimEnd('/') == officialUrl) {
+                "Saved rules do not match the selected fishing area. Open the official MPI page instead."
+            }
             val sections = item.getJSONArray("sections")
             val tables = item.getJSONArray("tables")
             FishingRulesPage(
@@ -56,4 +60,13 @@ class RulesRepository {
     }
 }
 
-private val ruleAreaIds = setOf("auckland-kermadec", "central", "challenger", "south-east", "southland", "kaikoura", "chatham-rise", "fiordland")
+private val ruleAreaSlugs = mapOf(
+    "auckland-kermadec" to "auckland-kermadec-fishing-rules",
+    "central" to "central-fishing-rules",
+    "challenger" to "challenger-fishing-rules",
+    "south-east" to "south-east-fishing-rules",
+    "southland" to "southland-fishing-rules",
+    "kaikoura" to "kaikoura-fishing-rules",
+    "chatham-rise" to "chatham-rise-area-recreational-fishing-rules",
+    "fiordland" to "fiordland-marine-area-fishing-rules"
+)

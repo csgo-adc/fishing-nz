@@ -131,6 +131,7 @@ class FishingRepository {
                 commonName = commonName,
                 scientificName = scientificName,
                 confidence = payload.getDouble("confidence").times(100).toInt(),
+                areaId = payload.optString("areaId").takeIf { it.isNotBlank() && it != "null" },
                 areaName = payload.optString("areaName", "Fishing area"),
                 areaIsEstimated = payload.optBoolean("areaIsEstimated", true),
                 rulesReviewedAt = payload.optString("rulesReviewedAt").takeIf { it.isNotBlank() && it != "null" },

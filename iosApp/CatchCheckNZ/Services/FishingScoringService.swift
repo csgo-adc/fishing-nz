@@ -364,7 +364,7 @@ struct FishingScoringService: Sendable {
         let qualification = complete ? "" : "Some essential local data is missing; treat this as a time to investigate. "
         return .init(id: "\(spot.name)|\(spot.boat)|\(Int(start.timeIntervalSince1970))", spotName: spot.name,
                      area: spot.area, boat: spot.boat, score: Int((comfort * 100).rounded()), start: start, end: end,
-                     distanceKm: distanceKm, reasons: [windText, tideFacts.description], warnings: warnings,
+                     distanceKm: distanceKm, reasons: ["\(qualification)\(why)"], warnings: warnings,
                      summary: "\(qualification)\(why) \(windText) \(rainText) \(tideFacts.description)", conditions: conditions,
                      sourceNote: sourceNote, rankingValue: comfort, dataComplete: complete,
                      daylightFraction: daylight, tidePreferenceFit: tideFacts.fit)

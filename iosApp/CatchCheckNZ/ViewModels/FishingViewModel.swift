@@ -26,14 +26,30 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
         }
     }
-    @Published var isBoatFishing = false { didSet { if oldValue != isBoatFishing { invalidateRecommendations() } } }
-    @Published var datePreset: FishingDatePreset = .inThreeDays { didSet { if oldValue != datePreset { invalidateRecommendations() } } }
-    @Published var customStartDate = Date.now { didSet { if oldValue != customStartDate { invalidateRecommendations() } } }
-    @Published var customEndDate = Date.now { didSet { if oldValue != customEndDate { invalidateRecommendations() } } }
-    @Published var timeMode: FishingTimeMode = .comfortable { didSet { if oldValue != timeMode { invalidateRecommendations() } } }
-    @Published var preference: WindowPriority = .weather { didSet { if oldValue != preference { invalidateRecommendations() } } }
-    @Published var preferredStartMinute = 8 * 60 { didSet { if oldValue != preferredStartMinute { invalidateRecommendations() } } }
-    @Published var preferredEndMinute = 18 * 60 { didSet { if oldValue != preferredEndMinute { invalidateRecommendations() } } }
+    @Published var isBoatFishing = false {
+        didSet { if oldValue != isBoatFishing { UserDefaults.standard.set(isBoatFishing, forKey: Self.planBoatKey); invalidateRecommendations() } }
+    }
+    @Published var datePreset: FishingDatePreset = .inThreeDays {
+        didSet { if oldValue != datePreset { UserDefaults.standard.set(datePreset.rawValue, forKey: Self.planDatePresetKey); invalidateRecommendations() } }
+    }
+    @Published var customStartDate = Date.now {
+        didSet { if oldValue != customStartDate { UserDefaults.standard.set(customStartDate, forKey: Self.planStartDateKey); invalidateRecommendations() } }
+    }
+    @Published var customEndDate = Date.now {
+        didSet { if oldValue != customEndDate { UserDefaults.standard.set(customEndDate, forKey: Self.planEndDateKey); invalidateRecommendations() } }
+    }
+    @Published var timeMode: FishingTimeMode = .comfortable {
+        didSet { if oldValue != timeMode { UserDefaults.standard.set(timeMode.rawValue, forKey: Self.planTimeModeKey); invalidateRecommendations() } }
+    }
+    @Published var preference: WindowPriority = .weather {
+        didSet { if oldValue != preference { UserDefaults.standard.set(preference.rawValue, forKey: Self.planPriorityKey); invalidateRecommendations() } }
+    }
+    @Published var preferredStartMinute = 8 * 60 {
+        didSet { if oldValue != preferredStartMinute { UserDefaults.standard.set(preferredStartMinute, forKey: Self.planStartMinuteKey); invalidateRecommendations() } }
+    }
+    @Published var preferredEndMinute = 18 * 60 {
+        didSet { if oldValue != preferredEndMinute { UserDefaults.standard.set(preferredEndMinute, forKey: Self.planEndMinuteKey); invalidateRecommendations() } }
+    }
     @Published var radiusKm = 100 {
         didSet {
             guard oldValue != radiusKm else { return }
@@ -43,6 +59,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
     @Published var location = GeoPoint(latitude: -36.85, longitude: 174.76)
     @Published var hasDeviceLocation = false
+    @Published private(set) var deviceLocationUpdatedAt: Date?
     @Published private(set) var tideLocationIssue: String?
     @Published var devicePlaceName: String?
     @Published private(set) var selectedSearchStationID: String?
@@ -90,9 +107,17 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private var tideTask: Task<Void, Never>?
     private var tideRequestID = UUID()
     private var accountRequestVersion = 0
-    private var rulesAreaSelectionIsManual = false
+    @Published private(set) var rulesAreaSelectionIsManual = false
     private static let searchStationKey = "fishingSearchStationID"
     private static let searchRadiusKey = "fishingSearchRadiusKm"
+    private static let planBoatKey = "fishingPlanBoat"
+    private static let planDatePresetKey = "fishingPlanDatePreset"
+    private static let planStartDateKey = "fishingPlanStartDate"
+    private static let planEndDateKey = "fishingPlanEndDate"
+    private static let planTimeModeKey = "fishingPlanTimeMode"
+    private static let planPriorityKey = "fishingPlanPriority"
+    private static let planStartMinuteKey = "fishingPlanStartMinute"
+    private static let planEndMinuteKey = "fishingPlanEndMinute"
 
     private var nzCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -317,24 +342,40 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         requestLocation()
     }
 
-    private func suggestedRulesAreaID(for point: GeoPoint) -> String? {
-        guard (-48 ... -34).contains(point.latitude) else { return nil }
-        if point.longitude < -170 { return "chatham-rise" }
-        guard (165 ... 180).contains(point.longitude) else { return nil }
+    var isNearRaglan: Bool {
+        hasDeviceLocation && CLLocation(latitude: location.latitude, longitude: location.longitude)
+            .distance(from: CLLocation(latitude: -37.799, longitude: 174.870)) <= 30_000
+    }
 
+    private func suggestedRulesAreaID(for point: GeoPoint) -> String? {
+        guard point.latitude.isFinite, point.longitude.isFinite,
+              (-90 ... 90).contains(point.latitude), (-180 ... 180).contains(point.longitude) else { return nil }
         let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
-        let kaikoura = CLLocation(latitude: -42.4167, longitude: 173.7)
-        if origin.distance(from: kaikoura) < 35_000 { return "kaikoura" }
-        if point.latitude < -43.8 && point.latitude > -46.5 && point.longitude < 168.5 {
-            return "fiordland"
+        let specialCoasts: [(area: String, latitude: Double, longitude: Double, radius: Double)] = [
+            ("auckland-kermadec", -29.25, -177.92, 80_000), // Raoul Island
+            ("auckland-kermadec", -30.23, -178.50, 80_000), // Macauley Island
+            ("auckland-kermadec", -31.35, -178.83, 80_000), // L'Esperance Rock
+            ("chatham-rise", -43.95, -176.56, 150_000),
+            ("kaikoura", -42.40, 173.68, 45_000),
+            ("fiordland", -44.67, 167.93, 35_000), // Milford Sound
+            ("fiordland", -45.28, 166.87, 35_000), // Doubtful Sound
+            ("fiordland", -45.74, 166.79, 35_000) // Dusky Sound
+        ]
+        if let nearest = specialCoasts.min(by: {
+            origin.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <
+            origin.distance(from: CLLocation(latitude: $1.latitude, longitude: $1.longitude))
+        }), origin.distance(from: CLLocation(latitude: nearest.latitude, longitude: nearest.longitude)) <= nearest.radius {
+            return nearest.area
         }
+        guard (-48 ... -34).contains(point.latitude) else { return nil }
+        guard (165 ... 180).contains(point.longitude) else { return nil }
 
         // Inland locations use the closest catalogued coast as a starting point.
         // MPI coast boundaries and special areas still need checking at the fishing spot.
         guard let nearest = fishingSpots.min(by: {
             origin.distance(from: CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)) <
             origin.distance(from: CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude))
-        }) else { return nil }
+        }), origin.distance(from: CLLocation(latitude: nearest.coordinate.latitude, longitude: nearest.coordinate.longitude)) <= 180_000 else { return nil }
         switch nearest.area {
         case "Northland", "Bay of Islands", "Far North", "Hokianga", "Auckland", "Auckland West Coast",
              "Waiheke Island", "Coromandel", "Firth of Thames", "Waikato", "Bay of Plenty":
@@ -415,6 +456,35 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     override init() {
         super.init()
+        let defaults = UserDefaults.standard
+        isBoatFishing = defaults.bool(forKey: Self.planBoatKey)
+        if let stored = defaults.string(forKey: Self.planDatePresetKey), let preset = FishingDatePreset(rawValue: stored) {
+            datePreset = preset
+        }
+        let earliest = firstSelectableDate
+        let latest = latestSelectableDate
+        if let stored = defaults.object(forKey: Self.planStartDateKey) as? Date {
+            customStartDate = min(max(stored, earliest), latest)
+        }
+        if let stored = defaults.object(forKey: Self.planEndDateKey) as? Date {
+            customEndDate = min(max(stored, customStartDate), latest)
+        } else {
+            customEndDate = max(customEndDate, customStartDate)
+        }
+        if let stored = defaults.string(forKey: Self.planTimeModeKey), let mode = FishingTimeMode(rawValue: stored) {
+            timeMode = mode
+        }
+        if let stored = defaults.string(forKey: Self.planPriorityKey), let priority = WindowPriority(rawValue: stored) {
+            preference = priority
+        }
+        let storedStartMinute = defaults.integer(forKey: Self.planStartMinuteKey)
+        if defaults.object(forKey: Self.planStartMinuteKey) != nil, (0..<1440).contains(storedStartMinute), storedStartMinute % 30 == 0 {
+            preferredStartMinute = storedStartMinute
+        }
+        let storedEndMinute = defaults.integer(forKey: Self.planEndMinuteKey)
+        if defaults.object(forKey: Self.planEndMinuteKey) != nil, (0..<1440).contains(storedEndMinute), storedEndMinute % 30 == 0 {
+            preferredEndMinute = storedEndMinute
+        }
         let storedRadius = UserDefaults.standard.integer(forKey: Self.searchRadiusKey)
         if [10, 30, 50, 100, 200, 300, 400, 500].contains(storedRadius) { radiusKm = storedRadius }
         if let stationID = UserDefaults.standard.string(forKey: Self.searchStationKey),
@@ -465,6 +535,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         guard let point = locations.last, CLLocationCoordinate2DIsValid(point.coordinate) else { return }
         location = GeoPoint(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude)
         hasDeviceLocation = true
+        deviceLocationUpdatedAt = point.timestamp
         tideLocationIssue = nil
         let nearestStation = tideStations.min {
             point.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <
@@ -629,9 +700,11 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private func identifyPendingFish(at point: GeoPoint) { guard let photo = pendingFishPhoto else { return }; pendingFishPhoto = nil; identify(photo, at: point) }
     private func identify(_ photo: UIImage, at point: GeoPoint) {
         isCheckingFish = true
+        let requestedAreaID = selectedRulesAreaID
         Task {
             do {
-                fishCheck = try await repository.identifyFish(image: photo, at: point, hasDeviceLocation: hasDeviceLocation, selectedRulesAreaID: selectedRulesAreaID)
+                let result = try await repository.identifyFish(image: photo, at: point, hasDeviceLocation: hasDeviceLocation, selectedRulesAreaID: requestedAreaID)
+                if selectedRulesAreaID == requestedAreaID && result.areaID == requestedAreaID { fishCheck = result }
             } catch { self.error = error.localizedDescription }
             isCheckingFish = false
         }

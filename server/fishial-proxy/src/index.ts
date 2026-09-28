@@ -542,13 +542,15 @@ export default {
       const areaId = validatedFishingRulesArea(request.headers.get("x-fishing-rules-area"));
       const rulePage = areaId
         ? await env.RULES_DB.prepare(
-          `SELECT r.area_name, r.source_url, r.reviewed_at, r.tables_json, s.status AS crawl_status
+          `SELECT r.area_id, r.area_name, r.source_url, r.reviewed_at, r.tables_json, s.status AS crawl_status
            FROM mpi_fishing_rules r LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id
            WHERE r.area_id = ?`
-        ).bind(areaId).first<{ area_name: string; source_url: string; reviewed_at: string | null; tables_json: string; crawl_status: string | null }>()
+        ).bind(areaId).first<{ area_id: string; area_name: string; source_url: string; reviewed_at: string | null; tables_json: string; crawl_status: string | null }>()
         : null;
-      const rulesNeedReview = rulePage?.crawl_status === "source_changed";
-      const rules = rulePage && !rulesNeedReview ? findFishRules(rulePage.tables_json, commonName) : [];
+      const officialUrl = areaId ? officialRulesUrl(areaId) : null;
+      const rulesPageMatchesArea = !!rulePage && !!areaId && cachedRuleMatchesArea(rulePage, areaId);
+      const rulesNeedReview = !!rulePage && (!rulesPageMatchesArea || rulePage.crawl_status === "source_changed");
+      const rules = rulesPageMatchesArea && !rulesNeedReview ? findFishRules(rulePage!.tables_json, commonName) : [];
       await recordAccountEvent(env, auth.account.id, "fish_identity_used", "fish_identity", clientPlatform(request));
       return json({
         commonName,
@@ -559,13 +561,13 @@ export default {
         visibleClues: identification.visible_clues,
         identificationNote: identification.note,
         areaId,
-        areaName: rulePage?.area_name || (areaId ? rulesAreas.get(areaId) : "Choose an MPI fishing area"),
+        areaName: areaId ? rulesAreas.get(areaId) : "Choose an MPI fishing area",
         areaIsEstimated: false,
         areaEstimated: false,
         areaSelectionRequired: areaId === null,
         rulesNeedsReview: rulesNeedReview,
         rulesReviewedAt: rulesNeedReview ? null : rulePage?.reviewed_at || null,
-        rulesSourceUrl: rulePage?.source_url || (areaId ? `https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/${areaSlug(areaId)}` : null),
+        rulesSourceUrl: officialUrl,
         fishRules: rules,
       });
     } catch (error) {
@@ -728,9 +730,13 @@ async function getRules(request: Request, env: Env): Promise<Response> {
     ).all<RulePage>();
   if (area && query.results.length === 0) return json({ error: "No cached rules for this area yet." }, 404);
   const results = query.results.map((row) => {
-    const needsReview = row.crawl_status === "source_changed";
+    const areaId = area || row.area_id;
+    const needsReview = row.crawl_status === "source_changed" || !cachedRuleMatchesArea(row, areaId);
     return {
       ...row,
+      area_id: areaId,
+      area_name: rulesAreas.get(areaId) || row.area_name,
+      source_url: rulesAreas.has(areaId) ? officialRulesUrl(areaId) : row.source_url,
       reviewed_at: needsReview ? null : row.reviewed_at,
       page_text: needsReview ? "MPI has updated this area. Review the current rules on the official site." : row.page_text,
       page_html: needsReview ? "" : row.page_html,
@@ -808,6 +814,15 @@ async function importRules(request: Request, env: Env): Promise<Response> {
 
 function areaSlug(id: string): string {
   return rulesSlugs[id] || "";
+}
+
+function officialRulesUrl(areaId: string): string {
+  return `https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/${areaSlug(areaId)}`;
+}
+
+function cachedRuleMatchesArea(row: { area_id: string; source_url: string }, areaId: string): boolean {
+  return rulesAreas.has(areaId) && row.area_id === areaId &&
+    row.source_url.replace(/\/+$/, "") === officialRulesUrl(areaId);
 }
 
 async function refreshRuleArea(areaId: string, env: Env): Promise<boolean> {

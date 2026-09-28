@@ -102,6 +102,29 @@ test("fish identification attaches limits only for a selected MPI area", async (
     assert.equal(selected.fishRules[0].minimumSizeLabel, "Min fish length (cm)");
     assert.equal(queries.filter((query) => query.includes("FROM mpi_fishing_rules")).length, 1);
 
+    ruleRow.source_url += "/";
+    const trailingSlash = await identify("central");
+    assert.equal(trailingSlash.rulesNeedsReview, false);
+    assert.equal(trailingSlash.fishRules.length, 1);
+    ruleRow.source_url = ruleRow.source_url.replace(/\/+$/, "");
+
+    // An incorrectly labelled cached row must never put Central limits under an Auckland heading.
+    const mismatched = await identify("auckland-kermadec");
+    assert.equal(mismatched.areaId, "auckland-kermadec");
+    assert.equal(mismatched.areaName, "Auckland / Kermadec");
+    assert.equal(mismatched.rulesNeedsReview, true);
+    assert.deepEqual(mismatched.fishRules, []);
+    assert.match(mismatched.rulesSourceUrl, /auckland-kermadec-fishing-rules$/);
+    const mismatchedRulesResponse = await worker.fetch(new Request("https://example.test/v1/rules?area=auckland-kermadec"), env);
+    assert.equal(mismatchedRulesResponse.status, 200);
+    const mismatchedRulesPage = (await mismatchedRulesResponse.json()).rules[0];
+    assert.equal(mismatchedRulesPage.area_id, "auckland-kermadec");
+    assert.equal(mismatchedRulesPage.area_name, "Auckland / Kermadec");
+    assert.equal(mismatchedRulesPage.needsReview, true);
+    assert.deepEqual(mismatchedRulesPage.tables, []);
+    assert.deepEqual(mismatchedRulesPage.sections, []);
+    assert.match(mismatchedRulesPage.source_url, /auckland-kermadec-fishing-rules$/);
+
     crawlStatus = "source_changed";
     const changed = await identify("central");
     assert.equal(changed.areaId, "central");

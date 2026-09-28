@@ -27,7 +27,7 @@ struct Recommendation: Identifiable, Equatable {
 }
 struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let minimumSizeLabel: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
-struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let areaName: String; let areaIsEstimated: Bool; let rulesNeedsReview: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?; let fishRules: [FishRuleMatch] }
+struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let areaID: String?; let areaName: String; let areaIsEstimated: Bool; let rulesNeedsReview: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?; let fishRules: [FishRuleMatch] }
 
 struct AccountProfile: Decodable, Equatable {
     let id: String

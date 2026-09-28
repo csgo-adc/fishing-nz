@@ -49,7 +49,7 @@ data class RecommendationSearch(
 )
 data class FishRuleDetail(val label: String, val value: String)
 data class FishRuleMatch(val species: String, val dailyLimit: String?, val minimumSize: String?, val details: List<FishRuleDetail>, val minimumSizeLabel: String? = null)
-data class FishCheck(val commonName: String, val scientificName: String, val confidence: Int, val areaName: String, val areaIsEstimated: Boolean, val rulesReviewedAt: String?, val fishRules: List<FishRuleMatch>, val rulesNeedsReview: Boolean = false, val rulesSourceUrl: String? = null, val areaSelectionRequired: Boolean = false)
+data class FishCheck(val commonName: String, val scientificName: String, val confidence: Int, val areaId: String?, val areaName: String, val areaIsEstimated: Boolean, val rulesReviewedAt: String?, val fishRules: List<FishRuleMatch>, val rulesNeedsReview: Boolean = false, val rulesSourceUrl: String? = null, val areaSelectionRequired: Boolean = false)
 
 // Named coastal search points. Wharf/pier names are recorded by LINZ tide predictions
 // (https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view)

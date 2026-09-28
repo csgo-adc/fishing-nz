@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,6 +31,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsBrightness
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -76,8 +80,10 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val view = LocalView.current
+    val density = LocalDensity.current
+    val imeOpen = WindowInsets.ime.getBottom(density) > 0
     val preferences = remember(context) { context.getSharedPreferences("appearance", android.content.Context.MODE_PRIVATE) }
-    var appearance by remember { mutableStateOf(runCatching { Appearance.valueOf(preferences.getString("mode", "SYSTEM") ?: "SYSTEM") }.getOrDefault(Appearance.SYSTEM)) }
+    var appearance by remember { mutableStateOf(runCatching { Appearance.valueOf(preferences.getString("mode", "LIGHT") ?: "LIGHT") }.getOrDefault(Appearance.LIGHT)) }
     val dark = when (appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
@@ -97,7 +103,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
     MaterialTheme(colorScheme = palette) {
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
         Scaffold(containerColor = palette.background, bottomBar = {
-            if (!state.showResults && state.selectedSpot == null) NavigationBar(containerColor = palette.surface) {
+            if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {
                 val destinations = listOf(
                     Triple(Icons.Default.Home, "Home", 0),
                     Triple(Icons.Default.Map, "Map", 1),
@@ -131,6 +137,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                         preferences.edit().putString("mode", choice.name).apply()
                     }
                 }
+                11 -> MoreDetail("Weather", { vm.selectTab(6) }, modifier) { WeatherScreen(Modifier) }
                 else -> MoreScreen(modifier, state.account?.user?.displayName, vm::selectTab)
             }
         }
@@ -164,6 +171,8 @@ private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> U
             MoreItem(Icons.Default.CalendarMonth, "Trips", "Saved spots and active plans") { onNavigate(3) }
             HorizontalDivider(Modifier.padding(start = 64.dp))
             MoreItem(Icons.Default.MenuBook, "Fishing rules", "Sizes, limits and local restrictions") { onNavigate(4) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.WbSunny, "Weather", "Current conditions and forecast near you") { onNavigate(11) }
         }
         Spacer(Modifier.height(2.dp))
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

@@ -26,9 +26,18 @@ internal fun suggestedRulesAreaId(point: GeoPoint): String? {
     return nearest.areaId.takeIf { distanceKm(point, nearest.point) <= 180.0 }
 }
 
+/** Raglan is clearly on MPI's Auckland West coast; other nearby subareas need a spot-specific check. */
+internal fun isNearRaglan(point: GeoPoint?): Boolean = point != null &&
+    point.latitude.isFinite() && point.longitude.isFinite() &&
+    distanceKm(point, GeoPoint(-37.799, 174.870)) <= 30.0
+
 private data class RulesAreaAnchor(val areaId: String, val point: GeoPoint, val maxDistanceKm: Double = 0.0)
 
 private val specialRulesAreaAnchors = listOf(
+    // Kermadec Islands also use the Auckland / Kermadec rules, far from the mainland anchors.
+    RulesAreaAnchor("auckland-kermadec", GeoPoint(-29.25, -177.92), 80.0), // Raoul Island
+    RulesAreaAnchor("auckland-kermadec", GeoPoint(-30.23, -178.50), 80.0), // Macauley Island
+    RulesAreaAnchor("auckland-kermadec", GeoPoint(-31.35, -178.83), 80.0), // L'Esperance Rock
     RulesAreaAnchor("kaikoura", GeoPoint(-42.40, 173.68), 45.0),
     RulesAreaAnchor("fiordland", GeoPoint(-44.67, 167.93), 35.0), // Milford Sound
     RulesAreaAnchor("fiordland", GeoPoint(-45.28, 166.87), 35.0), // Doubtful Sound

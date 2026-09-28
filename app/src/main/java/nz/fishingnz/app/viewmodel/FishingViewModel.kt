@@ -69,9 +69,31 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     private val savedSearchMode = if (SearchPreferencesStore.savedMode() == SearchLocationMode.SPECIFIC_LOCATION.name && savedSearchStation != null)
         SearchLocationMode.SPECIFIC_LOCATION else SearchLocationMode.NEAR_ME
     private val savedManualOrigin = searchOrigins.firstOrNull { it.name == SearchPreferencesStore.savedManualOriginName() }
+    private val today = LocalDate.now(nzZone)
+    private val savedDateLabel = SearchPreferencesStore.savedDateLabel()?.takeIf {
+        it in listOf("Today", "In 3 days", "Next 7 days", "This weekend", "Custom")
+    } ?: "In 3 days"
+    private val savedDates = if (savedDateLabel == "Custom") {
+        SearchPreferencesStore.savedCustomDates()?.let { (start, end) ->
+            val validStart = start.coerceIn(today, today.plusDays(15))
+            validStart to end.coerceIn(validStart, today.plusDays(15))
+        } ?: (today to today)
+    } else presetFishingDates(savedDateLabel, today) ?: (today.plusDays(3) to today.plusDays(3))
+    private val savedHoursMode = SearchPreferencesStore.savedHoursMode()
+    private val savedCustomHours = SearchPreferencesStore.savedCustomHours()
+    private val savedPreferredTime = when (savedHoursMode) {
+        "ANYTIME" -> null
+        "CUSTOM" -> savedCustomHours?.let { PreferredTimeRange(it.first, it.second) } ?: suggestedHours
+        else -> suggestedHours
+    }
     private val _state = MutableStateFlow(FishingUiState(
         hasStoredSession = AccountSessionStore.token() != null,
+        boat = SearchPreferencesStore.savedBoat(),
+        dateLabel = savedDateLabel, dateStart = savedDates.first, dateEnd = savedDates.second,
         radiusKm = SearchPreferencesStore.savedRadiusKm() ?: 100,
+        preferredTime = savedPreferredTime,
+        preferredTimeIsSuggested = savedHoursMode != "ANYTIME" && !(savedHoursMode == "CUSTOM" && savedCustomHours != null),
+        preference = runCatching { WindowPriority.valueOf(SearchPreferencesStore.savedPriority() ?: "WEATHER") }.getOrDefault(WindowPriority.WEATHER),
         searchLocationMode = savedSearchMode,
         selectedSearchStation = savedSearchStation,
         manualOriginSelected = savedSearchMode == SearchLocationMode.NEAR_ME && savedManualOrigin != null,
@@ -88,9 +110,9 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
     fun selectTab(value: Int) {
         val old = _state.value
-        if (value !in 0..10 || old.tab == value) return
+        if (value !in 0..11 || old.tab == value) return
         _state.value = old.copy(tab = value)
-        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance")
+        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance", "weather")
         if (old.account != null) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
     }
     fun canGoBack(): Boolean = _state.value.let { it.selectedSpot != null || it.showResults || it.tab != 0 }
@@ -100,25 +122,28 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             current.selectedSpot != null -> closeSpot()
             current.showResults -> closeResults()
             current.tab in 8..10 -> selectTab(7)
-            current.tab == 7 || current.tab in 3..5 -> selectTab(6)
+            current.tab == 7 || current.tab == 11 || current.tab in 3..5 -> selectTab(6)
             current.tab != 0 -> selectTab(0)
         }
     }
-    fun setBoat(value: Boolean) { _state.value = _state.value.copy(boat = value, recommendationSearch = null); if (_state.value.showResults) refreshRecommendations() }
+    fun setBoat(value: Boolean) { _state.value = _state.value.copy(boat = value, recommendationSearch = null); SearchPreferencesStore.saveBoat(value); if (_state.value.showResults) refreshRecommendations() }
     fun setWindowPriority(value: WindowPriority) {
         _state.value = _state.value.copy(preference = value, recommendationSearch = null)
+        SearchPreferencesStore.savePriority(value.name)
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setDate(value: String) {
         val today = LocalDate.now(nzZone)
         val range = presetFishingDates(value, today) ?: return
         _state.value = _state.value.copy(dateLabel = value, dateStart = range.first, dateEnd = range.second, recommendationSearch = null)
+        SearchPreferencesStore.saveDate(value, range.first, range.second)
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setCustomDates(start: LocalDate, end: LocalDate) {
         val today = LocalDate.now(nzZone)
         if (start < today || end < start || end > today.plusDays(15)) return
         _state.value = _state.value.copy(dateLabel = "Custom", dateStart = start, dateEnd = end, recommendationSearch = null)
+        SearchPreferencesStore.saveDate("Custom", start, end)
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setRadius(km: Int) {
@@ -129,15 +154,18 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
     fun setSuggestedHours() {
         _state.value = _state.value.copy(preferredTime = suggestedHours, preferredTimeIsSuggested = true, recommendationSearch = null)
+        SearchPreferencesStore.saveHours("SUGGESTED")
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setPreferredHours(start: LocalTime, end: LocalTime) {
         if (start == end) return
         _state.value = _state.value.copy(preferredTime = PreferredTimeRange(start, end), preferredTimeIsSuggested = false, recommendationSearch = null)
+        SearchPreferencesStore.saveHours("CUSTOM", start, end)
         if (_state.value.showResults) refreshRecommendations()
     }
     fun clearPreferredHours() {
         _state.value = _state.value.copy(preferredTime = null, preferredTimeIsSuggested = false, recommendationSearch = null)
+        SearchPreferencesStore.saveHours("ANYTIME")
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setSearchLocationMode(mode: SearchLocationMode) {
@@ -314,7 +342,14 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         if (hasDeviceLocation) updateLocation(point)
         _state.value = _state.value.copy(fishChecking = true, fishError = null)
         val selectedArea = _state.value.fishRulesAreaId
-        viewModelScope.launch { runCatching { repository.identifyFish(image, point, hasDeviceLocation, selectedArea) }.onSuccess { _state.value = _state.value.copy(fishCheck = it, fishChecking = false) }.onFailure { _state.value = _state.value.copy(fishChecking = false, fishError = it.message ?: "Could not identify this photo.") } }
+        viewModelScope.launch {
+            runCatching { repository.identifyFish(image, point, hasDeviceLocation, selectedArea) }
+                .onSuccess { result ->
+                    val current = _state.value
+                    _state.value = current.copy(fishCheck = result.takeIf { current.fishRulesAreaId == selectedArea }, fishChecking = false)
+                }
+                .onFailure { _state.value = _state.value.copy(fishChecking = false, fishError = it.message ?: "Could not identify this photo.") }
+        }
     }
     fun refreshAccount() {
         val version = accountVersion

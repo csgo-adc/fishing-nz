@@ -219,7 +219,7 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showPlan) ModalBottomSheet(onDismissRequest = { showPlan = false }) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.85f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.85f).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Plan your fishing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text("Fishing from", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -401,16 +401,20 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
         s.fishPhoto?.let { uri -> val bitmap = remember(uri) { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
-        s.fishCheck?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        s.fishCheck?.takeIf { it.areaId == s.fishRulesAreaId }?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            val nearRaglanWest = s.fishRulesAreaIsSuggested && result.areaId == "auckland-kermadec" && isNearRaglan(s.deviceLocation)
+            val westSnapperRows = result.fishRules.filter { it.species.contains("Auckland West", ignoreCase = true) }
+            val shownRules = if (nearRaglanWest && result.commonName.equals("Snapper", ignoreCase = true) && westSnapperRows.isNotEmpty()) westSnapperRows else result.fishRules
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text("${result.confidence}% match", color = Orange, fontWeight = FontWeight.Bold) }
             Text(result.scientificName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("MPI rules · ${result.areaName}", color = Navy, fontWeight = FontWeight.SemiBold); result.rulesReviewedAt?.let { Text("Reviewed $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
-            if (result.fishRules.isEmpty()) Text(when {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("MPI rules · ${fishingRulesAreas.firstOrNull { it.id == result.areaId }?.name ?: "Area not selected"}", color = Navy, fontWeight = FontWeight.SemiBold); result.rulesReviewedAt?.let { Text("Reviewed $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
+            if (nearRaglanWest) Text("Near Raglan: check the Auckland West snapper subarea for the exact catch spot.", color = Navy, style = MaterialTheme.typography.bodySmall)
+            if (shownRules.isEmpty()) Text(when {
                 result.rulesNeedsReview -> "MPI has updated this area. Open the current MPI page for size and catch limits."
                 result.areaSelectionRequired || s.fishRulesAreaId == null -> "Choose the MPI fishing area where you caught this fish to check size and catch limits."
                 else -> "No matching species limit was found in the saved rules for this area. Check MPI before keeping this fish."
             }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp))
-            result.fishRules.forEach { rule ->
+            shownRules.forEach { rule ->
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(rule.species, color = Navy, fontWeight = FontWeight.Bold)
                     if (rule.details.any { it.label.contains("daily limit", ignoreCase = true) || it.label.contains("bag limit", ignoreCase = true) }) {
@@ -422,7 +426,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
                 }
             }
             Text("Rules area: ${fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.name ?: "not selected"}. Check local closures before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            (result.rulesSourceUrl ?: fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.officialUrl)?.let { url ->
+            (fishingRulesAreas.firstOrNull { it.id == result.areaId }?.officialUrl ?: result.rulesSourceUrl)?.let { url ->
                 TextButton(onClick = { uriHandler.openUri(url) }) { Text("See full MPI rules") }
             } ?: TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("Find your MPI fishing area") }
         } } }
@@ -505,7 +509,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             password = ""
         }
     }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
         Text("Save your details and manage your CatchCheck profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
@@ -571,7 +575,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             submittedFeedback = null
         }
     }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Feedback", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
         Text("Report a problem or tell us what would improve your fishing trips.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (s.account == null) {
@@ -696,16 +700,42 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
 
 @Composable private fun RecommendationCard(item: Recommendation, click: () -> Unit = {}) {
     Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold)
             Text(item.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Why this time", color = Navy, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-            Text(item.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." },
-                color = Navy, style = MaterialTheme.typography.bodyMedium)
-            (item.warnings + listOfNotNull(item.warning)).distinct().forEach {
-                Text(it, color = Orange, style = MaterialTheme.typography.bodySmall)
+            Column(Modifier.fillMaxWidth().background(Seafoam, RoundedCornerShape(12.dp)).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("WHY THIS WINDOW", color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                if (!item.dataComplete) Text("Some local forecast data is missing; treat this as a time to investigate.",
+                    color = Navy, style = MaterialTheme.typography.bodySmall)
+                Text(item.reasons.firstOrNull() ?: item.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." },
+                    color = Navy, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (item.conditions.isNotEmpty()) {
+                Text("Conditions", color = Navy, fontWeight = FontWeight.SemiBold)
+                val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
+                item.conditions.forEachIndexed { index, detail ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(labels.getOrElse(index) { "Other" }, Modifier.width(66.dp),
+                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium)
+                        Text(detail, Modifier.weight(1f), color = Navy, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            val warnings = (item.warnings + listOfNotNull(item.warning)).distinct()
+            if (warnings.isNotEmpty()) Column(
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiary.copy(alpha = .10f), RoundedCornerShape(12.dp)).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("CHECK BEFORE YOU GO", color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                warnings.forEach {
+                    Text("• $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
@@ -725,7 +755,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
     var query by rememberSaveable { mutableStateOf("") }
     val matches = remember(query) { searchOrigins.filter { it.name.contains(query.trim(), ignoreCase = true) }.sortedBy { it.name } }
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Choose a location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             ListItem(headlineContent = { Text("Use current location") },
                 leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
@@ -752,7 +782,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             .sortedBy { it.name }
     }
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Choose a tide location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             ListItem(headlineContent = { Text("Use current location") },
                 leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
@@ -846,8 +876,9 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Why this time", fontWeight = FontWeight.Bold, color = Navy)
-                    Text(spot.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." }, color = Navy)
+                    Text("Why this window", fontWeight = FontWeight.Bold, color = Navy)
+                    if (!spot.dataComplete) Text("Some local forecast data is missing; treat this as a time to investigate.", color = Navy)
+                    Text(spot.reasons.firstOrNull() ?: spot.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." }, color = Navy)
                     spot.alternative?.takeIf { it.isNotBlank() }?.let {
                         Text("Another option", fontWeight = FontWeight.SemiBold, color = Navy)
                         Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -857,14 +888,23 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             if (spot.conditions.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Conditions during your session", fontWeight = FontWeight.Bold, color = Navy)
-                    spot.conditions.forEach { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
+                    spot.conditions.forEachIndexed { index, detail ->
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(labels.getOrElse(index) { "Other" }, Modifier.width(66.dp),
+                                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium)
+                            Text(detail, Modifier.weight(1f), color = Navy, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
             }
             val warnings = (spot.warnings + listOfNotNull(spot.warning)).distinct()
-            if (warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+            if (warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiary.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Check before you go", fontWeight = FontWeight.Bold, color = Navy)
-                    warnings.forEach { Text("• $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                    Text("Check before you go", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                    warnings.forEach { Text("• $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall) }
                 }
             }
             if (spot.sourceNote.isNotBlank()) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -940,6 +980,8 @@ private val fishingRulesAreas = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun RulesScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val uriHandler = LocalUriHandler.current
     val repository = remember { RulesRepository() }
     val selectedAreaId = s.fishRulesAreaId
@@ -949,7 +991,43 @@ private val fishingRulesAreas = listOf(
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var reloadToken by remember { mutableIntStateOf(0) }
+    var locationLoading by remember { mutableStateOf(false) }
+    var locationNotice by remember { mutableStateOf<String?>(null) }
     val area = fishingRulesAreas.firstOrNull { it.id == selectedAreaId }
+
+    fun hasLocationPermission() =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    fun refreshLocation(selectCurrentArea: Boolean = false) {
+        if (!hasLocationPermission() || locationLoading) return
+        locationLoading = true
+        locationNotice = null
+        requestCurrentLocation(context, { point ->
+            locationLoading = false
+            vm.updateLocation(point)
+            if (selectCurrentArea) vm.resetFishRulesAreaToCurrentLocation()
+        }, {
+            locationLoading = false
+            if (selectCurrentArea) locationNotice = "Current location is unavailable. Choose the fishing area below."
+        })
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+            refreshLocation(selectCurrentArea = true)
+        else locationNotice = "Location permission is off. Choose the area where you will fish."
+    }
+    LaunchedEffect(Unit) { refreshLocation() }
+    DisposableEffect(lifecycle) {
+        var initialResumeSeen = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (initialResumeSeen) refreshLocation()
+                initialResumeSeen = true
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(selectedAreaId, reloadToken) {
         page = null
@@ -967,8 +1045,9 @@ private val fishingRulesAreas = listOf(
             Text("Choose fishing area", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("MPI divides the coast into these fishing areas. Choose where you will fish.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            if (s.deviceLocation != null || s.tideDeviceLocation != null) TextButton(onClick = {
-                vm.resetFishRulesAreaToCurrentLocation()
+            TextButton(onClick = {
+                if (hasLocationPermission()) refreshLocation(selectCurrentArea = true)
+                else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                 query = ""
                 showAreas = false
             }, modifier = Modifier.fillMaxWidth()) {
@@ -998,14 +1077,19 @@ private val fishingRulesAreas = listOf(
         Regex("combined daily bag limit of\\s+\\d+\\s+finfish[^.]*\\.", RegexOption.IGNORE_CASE)
             .find(section.text)?.value?.replace("*", "")
     } ?: "Daily limits vary by species and location. Check the MPI page for the exact fishing spot."
-    val speciesRules = page?.let(::ruleSpeciesRows).orEmpty()
+    val nearRaglanWest = s.fishRulesAreaIsSuggested && selectedAreaId == "auckland-kermadec" && isNearRaglan(s.deviceLocation)
+    val speciesRules = page?.let(::ruleSpeciesRows).orEmpty().let { rows ->
+        if (nearRaglanWest && rows.any { it.species.contains("Auckland West", ignoreCase = true) })
+            rows.filter { !it.species.startsWith("Snapper", ignoreCase = true) || it.species.contains("Auckland West", ignoreCase = true) }
+        else rows
+    }
     val matchingSpecies = if (search.isEmpty()) {
         val preferred = listOf("snapper", "blue cod", "kingfish", "kahawai", "pāua", "paua", "cockle")
         speciesRules.filter { rule -> preferred.any { rule.species.startsWith(it, ignoreCase = true) } }
             .sortedBy { rule -> preferred.indexOfFirst { rule.species.startsWith(it, ignoreCase = true) } }
             .take(8)
     } else speciesRules.filter { it.species.contains(search, ignoreCase = true) }.take(40)
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(modifier.fillMaxSize().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(8.dp))
             Text("Fishing rules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -1021,6 +1105,13 @@ private val fishingRulesAreas = listOf(
                     }
                     if (s.fishRulesAreaIsSuggested) Text("Suggested from your current location", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else if (area != null) Text("Manually selected fishing area", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (nearRaglanWest) Text("Near Raglan: snapper is in the Auckland West subarea. Check the exact catch spot on MPI.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    if (locationLoading) Text("Checking current location…", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    locationNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                     area?.let { Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Text("GPS on land cannot safely identify the exact marine rule boundary. Select the MPI area for your fishing spot.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1043,7 +1134,7 @@ private val fishingRulesAreas = listOf(
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("MPI has updated this area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
                     Text("Open the current MPI page for limits and local restrictions. The saved summary is being reviewed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = { uriHandler.openUri(rules.sourceUrl) }) { Text("Open current MPI rules") }
+                    Button(onClick = { uriHandler.openUri(area?.officialUrl ?: rules.sourceUrl) }) { Text("Open current MPI rules") }
                 }
             } }
             else {
@@ -1066,7 +1157,7 @@ private val fishingRulesAreas = listOf(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item { Text("Local closures, gear restrictions and subarea rules can change what applies. Check MPI for your exact fishing spot.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            item { Button(onClick = { uriHandler.openUri(rules.sourceUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See all rules on MPI") } }
+            item { Button(onClick = { uriHandler.openUri(area?.officialUrl ?: rules.sourceUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See all rules on MPI") } }
             }
         }
         if (selectedAreaId == null) item { TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("View MPI fishing-area maps") } }
@@ -1255,7 +1346,7 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
         item { Text("High and low tide predictions: Toitū Te Whenua Land Information New Zealand (LINZ). Times are New Zealand local time; heights are above the station's Chart Datum. Check the official table before planning around water depth.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
     }
     if (showStations) ModalBottomSheet(onDismissRequest = { showStations = false }) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Choose tide location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("${tideStations.size} LINZ daily-prediction locations", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(stationQuery, onValueChange = { stationQuery = it }, modifier = Modifier.fillMaxWidth(),
