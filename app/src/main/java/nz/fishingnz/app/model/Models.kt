@@ -62,6 +62,10 @@ data class RecommendationSearch(
 )
 data class FishRuleDetail(val label: String, val value: String)
 data class FishRuleMatch(val species: String, val dailyLimit: String?, val minimumSize: String?, val details: List<FishRuleDetail>, val minimumSizeLabel: String? = null)
+data class FishRulesResult(
+    val areaId: String, val areaName: String, val rulesReviewedAt: String?, val fishRules: List<FishRuleMatch>,
+    val rulesNeedsReview: Boolean, val rulesSourceUrl: String?
+)
 data class FishCheck(
     val commonName: String,
     val scientificName: String,

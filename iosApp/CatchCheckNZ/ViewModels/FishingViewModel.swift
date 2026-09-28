@@ -74,10 +74,28 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var tideError: String?
     @Published private(set) var usesNearbyTideStation = true
     @Published var error: String?
-    @Published var selectedPhoto: UIImage?
+    @Published var selectedPhoto: UIImage? {
+        didSet {
+            if selectedPhoto !== oldValue {
+                fishIdentifyRequestID = UUID()
+                fishRulesTask?.cancel()
+                fishRulesRequestID = UUID()
+                isLoadingFishRules = false
+                fishRulesError = nil
+                fishCheck = nil
+                error = nil
+                pendingFishPhoto = nil
+                isCheckingFish = false
+            }
+        }
+    }
     @Published var fishCheck: FishCheck?
-    @Published private(set) var selectedRulesAreaID: String?
+    @Published private(set) var selectedRulesAreaID: String? {
+        didSet { if selectedRulesAreaID != oldValue { refreshFishRulesForSelection() } }
+    }
     @Published var isCheckingFish = false
+    @Published private(set) var isLoadingFishRules = false
+    @Published private(set) var fishRulesError: String?
     @Published var savedSpotNames = Set<String>()
     @Published var savedRecommendations: [String: Recommendation] = [:]
     @Published var activeTrip: Recommendation?
@@ -101,6 +119,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private let scoringService = FishingScoringService()
     private let locationManager = CLLocationManager()
     private var pendingFishPhoto: UIImage?
+    private var fishIdentifyRequestID = UUID()
+    private var fishRulesTask: Task<Void, Never>?
+    private var fishRulesRequestID = UUID()
     private var recommendationTask: Task<Void, Never>?
     private var recommendationSearchID = UUID()
     private var locationRequestID = UUID()
@@ -701,13 +722,56 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private func identifyPendingFish(at point: GeoPoint) { guard let photo = pendingFishPhoto else { return }; pendingFishPhoto = nil; identify(photo, at: point) }
     private func identify(_ photo: UIImage, at point: GeoPoint) {
         isCheckingFish = true
+        fishIdentifyRequestID = UUID()
+        let requestID = fishIdentifyRequestID
         let requestedAreaID = selectedRulesAreaID
         Task {
             do {
                 let result = try await repository.identifyFish(image: photo, at: point, hasDeviceLocation: hasDeviceLocation, selectedRulesAreaID: requestedAreaID)
-                if selectedPhoto === photo { fishCheck = result }
-            } catch { if selectedPhoto === photo { self.error = error.localizedDescription } }
-            isCheckingFish = false
+                if requestID == fishIdentifyRequestID && selectedPhoto === photo {
+                    fishRulesTask?.cancel()
+                    fishRulesRequestID = UUID()
+                    fishCheck = result
+                    isLoadingFishRules = false
+                    fishRulesError = nil
+                    if result.isFish && result.areaID != selectedRulesAreaID { refreshFishRulesForSelection() }
+                }
+            } catch {
+                if requestID == fishIdentifyRequestID && selectedPhoto === photo { self.error = error.localizedDescription }
+            }
+            if requestID == fishIdentifyRequestID && selectedPhoto === photo { isCheckingFish = false }
+        }
+    }
+    func retryFishRules() { refreshFishRulesForSelection(force: true) }
+
+    private func refreshFishRulesForSelection(force: Bool = false) {
+        fishRulesTask?.cancel()
+        fishRulesRequestID = UUID()
+        guard let check = fishCheck, check.isFish else { return }
+        let areaID = selectedRulesAreaID
+        if !force && check.areaID == areaID && !isLoadingFishRules { return }
+        let areaName = fishingRulesAreas.first(where: { $0.id == areaID })?.name ?? "Choose an MPI fishing area"
+        fishCheck = check.awaitingRules(for: areaID, name: areaName)
+        fishRulesError = nil
+        guard let areaID else { isLoadingFishRules = false; return }
+        isLoadingFishRules = true
+        let requestID = fishRulesRequestID
+        let photo = selectedPhoto
+        fishRulesTask = Task {
+            do {
+                let rules = try await repository.fishRules(species: check.commonName, areaID: areaID)
+                guard requestID == fishRulesRequestID, selectedRulesAreaID == areaID,
+                      selectedPhoto === photo, fishCheck?.commonName == check.commonName else { return }
+                fishCheck = fishCheck?.withRules(rules)
+                isLoadingFishRules = false
+            } catch is CancellationError {
+                return
+            } catch {
+                guard requestID == fishRulesRequestID, selectedRulesAreaID == areaID,
+                      selectedPhoto === photo, fishCheck?.commonName == check.commonName else { return }
+                fishRulesError = "Could not load this area's saved limits. Check the official MPI rules."
+                isLoadingFishRules = false
+            }
         }
     }
     func refreshConditions() {

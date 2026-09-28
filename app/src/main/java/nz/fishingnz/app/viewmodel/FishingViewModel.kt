@@ -51,7 +51,9 @@ data class FishingUiState(
     val stationTide: TideState? = null, val tideLoading: Boolean = false, val tideError: String? = null,
     val tideDeviceLocation: GeoPoint? = null, val tidePlaceName: String? = null, val tideLocationAttempted: Boolean = false,
     val tideStationManual: Boolean = false, val tideLocationNotice: String? = null, val error: String? = null,
-    val fishPhoto: Uri? = null, val fishCheck: FishCheck? = null, val fishChecking: Boolean = false, val fishError: String? = null, val savedSpots: Set<String> = emptySet(), val activeTrip: Recommendation? = null,
+    val fishPhoto: Uri? = null, val fishCheck: FishCheck? = null, val fishChecking: Boolean = false, val fishError: String? = null,
+    val fishRulesLoading: Boolean = false, val fishRulesError: String? = null,
+    val savedSpots: Set<String> = emptySet(), val activeTrip: Recommendation? = null,
     val selectedSpot: Recommendation? = null, val showResults: Boolean = false, val recommendationSearch: RecommendationSearch? = null,
     val recommendationsLoading: Boolean = false, val recommendationsError: String? = null, val savedRecommendations: List<Recommendation> = emptyList(),
     val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountLoading: Boolean = true,
@@ -63,6 +65,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     private val recommendationEngine = RecommendationEngine()
     private var recommendationJob: Job? = null
     private var tideJob: Job? = null
+    private var fishRulesJob: Job? = null
+    private var fishIdentifyGeneration = 0L
     private var fishRulesAreaManuallySelected = false
     private var accountVersion = 0
     private val savedSearchStation = tideStations.firstOrNull { it.id == SearchPreferencesStore.savedStationId() }
@@ -237,6 +241,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun chooseFishRulesArea(id: String?) {
         fishRulesAreaManuallySelected = id != null
         _state.value = _state.value.copy(fishRulesAreaId = id, fishRulesAreaIsSuggested = false)
+        refreshFishRulesForSelection()
     }
     fun syncRulesAreaFromDeviceLocation(point: GeoPoint) {
         if (fishRulesAreaManuallySelected) return
@@ -244,6 +249,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         if (_state.value.fishRulesAreaId != suggestion || _state.value.fishRulesAreaIsSuggested != (suggestion != null)) {
             _state.value = _state.value.copy(fishRulesAreaId = suggestion,
                 fishRulesAreaIsSuggested = suggestion != null)
+            refreshFishRulesForSelection()
         }
     }
     fun resetFishRulesAreaToCurrentLocation() {
@@ -252,6 +258,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val suggestion = point?.let(::suggestedRulesAreaId)
         _state.value = _state.value.copy(fishRulesAreaId = suggestion,
             fishRulesAreaIsSuggested = suggestion != null)
+        refreshFishRulesForSelection()
     }
     fun selectManualOrigin(origin: SearchOrigin) {
         val old = _state.value
@@ -337,8 +344,21 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             }
         }
     }
-    fun setFishPhoto(uri: Uri?) { _state.value = _state.value.copy(fishPhoto = uri, fishCheck = null, fishError = null) }
+    fun setFishPhoto(uri: Uri?) {
+        fishIdentifyGeneration += 1
+        fishRulesJob?.cancel()
+        _state.value = _state.value.copy(fishPhoto = uri, fishCheck = null, fishError = null,
+            fishChecking = false, fishRulesLoading = false, fishRulesError = null)
+    }
+    fun reportUnreadableFishPhoto() {
+        fishIdentifyGeneration += 1
+        fishRulesJob?.cancel()
+        _state.value = _state.value.copy(fishCheck = null, fishChecking = false,
+            fishRulesLoading = false, fishRulesError = null,
+            fishError = "Could not read this photo. Choose another image and try again.")
+    }
     fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean) {
+        val requestGeneration = ++fishIdentifyGeneration
         if (hasDeviceLocation) updateLocation(point)
         _state.value = _state.value.copy(fishChecking = true, fishError = null)
         val requestedPhoto = _state.value.fishPhoto
@@ -347,13 +367,57 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             runCatching { repository.identifyFish(image, point, hasDeviceLocation, selectedArea) }
                 .onSuccess { result ->
                     val current = _state.value
-                    _state.value = current.copy(fishCheck = result.takeIf { current.fishPhoto == requestedPhoto }, fishChecking = false)
+                    if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto) {
+                        fishRulesJob?.cancel()
+                        _state.value = current.copy(fishCheck = result, fishChecking = false,
+                            fishRulesLoading = false, fishRulesError = null)
+                        if (result.isFish && result.areaId != _state.value.fishRulesAreaId) refreshFishRulesForSelection()
+                    }
                 }
                 .onFailure {
                     val current = _state.value
-                    _state.value = current.copy(fishChecking = false,
-                        fishError = (it.message ?: "Could not identify this photo.").takeIf { current.fishPhoto == requestedPhoto })
+                    if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto)
+                        _state.value = current.copy(fishChecking = false,
+                            fishError = it.message ?: "Could not identify this photo.")
                 }
+        }
+    }
+    fun retryFishRules() = refreshFishRulesForSelection(force = true)
+
+    private fun refreshFishRulesForSelection(force: Boolean = false) {
+        fishRulesJob?.cancel()
+        val current = _state.value
+        val check = current.fishCheck ?: return
+        if (!check.isFish) return
+        val areaId = current.fishRulesAreaId
+        if (!force && areaId == check.areaId && !current.fishRulesLoading) return
+        val cleared = check.copy(areaId = areaId, areaName = if (areaId == null) "Choose an MPI fishing area" else check.areaName,
+            fishRules = emptyList(), rulesReviewedAt = null,
+            rulesNeedsReview = false, rulesSourceUrl = null, areaSelectionRequired = areaId == null)
+        if (areaId == null) {
+            _state.value = current.copy(fishCheck = cleared, fishRulesLoading = false, fishRulesError = null)
+            return
+        }
+        val photo = current.fishPhoto
+        _state.value = current.copy(fishCheck = cleared, fishRulesLoading = true, fishRulesError = null)
+        fishRulesJob = viewModelScope.launch {
+            try {
+                val rules = repository.fishRules(check.commonName, areaId)
+                val latest = _state.value
+                if (latest.fishPhoto == photo && latest.fishRulesAreaId == areaId && latest.fishCheck?.commonName == check.commonName) {
+                    _state.value = latest.copy(fishCheck = latest.fishCheck.copy(areaId = rules.areaId,
+                        areaName = rules.areaName, fishRules = rules.fishRules, rulesReviewedAt = rules.rulesReviewedAt,
+                        rulesNeedsReview = rules.rulesNeedsReview, rulesSourceUrl = rules.rulesSourceUrl,
+                        areaSelectionRequired = false), fishRulesLoading = false)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                val latest = _state.value
+                if (latest.fishPhoto == photo && latest.fishRulesAreaId == areaId && latest.fishCheck?.commonName == check.commonName)
+                    _state.value = latest.copy(fishRulesLoading = false,
+                        fishRulesError = "Could not load this area's saved limits. Check the official MPI rules.")
+            }
         }
     }
     fun refreshAccount() {

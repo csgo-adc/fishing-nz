@@ -103,6 +103,9 @@ struct WeatherView: View {
                             .tag(place.id)
                     }
                 }
+                // A searched location adds a page. Rebuild the pager when its page IDs
+                // change so the newly selected page is available before it resolves selection.
+                .id(places.map(\.id).joined(separator: ","))
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(CatchCheckColor.cream)

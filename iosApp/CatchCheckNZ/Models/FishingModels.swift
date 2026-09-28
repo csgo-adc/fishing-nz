@@ -44,12 +44,38 @@ struct Recommendation: Identifiable, Equatable {
 }
 struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let minimumSizeLabel: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
+struct FishRulesResult: Decodable {
+    let areaID: String; let areaName: String; let rulesNeedsReview: Bool; let rulesReviewedAt: String?
+    let rulesSourceURL: URL?; let fishRules: [FishRuleMatch]
+    enum CodingKeys: String, CodingKey {
+        case areaName, rulesNeedsReview, rulesReviewedAt, fishRules
+        case areaID = "areaId"
+        case rulesSourceURL = "rulesSourceUrl"
+    }
+}
 struct FishCheck {
     let commonName: String; let scientificName: String; let confidence: Int
     let areaID: String?; let areaName: String; let areaIsEstimated: Bool
     let rulesNeedsReview: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?
     let fishRules: [FishRuleMatch]; let isFish: Bool; let otherPossibilities: [String]
     let visibleClues: String; let identificationNote: String
+
+    func withRules(_ rules: FishRulesResult) -> FishCheck {
+        FishCheck(commonName: commonName, scientificName: scientificName, confidence: confidence,
+                  areaID: rules.areaID, areaName: rules.areaName, areaIsEstimated: false,
+                  rulesNeedsReview: rules.rulesNeedsReview, rulesReviewedAt: rules.rulesReviewedAt,
+                  rulesSourceURL: rules.rulesSourceURL, fishRules: rules.fishRules,
+                  isFish: isFish, otherPossibilities: otherPossibilities,
+                  visibleClues: visibleClues, identificationNote: identificationNote)
+    }
+
+    func awaitingRules(for areaID: String?, name: String) -> FishCheck {
+        FishCheck(commonName: commonName, scientificName: scientificName, confidence: confidence,
+                  areaID: areaID, areaName: name, areaIsEstimated: false,
+                  rulesNeedsReview: false, rulesReviewedAt: nil, rulesSourceURL: nil, fishRules: [],
+                  isFish: isFish, otherPossibilities: otherPossibilities,
+                  visibleClues: visibleClues, identificationNote: identificationNote)
+    }
 }
 
 struct AccountProfile: Decodable, Equatable {

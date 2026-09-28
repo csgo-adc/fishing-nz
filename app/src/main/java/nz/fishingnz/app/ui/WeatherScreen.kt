@@ -110,10 +110,12 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
     val store = remember(context) { WeatherLocationStore(context) }
     val initiallySelected = remember(store) { store.selected() }
     var savedIds by remember(store) { mutableStateOf(store.saved()) }
-    var extraId by remember(store) { mutableStateOf(initiallySelected.takeIf { it != "current" && it !in savedIds }) }
-    val places = remember(savedIds, extraId) { weatherPlaces(savedIds, extraId) }
+    var selectedId by remember(store) { mutableStateOf(initiallySelected) }
+    val places = remember(savedIds, selectedId) {
+        weatherPlaces(savedIds, selectedId.takeIf { it != "current" && it !in savedIds })
+    }
     val pager = rememberPagerState(initialPage = places.indexOfFirst { it.id == initiallySelected }.coerceAtLeast(0)) { places.size }
-    val selected = places.getOrElse(pager.currentPage) { places.first() }
+    val selected = places.firstOrNull { it.id == selectedId } ?: places.first()
     var pendingId by remember { mutableStateOf<String?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
     var refreshIndex by remember { mutableIntStateOf(0) }
@@ -126,12 +128,16 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
             pendingId = null
         }
     }
-    LaunchedEffect(pager.currentPage, places) {
-        store.saveSelected(selected.id)
-    }
-    LaunchedEffect(pager.currentPage, pendingId, places) {
-        if (pendingId == null && extraId != null && extraId !in savedIds && selected.id != extraId) {
-            extraId = null
+    LaunchedEffect(pager.settledPage, pendingId, places) {
+        // Only a completed swipe changes the selected location. A picker selection must
+        // not be overwritten while the pager is still moving to its new page.
+        if (pendingId == null) {
+            places.getOrNull(pager.settledPage)?.id?.let { visibleId ->
+                if (visibleId != selectedId) {
+                    selectedId = visibleId
+                    store.saveSelected(visibleId)
+                }
+            }
         }
     }
 
@@ -147,14 +153,13 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
             if (selected.id != "current") {
                 val isSaved = selected.id in savedIds
                 IconButton(onClick = {
+                    pendingId = selected.id
                     if (isSaved) {
                         savedIds = savedIds.filterNot { it == selected.id }
-                        extraId = selected.id
                     } else {
                         savedIds = savedIds + selected.id
                     }
                     store.saveSaved(savedIds)
-                    pendingId = selected.id
                 }) {
                     Icon(if (isSaved) Icons.Default.Star else Icons.Default.StarBorder,
                         contentDescription = if (isSaved) "Remove ${selected.name} from saved weather locations" else "Save ${selected.name} as a weather location")
@@ -168,7 +173,11 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 places.forEach { place ->
-                    OutlinedButton(onClick = { pendingId = place.id }) {
+                    OutlinedButton(onClick = {
+                        selectedId = place.id
+                        store.saveSelected(place.id)
+                        pendingId = place.id
+                    }) {
                         Text(place.name, color = if (place.id == selected.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                     }
                 }
@@ -187,7 +196,8 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
     }
 
     if (pickerOpen) WeatherLocationPicker(savedIds, onDismiss = { pickerOpen = false }) { id ->
-        if (id != "current" && id !in savedIds) extraId = id
+        selectedId = id
+        store.saveSelected(id)
         pendingId = id
         pickerOpen = false
     }

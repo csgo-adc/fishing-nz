@@ -187,7 +187,22 @@ struct FishingRepository {
         guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NSError(domain: "FishIdentification", code: 1, userInfo: [NSLocalizedDescriptionKey: payload.error ?? "Fish identification failed."]) }
         let commonName = payload.commonName ?? "Unknown fish"
         let scientificName = payload.scientificName ?? ""
-        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaID: payload.areaID, areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [], isFish: payload.isFish ?? true, otherPossibilities: payload.otherPossibilities ?? [], visibleClues: payload.visibleClues ?? "", identificationNote: payload.identificationNote ?? "")
+        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaID: payload.areaID, areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: payload.rulesSourceURL.flatMap(URL.init(string:)), fishRules: payload.fishRules ?? [], isFish: payload.isFish ?? true, otherPossibilities: payload.otherPossibilities ?? [], visibleClues: payload.visibleClues ?? "", identificationNote: payload.identificationNote ?? "")
+    }
+
+    func fishRules(species: String, areaID: String) async throws -> FishRulesResult {
+        guard var components = URLComponents(string: accountBaseURL + "/v1/fish/rules") else { throw URLError(.badURL) }
+        components.queryItems = [URLQueryItem(name: "area", value: areaID), URLQueryItem(name: "species", value: species)]
+        guard let url = components.url else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else {
+            let message = (try? JSONDecoder().decode(FishIdentificationResponse.self, from: data).error) ?? "Could not load MPI rules."
+            throw NSError(domain: "FishRules", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+        return try JSONDecoder().decode(FishRulesResult.self, from: data)
     }
 
     private static let tideStore = LINZTideStore.shared

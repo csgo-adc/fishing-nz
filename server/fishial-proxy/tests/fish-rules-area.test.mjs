@@ -34,6 +34,7 @@ test("fish identification attaches limits only for a selected MPI area", async (
   const queries = [];
   const statusWrites = [];
   let crawlStatus = null;
+  let ruleQueryFails = false;
   const ruleRow = {
     area_id: "central", area_name: "Central",
     source_url: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/central-fishing-rules",
@@ -50,7 +51,10 @@ test("fish identification attaches limits only for a selected MPI area", async (
             async first() {
               if (sql.includes("FROM account_sessions")) return { id: "tester", plan: "free", email_verified: 1 };
               if (sql.includes("SELECT content_sha256, reviewed_at FROM mpi_fishing_rules")) return { content_sha256: "0".repeat(64), reviewed_at: ruleRow.reviewed_at };
-              if (sql.includes("FROM mpi_fishing_rules")) return { ...ruleRow, crawl_status: crawlStatus };
+              if (sql.includes("FROM mpi_fishing_rules")) {
+                if (ruleQueryFails) throw new Error("D1 unavailable");
+                return { ...ruleRow, crawl_status: crawlStatus };
+              }
               throw new Error(`Unexpected query: ${sql}`);
             },
             async all() { return { results: [{ ...ruleRow, crawl_status: crawlStatus }] }; },
@@ -78,6 +82,13 @@ test("fish identification attaches limits only for a selected MPI area", async (
     assert.equal(response.status, 200);
     return response.json();
   };
+  const lookup = async (area, species) => {
+    const url = new URL("https://example.test/v1/fish/rules");
+    if (area != null) url.searchParams.set("area", area);
+    if (species != null) url.searchParams.set("species", species);
+    const response = await worker.fetch(new Request(url), env);
+    return { status: response.status, body: await response.json() };
+  };
 
   try {
     const unselected = await identify();
@@ -98,9 +109,36 @@ test("fish identification attaches limits only for a selected MPI area", async (
     assert.equal(selected.areaName, "Central");
     assert.equal(selected.areaSelectionRequired, false);
     assert.equal(selected.areaIsEstimated, false);
+    const refreshed = await lookup("central", "Snapper");
+    assert.equal(refreshed.status, 200);
+    assert.equal(refreshed.body.areaId, "central");
+    assert.deepEqual(refreshed.body.fishRules, selected.fishRules);
+    const unmatched = await lookup("central", "Spotty");
+    assert.equal(unmatched.status, 200);
+    assert.deepEqual(unmatched.body.fishRules, []);
+    assert.match(unmatched.body.rulesSourceUrl, /central-fishing-rules/);
+    assert.equal((await lookup("unknown", "Snapper")).status, 400);
     assert.equal(selected.fishRules[0].dailyLimit, "10");
     assert.equal(selected.fishRules[0].minimumSizeLabel, "Min fish length (cm)");
-    assert.equal(queries.filter((query) => query.includes("FROM mpi_fishing_rules")).length, 1);
+    assert.equal(queries.filter((query) => query.includes("FROM mpi_fishing_rules")).length, 3);
+
+    const validTablesJSON = ruleRow.tables_json;
+    ruleRow.tables_json = "{bad json";
+    const malformedLookup = await lookup("central", "Snapper");
+    assert.equal(malformedLookup.status, 502);
+    assert.match(malformedLookup.body.error, /Please try again/);
+    const malformedIdentify = await identify("central");
+    assert.equal(malformedIdentify.commonName, "Snapper");
+    assert.deepEqual(malformedIdentify.fishRules, []);
+    ruleRow.tables_json = validTablesJSON;
+
+    ruleQueryFails = true;
+    const failedLookup = await lookup("central", "Snapper");
+    assert.equal(failedLookup.status, 502);
+    const failedIdentify = await identify("central");
+    assert.equal(failedIdentify.commonName, "Snapper");
+    assert.deepEqual(failedIdentify.fishRules, []);
+    ruleQueryFails = false;
 
     ruleRow.source_url += "/";
     const trailingSlash = await identify("central");
@@ -115,6 +153,10 @@ test("fish identification attaches limits only for a selected MPI area", async (
     assert.equal(mismatched.rulesNeedsReview, true);
     assert.deepEqual(mismatched.fishRules, []);
     assert.match(mismatched.rulesSourceUrl, /auckland-kermadec-fishing-rules$/);
+    const mismatchedLookup = await lookup("auckland-kermadec", "Snapper");
+    assert.equal(mismatchedLookup.status, 200);
+    assert.equal(mismatchedLookup.body.rulesNeedsReview, true);
+    assert.deepEqual(mismatchedLookup.body.fishRules, []);
     const mismatchedRulesResponse = await worker.fetch(new Request("https://example.test/v1/rules?area=auckland-kermadec"), env);
     assert.equal(mismatchedRulesResponse.status, 200);
     const mismatchedRulesPage = (await mismatchedRulesResponse.json()).rules[0];
@@ -132,6 +174,9 @@ test("fish identification attaches limits only for a selected MPI area", async (
     assert.equal(changed.rulesReviewedAt, null);
     assert.deepEqual(changed.fishRules, []);
     assert.equal(changed.rulesSourceUrl, ruleRow.source_url);
+    const changedLookup = await lookup("central", "Snapper");
+    assert.equal(changedLookup.body.rulesNeedsReview, true);
+    assert.deepEqual(changedLookup.body.fishRules, []);
 
     const rulesResponse = await worker.fetch(new Request("https://example.test/v1/rules?area=central"), env);
     assert.equal(rulesResponse.status, 200);

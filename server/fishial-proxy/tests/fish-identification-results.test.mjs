@@ -98,6 +98,15 @@ test("fish identification always returns a useful result for model responses", a
     assert.equal(unidentified.commonName, "Crab");
     assert.equal(unidentified.isFish, false);
 
+    const genericSubject = await identify({
+      is_fish: false, common_name_nz: "", subject_name: "Not a fish.", scientific_name: "", confidence: 0.96,
+      other_possibilities: [],
+      visible_clues: "The photo appears to show a spiny sea star (starfish) on wet rock, with multiple arms.",
+      note: "This is not a fish.",
+    });
+    assert.equal(genericSubject.commonName, "Spiny sea star (starfish)");
+    assert.equal(genericSubject.isFish, false);
+
     const unsupported = await worker.fetch(new Request("https://example.test/v1/fish/identify", {
       method: "POST",
       headers: { authorization: `Bearer ${"a".repeat(64)}`, "content-type": "image/heic" },

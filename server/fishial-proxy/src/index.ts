@@ -504,6 +504,7 @@ export default {
     if (pathname === "/__health") return json({ ok: true });
     if (pathname === "/v1/rules/status" && request.method === "GET") return await getCrawlStatus(env);
     if (pathname === "/v1/rules" && request.method === "GET") return await getRules(request, env);
+    if (pathname === "/v1/fish/rules" && request.method === "GET") return await getFishRules(request, env);
     if (pathname === "/v1/rules/import" && request.method === "POST") return await importRules(request, env);
     if (pathname === "/v1/rules/source" && request.method === "POST") return await getMpiSource(request, env);
     if (pathname === "/v1/auth/register" && request.method === "POST") return await register(request, env);
@@ -542,21 +543,10 @@ export default {
       const result = presentFishIdentification(identification);
       const commonName = result.commonName;
       const areaId = validatedFishingRulesArea(request.headers.get("x-fishing-rules-area"));
-      const rulePage = areaId && result.isFish && commonName !== "Unknown fish"
-        ? await env.RULES_DB.prepare(
-          `SELECT r.area_id, r.area_name, r.source_url, r.reviewed_at, r.tables_json, s.status AS crawl_status
-           FROM mpi_fishing_rules r LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id
-           WHERE r.area_id = ?`
-        ).bind(areaId).first<{ area_id: string; area_name: string; source_url: string; reviewed_at: string | null; tables_json: string; crawl_status: string | null }>()
-          .catch((error) => { console.error("Could not load MPI rules for fish identification", error); return null; })
-        : null;
-      const officialUrl = areaId ? officialRulesUrl(areaId) : null;
-      const rulesPageMatchesArea = !!rulePage && !!areaId && cachedRuleMatchesArea(rulePage, areaId);
-      const rulesNeedReview = !!rulePage && (!rulesPageMatchesArea || rulePage.crawl_status === "source_changed");
-      let rules: FishRuleMatch[] = [];
-      if (result.isFish && rulesPageMatchesArea && !rulesNeedReview) {
-        try { rules = findFishRules(rulePage!.tables_json, commonName); }
-        catch (error) { console.error("Could not read cached MPI rules for fish identification", error); }
+      let ruleResult = emptyFishRules(areaId);
+      if (areaId && result.isFish && commonName !== "Unknown fish") {
+        try { ruleResult = await lookupFishRules(areaId, commonName, env); }
+        catch (error) { console.error("Could not attach MPI rules to fish identification", String(error)); }
       }
       await recordAccountEvent(env, auth.account.id, "fish_identity_used", "fish_identity", clientPlatform(request))
         .catch((error) => console.error("Could not record fish identification event", error));
@@ -570,14 +560,14 @@ export default {
         visibleClues: result.visibleClues,
         identificationNote: result.identificationNote,
         areaId,
-        areaName: areaId ? rulesAreas.get(areaId) : "Choose an MPI fishing area",
+        areaName: ruleResult.areaName,
         areaIsEstimated: false,
         areaEstimated: false,
         areaSelectionRequired: result.isFish && areaId === null,
-        rulesNeedsReview: rulesNeedReview,
-        rulesReviewedAt: rulesNeedReview ? null : rulePage?.reviewed_at || null,
-        rulesSourceUrl: officialUrl,
-        fishRules: rules,
+        rulesNeedsReview: ruleResult.rulesNeedsReview,
+        rulesReviewedAt: ruleResult.rulesReviewedAt,
+        rulesSourceUrl: ruleResult.rulesSourceUrl,
+        fishRules: ruleResult.fishRules,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Fish identification is temporarily unavailable.";
@@ -648,8 +638,7 @@ function presentFishIdentification(identification: OpenAIFishIdentification) {
   const subjectName = typeof identification.subject_name === "string" ? identification.subject_name.trim() : "";
   const commonName = isFish
     ? (usedAlternative ? alternatives[0] : isUsefulFishName(primary) ? primary : "Unknown fish")
-    : (subjectName && subjectName.length <= 80 && !/^(?:unidentified object|unknown|not a fish)$/i.test(subjectName)
-      ? subjectName : subjectFromVisibleClues(visibleClues) || subjectName || "Not a fish");
+    : (isUsefulNonFishName(subjectName) ? subjectName : subjectFromVisibleClues(visibleClues) || "Not a fish");
   return {
     isFish,
     commonName,
@@ -665,9 +654,16 @@ function isUsefulFishName(value: string): boolean {
   return value.length > 0 && !/^(?:unknown(?: fish)?|unidentified(?: fish)?|n\/a|none)$/i.test(value);
 }
 
+function isUsefulNonFishName(value: string): boolean {
+  const normalized = value.trim().replace(/[.!?]+$/, "").trim();
+  return normalized.length > 0 && normalized.length <= 80 &&
+    !/^(?:unknown|unidentified(?: object| animal)?|not a fish|non[- ]?fish|object|animal|marine animal|sea creature|other)$/i.test(normalized);
+}
+
 function subjectFromVisibleClues(clues: string): string {
-  const match = clues.match(/^(?:the (?:image|photo|picture) (?:shows|depicts)|this (?:appears to be|is)|it (?:appears to be|is))\s+(?:an?\s+)?(.+?)(?:\s+(?:on|with|near|against|beside|in)\s+|[,.;]|$)/i);
-  const subject = match?.[1]?.trim() || "";
+  const match = clues.match(/^(?:the (?:image|photo|picture) (?:shows|depicts|contains|appears to show)|the subject (?:is|appears to be)|this (?:appears to be|is|looks like)|it (?:appears to be|is|looks like))\s+(?:an?\s+)?(.+?)(?:\s+(?:on|with|near|against|beside|in)\s+|[,.;]|$)/i);
+  const fallback = clues.match(/\b(?:an?\s+)?((?:[a-z-]+\s+){0,3}(?:sea star|starfish|crab|jellyfish|octopus|squid|sea urchin))\b/i);
+  const subject = match?.[1]?.trim() || fallback?.[1]?.trim() || "";
   return subject && subject.length <= 80 ? subject[0].toUpperCase() + subject.slice(1) : "";
 }
 
@@ -701,10 +697,54 @@ type RulePage = {
 
 type FishRuleDetail = { label: string; value: string };
 type FishRuleMatch = { species: string; dailyLimit: string | null; minimumSize: string | null; minimumSizeLabel: string | null; details: FishRuleDetail[] };
+type FishRulesResult = {
+  areaId: string | null; areaName: string; rulesNeedsReview: boolean; rulesReviewedAt: string | null;
+  rulesSourceUrl: string | null; fishRules: FishRuleMatch[];
+};
 
 export function validatedFishingRulesArea(value: string | null): string | null {
   const areaId = value?.trim() || "";
   return rulesAreas.has(areaId) ? areaId : null;
+}
+
+function emptyFishRules(areaId: string | null): FishRulesResult {
+  return {
+    areaId,
+    areaName: areaId ? rulesAreas.get(areaId) || "Fishing area" : "Choose an MPI fishing area",
+    rulesNeedsReview: false,
+    rulesReviewedAt: null,
+    rulesSourceUrl: areaId ? officialRulesUrl(areaId) : null,
+    fishRules: [],
+  };
+}
+
+async function lookupFishRules(areaId: string, species: string, env: Env): Promise<FishRulesResult> {
+  const result = emptyFishRules(areaId);
+  const rulePage = await env.RULES_DB.prepare(
+    `SELECT r.area_id, r.area_name, r.source_url, r.reviewed_at, r.tables_json, s.status AS crawl_status
+     FROM mpi_fishing_rules r LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id
+     WHERE r.area_id = ?`
+  ).bind(areaId).first<{ area_id: string; area_name: string; source_url: string; reviewed_at: string | null; tables_json: string; crawl_status: string | null }>();
+  if (!rulePage) return result;
+  const matchesArea = cachedRuleMatchesArea(rulePage, areaId);
+  result.rulesNeedsReview = !matchesArea || rulePage.crawl_status === "source_changed";
+  if (result.rulesNeedsReview) return result;
+  result.rulesReviewedAt = rulePage.reviewed_at || null;
+  result.fishRules = findFishRules(rulePage.tables_json, species);
+  return result;
+}
+
+async function getFishRules(request: Request, env: Env): Promise<Response> {
+  const params = new URL(request.url).searchParams;
+  const areaId = validatedFishingRulesArea(params.get("area"));
+  const species = params.get("species")?.trim() || "";
+  if (!areaId) return json({ error: "Choose a valid MPI fishing area." }, 400);
+  if (!species || species.length > 120) return json({ error: "Provide a fish species name." }, 400);
+  try { return json(await lookupFishRules(areaId, species, env)); }
+  catch (error) {
+    console.error("Could not load MPI rules for selected area", String(error));
+    return json({ error: "Could not load this area's saved MPI rules. Please try again." }, 502);
+  }
 }
 
 function findFishRules(tablesJson: string, commonName: string): FishRuleMatch[] {

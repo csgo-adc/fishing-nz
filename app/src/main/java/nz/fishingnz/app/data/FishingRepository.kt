@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -115,22 +116,6 @@ class FishingRepository {
             val otherPossibilities = (0 until (possibilities?.length() ?: 0)).mapNotNull { index ->
                 possibilities?.optString(index)?.takeIf { it.isNotBlank() }
             }
-            val rules = payload.optJSONArray("fishRules")
-            val fishRules = (0 until (rules?.length() ?: 0)).map { index ->
-                val item = rules!!.getJSONObject(index)
-                val details = item.optJSONArray("details")
-                val parsedDetails = (0 until (details?.length() ?: 0)).map { detailIndex ->
-                    val detail = details!!.getJSONObject(detailIndex)
-                    FishRuleDetail(detail.optString("label"), detail.optString("value"))
-                }
-                FishRuleMatch(
-                    item.optString("species"),
-                    item.optString("dailyLimit").takeIf { it.isNotBlank() && it != "null" },
-                    item.optString("minimumSize").takeIf { it.isNotBlank() && it != "null" },
-                    parsedDetails,
-                    item.optString("minimumSizeLabel").takeIf { it.isNotBlank() && it != "null" }
-                )
-            }
             FishCheck(
                 commonName = commonName,
                 scientificName = scientificName,
@@ -139,7 +124,7 @@ class FishingRepository {
                 areaName = payload.optString("areaName", "Fishing area"),
                 areaIsEstimated = payload.optBoolean("areaIsEstimated", true),
                 rulesReviewedAt = payload.optString("rulesReviewedAt").takeIf { it.isNotBlank() && it != "null" },
-                fishRules = fishRules,
+                fishRules = parseFishRules(payload),
                 rulesNeedsReview = payload.optBoolean("rulesNeedsReview", false),
                 rulesSourceUrl = payload.optString("rulesSourceUrl").takeIf { it.isNotBlank() && it != "null" },
                 areaSelectionRequired = payload.optBoolean("areaSelectionRequired", false),
@@ -149,6 +134,45 @@ class FishingRepository {
                 identificationNote = payload.optString("identificationNote")
             )
         } finally { connection.disconnect() }
+    }
+
+    suspend fun fishRules(species: String, areaId: String): FishRulesResult = withContext(Dispatchers.IO) {
+        val encodedArea = URLEncoder.encode(areaId, "UTF-8")
+        val encodedSpecies = URLEncoder.encode(species, "UTF-8")
+        val connection = get("$accountBaseUrl/v1/fish/rules?area=$encodedArea&species=$encodedSpecies")
+        try {
+            val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val payload = JSONObject(body)
+            if (connection.responseCode !in 200..299) error(payload.optString("error", "Could not load MPI rules."))
+            FishRulesResult(
+                areaId = payload.getString("areaId"),
+                areaName = payload.getString("areaName"),
+                rulesReviewedAt = payload.optString("rulesReviewedAt").takeIf { it.isNotBlank() && it != "null" },
+                fishRules = parseFishRules(payload),
+                rulesNeedsReview = payload.optBoolean("rulesNeedsReview"),
+                rulesSourceUrl = payload.optString("rulesSourceUrl").takeIf { it.isNotBlank() && it != "null" }
+            )
+        } finally { connection.disconnect() }
+    }
+
+    private fun parseFishRules(payload: JSONObject): List<FishRuleMatch> {
+        val rules = payload.optJSONArray("fishRules")
+        return (0 until (rules?.length() ?: 0)).map { index ->
+            val item = rules!!.getJSONObject(index)
+            val details = item.optJSONArray("details")
+            val parsedDetails = (0 until (details?.length() ?: 0)).map { detailIndex ->
+                val detail = details!!.getJSONObject(detailIndex)
+                FishRuleDetail(detail.optString("label"), detail.optString("value"))
+            }
+            FishRuleMatch(
+                item.optString("species"),
+                item.optString("dailyLimit").takeIf { it.isNotBlank() && it != "null" },
+                item.optString("minimumSize").takeIf { it.isNotBlank() && it != "null" },
+                parsedDetails,
+                item.optString("minimumSizeLabel").takeIf { it.isNotBlank() && it != "null" }
+            )
+        }
     }
 
     suspend fun signIn(email: String, password: String): AccountSnapshot = withContext(Dispatchers.IO) {

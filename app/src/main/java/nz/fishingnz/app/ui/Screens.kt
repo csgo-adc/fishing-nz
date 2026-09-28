@@ -85,9 +85,24 @@ import kotlin.math.roundToInt
 
 private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
+private fun encodedFishPhoto(context: android.content.Context, uri: android.net.Uri?): ByteArray? {
+    if (uri == null) return null
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val bitmap = BitmapFactory.decodeStream(input) ?: return null
+            try {
+                val output = java.io.ByteArrayOutputStream()
+                if (bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, output))
+                    output.toByteArray().takeIf { it.isNotEmpty() }
+                else null
+            } finally { bitmap.recycle() }
+        }
+    } catch (_: Exception) { null }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun HomeScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { vm.setFishPhoto(it) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) vm.setFishPhoto(uri) }
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var showPlan by rememberSaveable { mutableStateOf(false) }
@@ -215,7 +230,9 @@ private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Local
             }
         } }
         item { Text("Your next planning window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { s.recommendationSearch?.items?.firstOrNull()?.let { RecommendationCard(it) { vm.showResults() } } ?: Text("Choose a date and search to compare fishing conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { s.recommendationSearch?.items?.firstOrNull()?.let {
+            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty())) { vm.showResults() }
+        } ?: Text("Choose a date and search to compare fishing conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showPlan) ModalBottomSheet(onDismissRequest = { showPlan = false }) {
@@ -383,59 +400,35 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     val needsAccountRefresh = s.account == null && s.hasStoredSession && !s.accountLoading
     var showCamera by remember { mutableStateOf(false) }
     var showRuleAreas by remember { mutableStateOf(false) }
+    var pendingPhotoForLocationPermission by remember { mutableStateOf<android.net.Uri?>(null) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) showCamera = true }
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        val image = s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }?.let { bitmap -> java.io.ByteArrayOutputStream().also { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }.toByteArray() } }
-        if (image != null && granted) requestCurrentLocation(context, { vm.identifyFish(image, it, true) },
-            { vm.identifyFish(image, s.deviceLocation ?: s.location, s.deviceLocation != null) })
-        else if (image != null) vm.identifyFish(image, s.deviceLocation ?: s.location, false)
+        val photo = pendingPhotoForLocationPermission
+        pendingPhotoForLocationPermission = null
+        if (photo == null || vm.state.value.fishPhoto != photo) return@rememberLauncherForActivityResult
+        val image = encodedFishPhoto(context, photo)
+        if (image == null) vm.reportUnreadableFishPhoto()
+        else if (granted) requestCurrentLocation(context,
+            { if (vm.state.value.fishPhoto == photo) vm.identifyFish(image, it, true) },
+            { if (vm.state.value.fishPhoto == photo) vm.identifyFish(image, s.deviceLocation ?: s.location, s.deviceLocation != null) })
+        else vm.identifyFish(image, s.deviceLocation ?: s.location, false)
     }
-    fun identifyAtCurrentLocation(image: ByteArray) {
+    fun identifyAtCurrentLocation(image: ByteArray, photo: android.net.Uri) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fine || coarse) requestCurrentLocation(context, { vm.identifyFish(image, it, true) },
-            { vm.identifyFish(image, s.deviceLocation ?: s.location, s.deviceLocation != null) })
-        else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        if (fine || coarse) requestCurrentLocation(context,
+            { if (vm.state.value.fishPhoto == photo) vm.identifyFish(image, it, true) },
+            { if (vm.state.value.fishPhoto == photo) vm.identifyFish(image, s.deviceLocation ?: s.location, s.deviceLocation != null) })
+        else {
+            pendingPhotoForLocationPermission = photo
+            locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
     }
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
-        s.fishPhoto?.let { uri -> val bitmap = remember(uri) { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
-        s.fishCheck?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            val nearRaglanWest = s.fishRulesAreaIsSuggested && result.areaId == "auckland-kermadec" && isNearRaglan(s.deviceLocation)
-            val westSnapperRows = result.fishRules.filter { it.species.contains("Auckland West", ignoreCase = true) }
-            val shownRules = if (nearRaglanWest && result.commonName.equals("Snapper", ignoreCase = true) && westSnapperRows.isNotEmpty()) westSnapperRows else result.fishRules
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text(if (result.isFish) "${result.confidence}% AI confidence" else "Not a fish", color = Orange, fontWeight = FontWeight.Bold) }
-            if (result.scientificName.isNotBlank()) Text(result.scientificName, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (result.visibleClues.isNotBlank()) Text("Visible clues: ${result.visibleClues}", color = Navy, style = MaterialTheme.typography.bodySmall)
-            if (result.otherPossibilities.isNotEmpty()) Text("Could also be: ${result.otherPossibilities.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            if (result.identificationNote.isNotBlank()) Text(result.identificationNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            if (result.isFish && result.areaId != s.fishRulesAreaId) Text("Your MPI rules area changed. Identify this photo again to check local size and catch limits.", color = Navy, style = MaterialTheme.typography.bodySmall)
-            if (result.isFish && result.areaId == s.fishRulesAreaId) {
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("MPI rules · ${fishingRulesAreas.firstOrNull { it.id == result.areaId }?.name ?: "Area not selected"}", color = Navy, fontWeight = FontWeight.SemiBold); result.rulesReviewedAt?.let { Text("Reviewed $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
-            if (nearRaglanWest) Text("Near Raglan: check the Auckland West snapper subarea for the exact catch spot.", color = Navy, style = MaterialTheme.typography.bodySmall)
-            if (shownRules.isEmpty()) Text(when {
-                result.rulesNeedsReview -> "MPI has updated this area. Open the current MPI page for size and catch limits."
-                result.areaSelectionRequired || s.fishRulesAreaId == null -> "Choose the MPI fishing area where you caught this fish to check size and catch limits."
-                else -> "No matching species limit was found in the saved rules for this area. Check MPI before keeping this fish."
-            }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp))
-            shownRules.forEach { rule ->
-                Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(rule.species, color = Navy, fontWeight = FontWeight.Bold)
-                    if (rule.details.any { it.label.contains("daily limit", ignoreCase = true) || it.label.contains("bag limit", ignoreCase = true) }) {
-                        Text("Limits differ within this area. Check the exact subarea on MPI.", color = Navy)
-                    } else {
-                        rule.minimumSize?.let { Text("${rule.minimumSizeLabel ?: "Minimum size"}: $it", color = Navy) }
-                        rule.dailyLimit?.let { Text("Daily limit: $it", color = Navy) }
-                    }
-                }
-            }
-            Text("Rules area: ${fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.name ?: "not selected"}. Check local closures before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            (fishingRulesAreas.firstOrNull { it.id == result.areaId }?.officialUrl ?: result.rulesSourceUrl)?.let { url ->
-                TextButton(onClick = { uriHandler.openUri(url) }) { Text("See full MPI rules") }
-            } ?: TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("Find your MPI fishing area") }
-            }
-        } } }
+        s.fishPhoto?.let { uri -> val bitmap = remember(uri) { try { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } } catch (_: Exception) { null } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
+        s.fishCheck?.let { FishResultCard(it, s, vm::retryFishRules) }
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (s.fishCheck?.isFish != false) {
@@ -457,13 +450,11 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         Button(enabled = !s.fishChecking && !s.accountLoading && (!hasFishAccess || s.fishPhoto != null), onClick = {
             if (needsAccountRefresh) vm.refreshAccount()
             else if (s.account == null) vm.selectTab(5)
-            else if (hasFishAccess) s.fishPhoto?.let { uri -> context.contentResolver.openInputStream(uri)?.use { input ->
-                    BitmapFactory.decodeStream(input)?.let { bitmap ->
-                        val output = java.io.ByteArrayOutputStream()
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, output)
-                        identifyAtCurrentLocation(output.toByteArray())
-                    }
-                } }
+            else if (hasFishAccess) s.fishPhoto?.let { uri ->
+                val image = encodedFishPhoto(context, uri)
+                if (image == null) vm.reportUnreadableFishPhoto()
+                else identifyAtCurrentLocation(image, uri)
+            }
         }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text(when {
             hasFishAccess -> "Identify fish"
             s.accountLoading -> "Checking account…"
@@ -620,18 +611,23 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     val lifecycleOwner = LocalLifecycleOwner.current
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var captureError by remember { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { ctx -> PreviewView(ctx).also { previewView = it } }, modifier = Modifier.fillMaxSize())
         FishCameraOverlay()
         TextButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) { Text("Cancel", color = Color.White) }
         Text("Hold the fish vertically — head up", color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(top = 22.dp), fontWeight = FontWeight.Bold)
+        captureError?.let { Text(it, color = Color.White, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp)) }
         FloatingActionButton(onClick = {
             val capture = imageCapture ?: return@FloatingActionButton
+            captureError = null
             val values = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, "catchcheck-fish-${System.currentTimeMillis()}.jpg"); put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg"); put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CatchCheck") }
             val output = ImageCapture.OutputFileOptions.Builder(context.contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values).build()
             capture.takePicture(output, ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
-                override fun onImageSaved(result: ImageCapture.OutputFileResults) { result.savedUri?.let(onPhotoCaptured) }
-                override fun onError(exception: ImageCaptureException) { }
+                override fun onImageSaved(result: ImageCapture.OutputFileResults) {
+                    result.savedUri?.let(onPhotoCaptured) ?: run { captureError = "Could not save this photo. Try again." }
+                }
+                override fun onError(exception: ImageCaptureException) { captureError = "Could not take this photo. Try again." }
             })
         }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp), containerColor = Orange) { Icon(Icons.Default.CameraAlt, "Take photo", tint = Color.White) }
     }
@@ -706,36 +702,82 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     }
 }
 
-@Composable private fun RecommendationCard(item: Recommendation, click: () -> Unit = {}) {
+private fun windowReason(item: Recommendation): String? =
+    item.reasons.firstOrNull { it.isNotBlank() }?.trim()
+        ?: item.summary.trim().takeIf { it.isNotEmpty() }
+
+private fun comparableWindowReason(reason: String): String = reason
+    .removePrefix("Some local forecast data is missing; treat this as a time to investigate. ")
+    .trim()
+
+private fun shouldShowWindowReason(item: Recommendation, results: List<Recommendation>): Boolean {
+    val reason = windowReason(item) ?: return false
+    return results.size < 2 || results.any { comparableWindowReason(windowReason(it).orEmpty()) != comparableWindowReason(reason) }
+}
+
+@Composable private fun WindowOutlook(outlook: String) {
+    val emoji = outlook.substringBefore(' ')
+    val label = outlook.substringAfter(' ', outlook)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("WIND & RAIN OUTLOOK", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text(label, color = Navy, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        Text(emoji, style = MaterialTheme.typography.headlineMedium)
+    }
+}
+
+@Composable private fun WindowConditions(conditions: List<String>) {
+    val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
+    conditions.forEachIndexed { index, detail ->
+        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        val label = labels.getOrElse(index) { "Other" }
+        val emoji = when (label) {
+            "Tide" -> "🌊"
+            "Wind" -> "💨"
+            "Rain" -> when {
+                detail.startsWith("Little or no rain") -> "☀️"
+                detail.startsWith("No rain accumulation") -> "🌦️"
+                else -> "🌧️"
+            }
+            "Waves" -> "🌊"
+            "Daylight" -> if (detail.contains("entirely in daylight")) "☀️" else "🌙"
+            else -> "📍"
+        }
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(label, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge)
+                Text(emoji, style = MaterialTheme.typography.titleMedium)
+            }
+            Text(detail, color = Navy, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable private fun RecommendationCard(item: Recommendation, showWhy: Boolean = true, click: () -> Unit = {}) {
     Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Wind & rain outlook: ${item.windowOutlook}", color = Navy,
-                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            WindowOutlook(item.windowOutlook)
             Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold)
             Text(item.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Column(Modifier.fillMaxWidth().background(Seafoam, RoundedCornerShape(12.dp)).padding(12.dp),
+            if (showWhy) Column(Modifier.fillMaxWidth().background(Seafoam, RoundedCornerShape(12.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("WHY THIS WINDOW", color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                 if (!item.dataComplete) Text("Some local forecast data is missing; treat this as a time to investigate.",
                     color = Navy, style = MaterialTheme.typography.bodySmall)
-                Text(item.reasons.firstOrNull() ?: item.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." },
+                Text(windowReason(item).orEmpty(),
                     color = Navy, style = MaterialTheme.typography.bodyMedium)
             }
             if (item.conditions.isNotEmpty()) {
                 Text("Conditions", color = Navy, fontWeight = FontWeight.SemiBold)
-                val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
-                item.conditions.forEachIndexed { index, detail ->
-                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(labels.getOrElse(index) { "Other" }, Modifier.width(66.dp),
-                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelMedium)
-                        Text(detail, Modifier.weight(1f), color = Navy, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                WindowConditions(item.conditions)
             }
             val warnings = (item.warnings + listOfNotNull(item.warning)).distinct()
             if (warnings.isNotEmpty()) Column(
@@ -866,7 +908,9 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
                     }, color = Navy)
                 }
-                else -> items(s.recommendationSearch?.items ?: emptyList()) { RecommendationCard(it) { vm.openSpot(it) } }
+                else -> items(s.recommendationSearch?.items ?: emptyList()) {
+                    RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty())) { vm.openSpot(it) }
+                }
             }
             if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); no planning windows are shown for those spots.", color = Orange, style = MaterialTheme.typography.bodySmall) }
             item { Text("Planning windows compare forecast conditions. Local access, wave exposure, marine warnings and current MPI rules still need checking.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
@@ -876,21 +920,31 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
 }
 @Composable fun SpotDetailScreen(spot: Recommendation, saved: Boolean, vm: FishingViewModel) {
     val context = LocalContext.current
+    val appState = vm.state.value
+    val reasonPeers = appState.recommendationSearch?.items?.takeIf { spot in it } ?: appState.savedRecommendations
     var addToCalendar by rememberSaveable(recommendationKey(spot)) { mutableStateOf(false) }
     Surface(modifier = Modifier.fillMaxSize(), color = Cream) {
         Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }
             Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Wind & rain outlook: ${spot.windowOutlook}", color = Navy, fontWeight = FontWeight.SemiBold)
+            WindowOutlook(spot.windowOutlook)
             Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
+            if (shouldShowWindowReason(spot, reasonPeers)) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Why this window", fontWeight = FontWeight.Bold, color = Navy)
                     if (!spot.dataComplete) Text("Some local forecast data is missing; treat this as a time to investigate.", color = Navy)
-                    Text(spot.reasons.firstOrNull() ?: spot.summary.ifBlank { "Search again to get the latest explanation and conditions for this session." }, color = Navy)
+                    Text(windowReason(spot).orEmpty(), color = Navy)
                     spot.alternative?.takeIf { it.isNotBlank() }?.let {
+                        Text("Another option", fontWeight = FontWeight.SemiBold, color = Navy)
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            else spot.alternative?.takeIf { it.isNotBlank() }?.let {
+                Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Another option", fontWeight = FontWeight.SemiBold, color = Navy)
                         Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -899,16 +953,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             if (spot.conditions.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Conditions during your session", fontWeight = FontWeight.Bold, color = Navy)
-                    val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
-                    spot.conditions.forEachIndexed { index, detail ->
-                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(labels.getOrElse(index) { "Other" }, Modifier.width(66.dp),
-                                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelMedium)
-                            Text(detail, Modifier.weight(1f), color = Navy, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+                    WindowConditions(spot.conditions)
                 }
             }
             val warnings = (spot.warnings + listOfNotNull(spot.warning)).distinct()
@@ -972,13 +1017,15 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 }
             }
         }
-        else items(s.savedRecommendations) { RecommendationCard(it) { vm.openSpot(it) } }
+        else items(s.savedRecommendations) {
+            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.savedRecommendations)) { vm.openSpot(it) }
+        }
     }
 }
-private data class FishingRulesArea(val id: String, val name: String, val slug: String, val description: String) {
+internal data class FishingRulesArea(val id: String, val name: String, val slug: String, val description: String) {
     val officialUrl: String get() = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
 }
-private val fishingRulesAreas = listOf(
+internal val fishingRulesAreas = listOf(
     FishingRulesArea("auckland-kermadec", "Auckland / Kermadec", "auckland-kermadec-fishing-rules", "Northland, Auckland, Waikato, Bay of Plenty and the Kermadec Islands"),
     FishingRulesArea("central", "Central", "central-fishing-rules", "North Island coast from Cape Runaway to Tirua Point"),
     FishingRulesArea("challenger", "Challenger", "challenger-fishing-rules", "West Coast north of Awarua Point, through Marlborough to Clarence Point"),
