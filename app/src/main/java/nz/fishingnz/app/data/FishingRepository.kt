@@ -111,6 +111,10 @@ class FishingRepository {
             if (connection.responseCode !in 200..299) error(payload.optString("error", "Fish identification failed."))
             val commonName = payload.getString("commonName")
             val scientificName = payload.getString("scientificName")
+            val possibilities = payload.optJSONArray("otherPossibilities")
+            val otherPossibilities = (0 until (possibilities?.length() ?: 0)).mapNotNull { index ->
+                possibilities?.optString(index)?.takeIf { it.isNotBlank() }
+            }
             val rules = payload.optJSONArray("fishRules")
             val fishRules = (0 until (rules?.length() ?: 0)).map { index ->
                 val item = rules!!.getJSONObject(index)
@@ -138,7 +142,11 @@ class FishingRepository {
                 fishRules = fishRules,
                 rulesNeedsReview = payload.optBoolean("rulesNeedsReview", false),
                 rulesSourceUrl = payload.optString("rulesSourceUrl").takeIf { it.isNotBlank() && it != "null" },
-                areaSelectionRequired = payload.optBoolean("areaSelectionRequired", false)
+                areaSelectionRequired = payload.optBoolean("areaSelectionRequired", false),
+                isFish = payload.optBoolean("isFish", true),
+                otherPossibilities = otherPossibilities,
+                visibleClues = payload.optString("visibleClues"),
+                identificationNote = payload.optString("identificationNote")
             )
         } finally { connection.disconnect() }
     }

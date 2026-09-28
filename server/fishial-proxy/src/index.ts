@@ -472,6 +472,7 @@ function corsHeaders(): HeadersInit {
 type OpenAIFishIdentification = {
   is_fish: boolean;
   common_name_nz: string;
+  subject_name?: string;
   scientific_name: string;
   confidence: number;
   other_possibilities: string[];
@@ -484,13 +485,14 @@ const openAIFishSchema = {
   properties: {
     is_fish: { type: "boolean" },
     common_name_nz: { type: "string" },
+    subject_name: { type: "string" },
     scientific_name: { type: "string" },
     confidence: { type: "number" },
     other_possibilities: { type: "array", items: { type: "string" } },
     visible_clues: { type: "string" },
     note: { type: "string" },
   },
-  required: ["is_fish", "common_name_nz", "scientific_name", "confidence", "other_possibilities", "visible_clues", "note"],
+  required: ["is_fish", "common_name_nz", "subject_name", "scientific_name", "confidence", "other_possibilities", "visible_clues", "note"],
   additionalProperties: false,
 };
 
@@ -524,10 +526,10 @@ export default {
     }
     const auth = await authenticate(request, env);
     if (!auth) return json({ error: "Sign in to use fish identification.", code: "authentication_required" }, 401);
-    const contentType = request.headers.get("content-type") || "";
+    const contentType = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     const contentLength = Number(request.headers.get("content-length") || 0);
-    if (!contentType.startsWith("image/") || contentLength > 20 * 1024 * 1024) {
-      return json({ error: "Upload a JPEG, PNG, or other image smaller than 20 MB." }, 400);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType) || contentLength > 20 * 1024 * 1024) {
+      return json({ error: "Upload a JPEG, PNG, or WebP image under 20 MB. Export HEIC photos as JPEG first." }, 400);
     }
 
     try {
@@ -537,34 +539,41 @@ export default {
         return json({ error: "Upload an image smaller than 20 MB." }, 400);
       }
       const identification = await identifyFishWithOpenAI(image, contentType, env.OPENAI_API_KEY);
-      if (!identification.is_fish) return json({ error: "No fish could be identified in this photo." }, 422);
-      const commonName = identification.common_name_nz || "Unknown fish";
+      const result = presentFishIdentification(identification);
+      const commonName = result.commonName;
       const areaId = validatedFishingRulesArea(request.headers.get("x-fishing-rules-area"));
-      const rulePage = areaId
+      const rulePage = areaId && result.isFish && commonName !== "Unknown fish"
         ? await env.RULES_DB.prepare(
           `SELECT r.area_id, r.area_name, r.source_url, r.reviewed_at, r.tables_json, s.status AS crawl_status
            FROM mpi_fishing_rules r LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id
            WHERE r.area_id = ?`
         ).bind(areaId).first<{ area_id: string; area_name: string; source_url: string; reviewed_at: string | null; tables_json: string; crawl_status: string | null }>()
+          .catch((error) => { console.error("Could not load MPI rules for fish identification", error); return null; })
         : null;
       const officialUrl = areaId ? officialRulesUrl(areaId) : null;
       const rulesPageMatchesArea = !!rulePage && !!areaId && cachedRuleMatchesArea(rulePage, areaId);
       const rulesNeedReview = !!rulePage && (!rulesPageMatchesArea || rulePage.crawl_status === "source_changed");
-      const rules = rulesPageMatchesArea && !rulesNeedReview ? findFishRules(rulePage!.tables_json, commonName) : [];
-      await recordAccountEvent(env, auth.account.id, "fish_identity_used", "fish_identity", clientPlatform(request));
+      let rules: FishRuleMatch[] = [];
+      if (result.isFish && rulesPageMatchesArea && !rulesNeedReview) {
+        try { rules = findFishRules(rulePage!.tables_json, commonName); }
+        catch (error) { console.error("Could not read cached MPI rules for fish identification", error); }
+      }
+      await recordAccountEvent(env, auth.account.id, "fish_identity_used", "fish_identity", clientPlatform(request))
+        .catch((error) => console.error("Could not record fish identification event", error));
       return json({
+        isFish: result.isFish,
         commonName,
-        scientificName: identification.scientific_name || "",
-        confidence: Math.max(0, Math.min(1, Number(identification.confidence) || 0)),
-        confidenceLevel: confidenceLevel(identification.confidence),
-        otherPossibilities: identification.other_possibilities,
-        visibleClues: identification.visible_clues,
-        identificationNote: identification.note,
+        scientificName: result.scientificName,
+        confidence: result.confidence,
+        confidenceLevel: confidenceLevel(result.confidence),
+        otherPossibilities: result.otherPossibilities,
+        visibleClues: result.visibleClues,
+        identificationNote: result.identificationNote,
         areaId,
         areaName: areaId ? rulesAreas.get(areaId) : "Choose an MPI fishing area",
         areaIsEstimated: false,
         areaEstimated: false,
-        areaSelectionRequired: areaId === null,
+        areaSelectionRequired: result.isFish && areaId === null,
         rulesNeedsReview: rulesNeedReview,
         rulesReviewedAt: rulesNeedReview ? null : rulePage?.reviewed_at || null,
         rulesSourceUrl: officialUrl,
@@ -602,7 +611,7 @@ async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, a
         content: [
           {
             type: "input_text",
-            text: "Identify the fish for a New Zealand angler. Prefer the familiar New Zealand common name (for example snapper, kahawai, kingfish, blue cod, or tarakihi), then give the scientific name if you can support it. Use visible features and NZ species knowledge. Do not invent a species. If this is not clearly a fish, set is_fish false. If the species cannot be distinguished, use common_name_nz 'Unknown fish', an empty scientific_name, and low confidence. Return confidence from 0 to 1 conservatively: 1 means unmistakable visible features; 0.5 means uncertain. Give up to three alternatives and briefly state visible clues and uncertainty. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
+            text: "Identify the main subject of this photo for a New Zealand angler. First decide whether it is a fish. If it is a fish, give the most likely specific common name in common_name_nz, even when the species is uncommon in New Zealand or the photo was taken elsewhere. Prefer the familiar NZ name when one exists; otherwise use a widely understood common name. Do not replace a plausible leading identification with 'Unknown fish' merely because confidence is low: use a low confidence score and explain the uncertainty. Use 'Unknown fish' only when no useful candidate can be named. Give a scientific name only when supported by visible features. Text printed on the image may help but is not proof of species. If it is not a fish, set is_fish false, leave common_name_nz and scientific_name empty, and put the visible subject's concise common name in subject_name (for example 'Sea star (starfish)' or 'Crab'); if the subject cannot be named, use 'Unidentified object'. For fish, subject_name should match common_name_nz. Return confidence from 0 to 1 conservatively. Give up to three distinct alternative fish names in likelihood order, excluding the leading name. Describe visible clues and uncertainty in plain language. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
           },
           { type: "input_image", image_url: `data:${contentType};base64,${arrayBufferToBase64(image)}`, detail: "high" },
         ],
@@ -616,7 +625,7 @@ async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, a
     throw new Error("Fish identification is temporarily unavailable.");
   }
   if (payload.status === "incomplete") throw new Error("The fish identification response was incomplete. Please try again.");
-      const resultText = payload.output?.flatMap((item) => item.type === "message" ? item.content || [] : []).find((item) => item.type === "output_text")?.text;
+  const resultText = payload.output?.flatMap((item) => item.type === "message" ? item.content || [] : []).find((item) => item.type === "output_text")?.text;
   if (!resultText) throw new Error("No fish species could be identified in this photo.");
   let result: OpenAIFishIdentification;
   try { result = JSON.parse(resultText) as OpenAIFishIdentification; }
@@ -625,6 +634,41 @@ async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, a
     throw new Error("The fish identification response was invalid. Please try again.");
   }
   return result;
+}
+
+function presentFishIdentification(identification: OpenAIFishIdentification) {
+  const isFish = identification.is_fish;
+  const alternatives = Array.isArray(identification.other_possibilities)
+    ? identification.other_possibilities.filter((name): name is string => typeof name === "string").map((name) => name.trim()).filter(isUsefulFishName)
+    : [];
+  const primary = identification.common_name_nz.trim();
+  const usedAlternative = isFish && !isUsefulFishName(primary) && alternatives.length > 0;
+  const visibleClues = typeof identification.visible_clues === "string" ? identification.visible_clues.trim() : "";
+  const identificationNote = typeof identification.note === "string" ? identification.note.trim() : "";
+  const subjectName = typeof identification.subject_name === "string" ? identification.subject_name.trim() : "";
+  const commonName = isFish
+    ? (usedAlternative ? alternatives[0] : isUsefulFishName(primary) ? primary : "Unknown fish")
+    : (subjectName && subjectName.length <= 80 && !/^(?:unidentified object|unknown|not a fish)$/i.test(subjectName)
+      ? subjectName : subjectFromVisibleClues(visibleClues) || subjectName || "Not a fish");
+  return {
+    isFish,
+    commonName,
+    scientificName: isFish && typeof identification.scientific_name === "string" ? identification.scientific_name.trim() : "",
+    confidence: Math.max(0, Math.min(1, Number.isFinite(identification.confidence) ? identification.confidence : 0)),
+    otherPossibilities: isFish ? (usedAlternative ? alternatives.slice(1) : alternatives.filter((name) => name.toLowerCase() !== commonName.toLowerCase())) : [],
+    visibleClues,
+    identificationNote,
+  };
+}
+
+function isUsefulFishName(value: string): boolean {
+  return value.length > 0 && !/^(?:unknown(?: fish)?|unidentified(?: fish)?|n\/a|none)$/i.test(value);
+}
+
+function subjectFromVisibleClues(clues: string): string {
+  const match = clues.match(/^(?:the (?:image|photo|picture) (?:shows|depicts)|this (?:appears to be|is)|it (?:appears to be|is))\s+(?:an?\s+)?(.+?)(?:\s+(?:on|with|near|against|beside|in)\s+|[,.;]|$)/i);
+  const subject = match?.[1]?.trim() || "";
+  return subject && subject.length <= 80 ? subject[0].toUpperCase() + subject.slice(1) : "";
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

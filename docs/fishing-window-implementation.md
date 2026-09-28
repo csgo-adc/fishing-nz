@@ -1,10 +1,10 @@
 # Fishing-window explanations and data corrections
 
-Implemented in the Android and iOS source on 27 September 2026. This note distinguishes the working mobile changes from the larger [target design](fishing-window-method.md).
+Implemented in the Android and iOS source on 27 September 2026; qualitative outlook labels were added on 29 September 2026. This note distinguishes the working mobile changes from the larger [target design](fishing-window-method.md).
 
 ## What the user sees
 
-- A date and two-hour session, without an overall rating or component scores.
+- A date and two-hour session with a short wind-and-rain outlook label and emoji, without numeric scores. Incomplete data and material warnings get their own caution labels.
 - **Why this time:** a conclusion generated from the selected preference and the session's actual wind, gusts, precipitation and official local tide events.
 - **Conditions during your session:** factual tide, wind, rain, offshore wave and daylight information.
 - A same-day alternative when the weather choice and late-incoming choice differ. It is evaluated from the same fetched data and allowed hours.
@@ -20,7 +20,7 @@ The search has two explicit choices: **Weather balance** (default) and **Late in
 3. Preserve the existing broad thunderstorm, wind/gust and wave exclusion filters. A known adverse wave still excludes a candidate when another wave sample is missing. These coarse filters do **not** establish local shore or boat safety; every result remains a planning option requiring site and warning checks.
 4. When **Late incoming tide** is selected, require verified LINZ coverage and at least 80% overlap with a target from 150 minutes before high water to 30 minutes afterwards. This is a configurable product preference, not a biological claim. If nothing fits, return no matching window rather than silently switching preference.
 5. Prefer candidates with complete wave/period and tide data, then the greater proportion of the full fishing session in daylight, then the weather comfort ordering below. Ties favour the earlier start. Distance affects search radius/logistics, not fishing conditions. Dawn receives no separate bonus. Anytime permits a dark session but the default order still prefers daylight when available; the UI explains this.
-6. Internal weather comfort uses `0.6 × windComfort + 0.4 × rainComfort`. This is a provisional planning heuristic, **not a catch score**, and is not displayed. Wind retains the existing continuous comfort curves for maximum sustained wind and gusts; rain uses equal contributions from maximum hourly probability and mean forecast amount. It is not double-counted through a weather-code bonus. No missing-data weight renormalisation or arbitrary 79/89 score caps remain. A more complete preference/tolerance and multi-model policy is still part of the target design.
+6. Internal weather comfort uses `0.6 × windComfort + 0.4 × rainComfort`. This is a provisional planning heuristic, **not a catch score**. The number is hidden; the UI maps it to Excellent, Good, Fair or Challenging, and replaces that label with a caution when essential data is incomplete or a material weather warning applies. Wind retains the existing continuous comfort curves for maximum sustained wind and gusts; rain uses equal contributions from maximum hourly probability and mean forecast amount. It is not double-counted through a weather-code bonus. No missing-data weight renormalisation or arbitrary 79/89 score caps remain. A more complete preference/tolerance and multi-model policy is still part of the target design.
 7. Generate the explanation from those same facts. State tide phase using consecutive official events. Never substitute tide-height change for current speed or infer slack water from high water.
 
 Existing exclusion limits retained: land wind 55 km/h, gust 70 km/h, offshore significant wave height 3 m; boat wind 40 km/h, gust 55 km/h, offshore significant wave height 2 m. Their only role is to exclude gross adverse conditions under the prior policy. They are not acceptable-condition guarantees, especially for exposed rocks, harbour bars or locally exposed shorelines.

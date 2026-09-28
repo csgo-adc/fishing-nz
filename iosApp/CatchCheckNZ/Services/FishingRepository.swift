@@ -187,7 +187,7 @@ struct FishingRepository {
         guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NSError(domain: "FishIdentification", code: 1, userInfo: [NSLocalizedDescriptionKey: payload.error ?? "Fish identification failed."]) }
         let commonName = payload.commonName ?? "Unknown fish"
         let scientificName = payload.scientificName ?? ""
-        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaID: payload.areaID, areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [])
+        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaID: payload.areaID, areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: URL(string: payload.rulesSourceURL ?? ""), fishRules: payload.fishRules ?? [], isFish: payload.isFish ?? true, otherPossibilities: payload.otherPossibilities ?? [], visibleClues: payload.visibleClues ?? "", identificationNote: payload.identificationNote ?? "")
     }
 
     private static let tideStore = LINZTideStore.shared
@@ -202,9 +202,10 @@ struct FishingRepository {
 
 private struct FishIdentificationResponse: Decodable {
     let commonName: String?; let scientificName: String?; let confidence: Double?; let error: String?
+    let isFish: Bool?; let otherPossibilities: [String]?; let visibleClues: String?; let identificationNote: String?
     let areaID: String?; let areaName: String?; let areaIsEstimated: Bool?; let rulesNeedsReview: Bool?; let rulesReviewedAt: String?; let rulesSourceURL: String?; let fishRules: [FishRuleMatch]?
     enum CodingKeys: String, CodingKey {
-        case commonName, scientificName, confidence, error, areaName, areaIsEstimated, rulesNeedsReview, rulesReviewedAt, fishRules
+        case commonName, scientificName, confidence, error, isFish, otherPossibilities, visibleClues, identificationNote, areaName, areaIsEstimated, rulesNeedsReview, rulesReviewedAt, fishRules
         case areaID = "areaId"
         case rulesSourceURL = "rulesSourceUrl"
     }

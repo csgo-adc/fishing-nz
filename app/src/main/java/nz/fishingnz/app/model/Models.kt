@@ -39,6 +39,19 @@ data class Recommendation(
     val daylightFraction: Double = 1.0,
     val tidePreferenceFit: Double = 0.0
 )
+/** A short wind-and-rain outlook. This is not a catch or safety rating. */
+val Recommendation.windowOutlook: String
+    get() = when {
+        !dataComplete -> "🔎 Forecast incomplete"
+        warnings.any { warning -> listOf(
+            "Part of this session is outside daylight", "Strong gusts", "Elevated offshore waves",
+            "Long wave periods", "Rain could affect", "Fog may reduce visibility"
+        ).any(warning::startsWith) } -> "⚠️ Check conditions"
+        rating >= 85 -> "🌤️ Excellent"
+        rating >= 70 -> "👍 Good"
+        rating >= 50 -> "🙂 Fair"
+        else -> "🌧️ Challenging"
+    }
 fun recommendationKey(item: Recommendation): String = "${if (item.boat) "boat" else "land"}:${item.name}"
 data class RecommendationSearch(
     val items: List<Recommendation>,
@@ -49,7 +62,23 @@ data class RecommendationSearch(
 )
 data class FishRuleDetail(val label: String, val value: String)
 data class FishRuleMatch(val species: String, val dailyLimit: String?, val minimumSize: String?, val details: List<FishRuleDetail>, val minimumSizeLabel: String? = null)
-data class FishCheck(val commonName: String, val scientificName: String, val confidence: Int, val areaId: String?, val areaName: String, val areaIsEstimated: Boolean, val rulesReviewedAt: String?, val fishRules: List<FishRuleMatch>, val rulesNeedsReview: Boolean = false, val rulesSourceUrl: String? = null, val areaSelectionRequired: Boolean = false)
+data class FishCheck(
+    val commonName: String,
+    val scientificName: String,
+    val confidence: Int,
+    val areaId: String?,
+    val areaName: String,
+    val areaIsEstimated: Boolean,
+    val rulesReviewedAt: String?,
+    val fishRules: List<FishRuleMatch>,
+    val rulesNeedsReview: Boolean = false,
+    val rulesSourceUrl: String? = null,
+    val areaSelectionRequired: Boolean = false,
+    val isFish: Boolean = true,
+    val otherPossibilities: List<String> = emptyList(),
+    val visibleClues: String = "",
+    val identificationNote: String = ""
+)
 
 // Named coastal search points. Wharf/pier names are recorded by LINZ tide predictions
 // (https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view)

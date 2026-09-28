@@ -401,12 +401,17 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
         s.fishPhoto?.let { uri -> val bitmap = remember(uri) { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
-        s.fishCheck?.takeIf { it.areaId == s.fishRulesAreaId }?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        s.fishCheck?.let { result -> Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             val nearRaglanWest = s.fishRulesAreaIsSuggested && result.areaId == "auckland-kermadec" && isNearRaglan(s.deviceLocation)
             val westSnapperRows = result.fishRules.filter { it.species.contains("Auckland West", ignoreCase = true) }
             val shownRules = if (nearRaglanWest && result.commonName.equals("Snapper", ignoreCase = true) && westSnapperRows.isNotEmpty()) westSnapperRows else result.fishRules
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text("${result.confidence}% match", color = Orange, fontWeight = FontWeight.Bold) }
-            Text(result.scientificName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(result.commonName, color = Navy, fontWeight = FontWeight.Bold); Text(if (result.isFish) "${result.confidence}% AI confidence" else "Not a fish", color = Orange, fontWeight = FontWeight.Bold) }
+            if (result.scientificName.isNotBlank()) Text(result.scientificName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (result.visibleClues.isNotBlank()) Text("Visible clues: ${result.visibleClues}", color = Navy, style = MaterialTheme.typography.bodySmall)
+            if (result.otherPossibilities.isNotEmpty()) Text("Could also be: ${result.otherPossibilities.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            if (result.identificationNote.isNotBlank()) Text(result.identificationNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            if (result.isFish && result.areaId != s.fishRulesAreaId) Text("Your MPI rules area changed. Identify this photo again to check local size and catch limits.", color = Navy, style = MaterialTheme.typography.bodySmall)
+            if (result.isFish && result.areaId == s.fishRulesAreaId) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("MPI rules · ${fishingRulesAreas.firstOrNull { it.id == result.areaId }?.name ?: "Area not selected"}", color = Navy, fontWeight = FontWeight.SemiBold); result.rulesReviewedAt?.let { Text("Reviewed $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
             if (nearRaglanWest) Text("Near Raglan: check the Auckland West snapper subarea for the exact catch spot.", color = Navy, style = MaterialTheme.typography.bodySmall)
             if (shownRules.isEmpty()) Text(when {
@@ -429,15 +434,18 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             (fishingRulesAreas.firstOrNull { it.id == result.areaId }?.officialUrl ?: result.rulesSourceUrl)?.let { url ->
                 TextButton(onClick = { uriHandler.openUri(url) }) { Text("See full MPI rules") }
             } ?: TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("Find your MPI fishing area") }
+            }
         } } }
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        if (s.fishCheck?.isFish != false) {
         OutlinedButton(onClick = { showRuleAreas = true }, modifier = Modifier.fillMaxWidth()) {
             Text(fishingRulesAreas.firstOrNull { it.id == s.fishRulesAreaId }?.name ?: "Choose MPI rules area", modifier = Modifier.weight(1f))
             Text("⌄")
         }
         if (s.fishRulesAreaIsSuggested) Text("Suggested from your current location. Choose the MPI area where the fish was caught.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true else cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.weight(1f).height(48.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
                 Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(4.dp)); Text("Camera")
@@ -703,6 +711,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Wind & rain outlook: ${item.windowOutlook}", color = Navy,
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
             Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold)
             Text(item.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Column(Modifier.fillMaxWidth().background(Seafoam, RoundedCornerShape(12.dp)).padding(12.dp),
@@ -872,6 +882,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }
             Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Wind & rain outlook: ${spot.windowOutlook}", color = Navy, fontWeight = FontWeight.SemiBold)
             Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {

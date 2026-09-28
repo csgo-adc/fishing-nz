@@ -122,7 +122,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             current.selectedSpot != null -> closeSpot()
             current.showResults -> closeResults()
             current.tab in 8..10 -> selectTab(7)
-            current.tab == 7 || current.tab == 11 || current.tab in 3..5 -> selectTab(6)
+            current.tab == 7 || current.tab in 3..5 -> selectTab(6)
             current.tab != 0 -> selectTab(0)
         }
     }
@@ -236,14 +236,14 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
     fun chooseFishRulesArea(id: String?) {
         fishRulesAreaManuallySelected = id != null
-        _state.value = _state.value.copy(fishRulesAreaId = id, fishRulesAreaIsSuggested = false, fishCheck = null)
+        _state.value = _state.value.copy(fishRulesAreaId = id, fishRulesAreaIsSuggested = false)
     }
     fun syncRulesAreaFromDeviceLocation(point: GeoPoint) {
         if (fishRulesAreaManuallySelected) return
         val suggestion = suggestedRulesAreaId(point)
         if (_state.value.fishRulesAreaId != suggestion || _state.value.fishRulesAreaIsSuggested != (suggestion != null)) {
             _state.value = _state.value.copy(fishRulesAreaId = suggestion,
-                fishRulesAreaIsSuggested = suggestion != null, fishCheck = null)
+                fishRulesAreaIsSuggested = suggestion != null)
         }
     }
     fun resetFishRulesAreaToCurrentLocation() {
@@ -251,7 +251,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val point = _state.value.deviceLocation ?: _state.value.tideDeviceLocation
         val suggestion = point?.let(::suggestedRulesAreaId)
         _state.value = _state.value.copy(fishRulesAreaId = suggestion,
-            fishRulesAreaIsSuggested = suggestion != null, fishCheck = null)
+            fishRulesAreaIsSuggested = suggestion != null)
     }
     fun selectManualOrigin(origin: SearchOrigin) {
         val old = _state.value
@@ -341,14 +341,19 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean) {
         if (hasDeviceLocation) updateLocation(point)
         _state.value = _state.value.copy(fishChecking = true, fishError = null)
+        val requestedPhoto = _state.value.fishPhoto
         val selectedArea = _state.value.fishRulesAreaId
         viewModelScope.launch {
             runCatching { repository.identifyFish(image, point, hasDeviceLocation, selectedArea) }
                 .onSuccess { result ->
                     val current = _state.value
-                    _state.value = current.copy(fishCheck = result.takeIf { current.fishRulesAreaId == selectedArea }, fishChecking = false)
+                    _state.value = current.copy(fishCheck = result.takeIf { current.fishPhoto == requestedPhoto }, fishChecking = false)
                 }
-                .onFailure { _state.value = _state.value.copy(fishChecking = false, fishError = it.message ?: "Could not identify this photo.") }
+                .onFailure {
+                    val current = _state.value
+                    _state.value = current.copy(fishChecking = false,
+                        fishError = (it.message ?: "Could not identify this photo.").takeIf { current.fishPhoto == requestedPhoto })
+                }
         }
     }
     fun refreshAccount() {

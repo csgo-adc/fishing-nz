@@ -147,14 +147,18 @@
     }
 
     function renderResult(data) {
-      const title = data.is_fish ? (data.common_name_nz || "Unknown fish") : "No fish identified";
+      const alternatives = Array.isArray(data.other_possibilities) ? [...data.other_possibilities] : [];
+      const primary = String(data.common_name_nz || "").trim();
+      const title = data.is_fish
+        ? (primary && !/^unknown fish$/i.test(primary) ? primary : alternatives.shift() || "Unknown fish")
+        : data.subject_name || data.visible_clues?.match(/^The image shows an? (.+?)(?: on | with |[,.;])/i)?.[1] || "Not a fish";
       result.innerHTML = `
-        <div class="result-label">Likely New Zealand name</div>
+        <div class="result-label">${data.is_fish ? "Possible fish identification" : "Photo result · not a fish"}</div>
         <h2>${escapeHtml(title)}</h2>
         ${data.scientific_name ? `<div class="scientific">${escapeHtml(data.scientific_name)}</div>` : ""}
         <span class="confidence">${escapeHtml(data.confidence || "uncertain")} confidence</span>
         ${data.visible_clues ? `<p><strong>Visible clues:</strong> ${escapeHtml(data.visible_clues)}</p>` : ""}
-        ${data.other_possibilities?.length ? `<p class="alternatives"><strong>Could also be:</strong> ${data.other_possibilities.map(escapeHtml).join(", ")}</p>` : ""}
+        ${data.is_fish && alternatives.length ? `<p class="alternatives"><strong>Could also be:</strong> ${alternatives.map(escapeHtml).join(", ")}</p>` : ""}
         ${data.note ? `<p>${escapeHtml(data.note)}</p>` : ""}`;
       result.classList.add("show");
     }

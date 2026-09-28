@@ -22,12 +22,35 @@ struct Recommendation: Identifiable, Equatable {
     var conditions: [String] = []
     var sourceNote: String = ""
     var alternative: String? = nil
+    var dataComplete: Bool = true
     var id: String { "\(boat ? "boat" : "land"):\(name)" }
     var windowID: String { "\(id):\(startsAt?.timeIntervalSince1970 ?? 0)" }
+    /// A wind-and-rain outlook, not a catch or safety rating.
+    var windowOutlook: String {
+        if !dataComplete { return "🔎 Forecast incomplete" }
+        let cautionWarnings = ["Part or all of this session is after dark", "Strong gusts",
+                               "Elevated offshore waves", "Long-period waves", "Rain could affect",
+                               "Fog may reduce visibility"]
+        if warnings.contains(where: { warning in cautionWarnings.contains { warning.hasPrefix($0) } }) {
+            return "⚠️ Check conditions"
+        }
+        switch rating {
+        case 85...: return "🌤️ Excellent"
+        case 70...: return "👍 Good"
+        case 50...: return "🙂 Fair"
+        default: return "🌧️ Challenging"
+        }
+    }
 }
 struct FishRuleDetail: Decodable, Identifiable { let label: String; let value: String; var id: String { "\(label)-\(value)" } }
 struct FishRuleMatch: Decodable, Identifiable { let species: String; let dailyLimit: String?; let minimumSize: String?; let minimumSizeLabel: String?; let details: [FishRuleDetail]; var id: String { species + (dailyLimit ?? "") + (minimumSize ?? "") } }
-struct FishCheck { let commonName: String; let scientificName: String; let confidence: Int; let areaID: String?; let areaName: String; let areaIsEstimated: Bool; let rulesNeedsReview: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?; let fishRules: [FishRuleMatch] }
+struct FishCheck {
+    let commonName: String; let scientificName: String; let confidence: Int
+    let areaID: String?; let areaName: String; let areaIsEstimated: Bool
+    let rulesNeedsReview: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?
+    let fishRules: [FishRuleMatch]; let isFish: Bool; let otherPossibilities: [String]
+    let visibleClues: String; let identificationNote: String
+}
 
 struct AccountProfile: Decodable, Equatable {
     let id: String

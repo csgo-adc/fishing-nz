@@ -8,7 +8,7 @@ CatchCheck NZ helps you find a place and time to fish, check nearby tides, and r
 
 Start with your current location or choose a town. Pick land or boat fishing, how far you want to travel (10–500 km), and when you want to go. You can search today, in three days, this week, this weekend, or choose your own dates within the next 16 days.
 
-The app ranks named fishing areas by their best two- or three-hour window. Each suggestion shows a score, straight-line distance, a suggested time, reasons for the rating, and any weather or sea-condition warnings. Land ratings give more weight to tides; boat ratings give more weight to wind and waves.
+The app compares named fishing areas and suggests two-hour windows. Each suggestion shows a short outlook label, straight-line distance, a suggested time, reasons for the suggestion, and any weather or sea-condition warnings.
 
 Suggestions normally fit between **7:00 AM and 9:00 PM**. Choose your own hours, including overnight, or select **Anytime** if you are happy to start early.
 
@@ -21,12 +21,12 @@ The Tide page selects the nearest supported tide station from your location. You
 - **Map:** Open near your current location, browse named coastal places, switch between land and boat spots, and choose from standard, LINZ aerial imagery, and LINZ topographic basemaps.
 - **Trips:** Keep a shortlist of spots and an active plan while you are planning.
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location for a short rule summary, then open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
-- **Weather:** Open More → Weather for current forecast conditions, an hourly outlook, and a seven-day forecast at your current location. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
+- **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and a seven-day forecast. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
 - **Account:** Confirm your email to manage your profile and send feedback.
 - **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information.
 
 ## Good to know
 
-CatchCheck NZ searches a curated set of named areas, so a small search radius may have no results. A named wharf or beach on the map does not guarantee public access or that fishing is allowed. Scores compare forecast conditions; they do not predict how many fish you will catch or guarantee a safe trip. Heights between published high and low tides on the curve are estimates, and weather can change actual water levels. Fish identification is a suggestion, so check the latest official rules for your exact location and species before keeping a catch. [Read about the location and rules sources](docs/data-sources.md).
+CatchCheck NZ searches a curated set of named areas, so a small search radius may have no results. A named wharf or beach on the map does not guarantee public access or that fishing is allowed. Window outlook labels summarise forecast conditions; they do not predict how many fish you will catch or guarantee a safe trip. Heights between published high and low tides on the curve are estimates, and weather can change actual water levels. Fish identification is a suggestion, so check the latest official rules for your exact location and species before keeping a catch. [Read about the location and rules sources](docs/data-sources.md).
 
 CatchCheck NZ is an evolving project. Android preview builds are available from [Releases](https://github.com/csgo-adc/fishing-nz/releases).

@@ -5,7 +5,38 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type User = { id: string; email: string; display_name: string; country_code: string; plan: "free" | "paid"; created_at: string };
 type FeedbackCategory = "general" | "bug" | "idea";
-type FishResult = { commonName: string; scientificName: string; confidence: number; areaName: string; fishRules: Array<{ species: string; dailyLimit: string | null; minimumSize: string | null }> };
+type FishResult = {
+  isFish?: boolean; commonName: string; scientificName: string; confidence: number;
+  otherPossibilities?: string[]; visibleClues?: string; identificationNote?: string;
+  areaName: string; fishRules: Array<{ species: string; dailyLimit: string | null; minimumSize: string | null }>;
+};
+const supportedFishPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function isHeicPhoto(file: File): boolean {
+  return ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(file.type.toLowerCase()) || /\.hei(?:c|f)$/i.test(file.name);
+}
+
+async function prepareFishPhoto(file: File): Promise<Blob> {
+  if (supportedFishPhotoTypes.has(file.type.toLowerCase())) return file;
+  if (!isHeicPhoto(file)) throw new Error("Choose a JPEG, PNG, WebP, or HEIC photo.");
+  return new Promise<Blob>((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const scale = Math.min(1, 2048 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) { reject(new Error("Could not prepare this photo. Export it as JPEG and try again.")); return; }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not prepare this photo. Export it as JPEG and try again.")), "image/jpeg", 0.88);
+    };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Could not open this HEIC photo. Export it as JPEG and try again.")); };
+    image.src = objectUrl;
+  });
+}
 
 class AccountApiError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) { super(message); }
@@ -139,7 +170,8 @@ export default function AccountPage() {
     if (!fishPhoto) return;
     setFishBusy(true); setError(""); setFishResult(null);
     try {
-      const response = await fetch("/api/account/fish/identify", { method: "POST", headers: { "content-type": fishPhoto.type || "image/jpeg" }, body: fishPhoto });
+      const prepared = await prepareFishPhoto(fishPhoto);
+      const response = await fetch("/api/account/fish/identify", { method: "POST", headers: { "content-type": prepared.type }, body: prepared });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Fish identification failed.");
       setFishResult(payload as FishResult);
@@ -174,9 +206,17 @@ export default function AccountPage() {
             <div className="plan-card"><div><span>Account</span><strong>Signed in</strong></div><p>Fish identification and your fishing tools are ready.</p></div>
             <form className="account-form fish-form" onSubmit={identifyFish}>
               <h2>Identify a fish</h2><p>Choose a clear photo. The result is an AI suggestion; confirm the species and local rules before keeping a fish.</p>
-              <label>Fish photo<input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0] || null; const problem = file && file.size > 20 * 1024 * 1024 ? "Choose an image smaller than 20 MB." : file && file.type && !file.type.startsWith("image/") ? "Choose an image file." : ""; setFishPhoto(problem ? null : file); setFishResult(null); setError(problem); }} /></label>
+              <label>Fish photo<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={(event) => { const file = event.target.files?.[0] || null; const problem = file && file.size > 20 * 1024 * 1024 ? "Choose an image smaller than 20 MB." : file && !supportedFishPhotoTypes.has(file.type.toLowerCase()) && !isHeicPhoto(file) ? "Choose a JPEG, PNG, WebP, or HEIC photo." : ""; setFishPhoto(problem ? null : file); setFishResult(null); setError(problem); }} /></label>
               <button className="button button-primary" disabled={fishBusy || !fishPhoto}>{fishBusy ? "Checking photo…" : "Identify fish"}</button>
-              {fishResult && <div className="plan-card"><strong>{fishResult.commonName}</strong><p>{fishResult.scientificName} · {Math.round(fishResult.confidence * 100)}% confidence · {fishResult.areaName}</p>{fishResult.fishRules.map((rule, index) => <p key={`${rule.species}-${index}`}><b>{rule.species}</b>{rule.minimumSize ? ` · Minimum size: ${rule.minimumSize}` : ""}{rule.dailyLimit ? ` · Daily limit: ${rule.dailyLimit}` : ""}</p>)}</div>}
+              {fishResult && <div className="plan-card" role="status">
+                <strong>{fishResult.commonName}</strong>
+                <p>{fishResult.isFish !== false ? `${Math.round(fishResult.confidence * 100)}% AI confidence · ${fishResult.areaName}` : "This is not a fish."}</p>
+                {fishResult.scientificName && <p>{fishResult.scientificName}</p>}
+                {fishResult.visibleClues && <p><b>Visible clues:</b> {fishResult.visibleClues}</p>}
+                {(fishResult.otherPossibilities?.length ?? 0) > 0 && <p><b>Could also be:</b> {fishResult.otherPossibilities?.join(", ")}</p>}
+                {fishResult.identificationNote && <p>{fishResult.identificationNote}</p>}
+                {fishResult.isFish !== false && fishResult.fishRules.map((rule, index) => <p key={`${rule.species}-${index}`}><b>{rule.species}</b>{rule.minimumSize ? ` · Minimum size: ${rule.minimumSize}` : ""}{rule.dailyLimit ? ` · Daily limit: ${rule.dailyLimit}` : ""}</p>)}
+              </div>}
             </form>
             <form className="account-form" onSubmit={saveProfile}>
               <h2>Profile</h2><label>Email<input value={user.email} readOnly /></label><label>Name<input autoComplete="name" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><label>Country code<input maxLength={2} value={countryCode} onChange={(event) => setCountryCode(event.target.value.toUpperCase().slice(0, 2))} /></label><button className="button button-primary" disabled={busy}>Save profile</button>

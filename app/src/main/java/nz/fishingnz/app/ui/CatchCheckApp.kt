@@ -108,11 +108,12 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                     Triple(Icons.Default.Home, "Home", 0),
                     Triple(Icons.Default.Map, "Map", 1),
                     Triple(Icons.Default.Waves, "Tide", 2),
+                    Triple(Icons.Default.WbSunny, "Weather", 11),
                     Triple(Icons.Default.MoreHoriz, "More", 6)
                 )
                 destinations.forEach { (icon, label, tab) ->
                     NavigationBarItem(
-                        selected = if (tab == 6) state.tab >= 3 else state.tab == tab,
+                        selected = if (tab == 6) state.tab in 3..10 else state.tab == tab,
                         onClick = { vm.selectTab(tab) },
                         icon = { Icon(icon, contentDescription = null) },
                         label = { Text(label) }
@@ -137,7 +138,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                         preferences.edit().putString("mode", choice.name).apply()
                     }
                 }
-                11 -> MoreDetail("Weather", { vm.selectTab(6) }, modifier) { WeatherScreen(Modifier) }
+                11 -> WeatherScreen(modifier)
                 else -> MoreScreen(modifier, state.account?.user?.displayName, vm::selectTab)
             }
         }
@@ -171,8 +172,6 @@ private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> U
             MoreItem(Icons.Default.CalendarMonth, "Trips", "Saved spots and active plans") { onNavigate(3) }
             HorizontalDivider(Modifier.padding(start = 64.dp))
             MoreItem(Icons.Default.MenuBook, "Fishing rules", "Sizes, limits and local restrictions") { onNavigate(4) }
-            HorizontalDivider(Modifier.padding(start = 64.dp))
-            MoreItem(Icons.Default.WbSunny, "Weather", "Current conditions and forecast near you") { onNavigate(11) }
         }
         Spacer(Modifier.height(2.dp))
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

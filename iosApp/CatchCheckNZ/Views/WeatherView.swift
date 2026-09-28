@@ -2,7 +2,195 @@ import SwiftUI
 
 struct WeatherView: View {
     @EnvironmentObject private var vm: FishingViewModel
+    @AppStorage("weatherSavedLocationIDs") private var savedIDsRaw = ""
+    @AppStorage("weatherSelectedLocationID") private var selectedID = "current"
+    @State private var showingLocationPicker = false
+    @State private var refreshIndex = 0
+
+    private var savedStations: [TideStation] {
+        var seen = Set<String>()
+        return savedIDsRaw.split(separator: ",").compactMap { id in
+            let key = String(id)
+            guard seen.insert(key).inserted else { return nil }
+            return tideStations.first { $0.id == key }
+        }
+    }
+
+    private var places: [WeatherPlace] {
+        var result = [WeatherPlace(id: "current", name: "Current location", point: nil)]
+        result += savedStations.map { WeatherPlace(station: $0) }
+        if selectedID != "current", !result.contains(where: { $0.id == selectedID }),
+           let station = tideStations.first(where: { $0.id == selectedID }) {
+            result.append(WeatherPlace(station: station))
+        }
+        return result
+    }
+
+    private var selectedPlace: WeatherPlace {
+        places.first { $0.id == selectedID } ?? places[0]
+    }
+
+    private var isSaved: Bool { savedStations.contains { $0.id == selectedID } }
+
+    private func toggleSaved() {
+        guard selectedID != "current" else { return }
+        var ids = savedStations.map(\.id)
+        if isSaved { ids.removeAll { $0 == selectedID } }
+        else { ids.append(selectedID) }
+        savedIDsRaw = ids.joined(separator: ",")
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Weather").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                        Text(selectedID == "current" && vm.hasDeviceLocation
+                             ? "\(vm.devicePlaceName ?? "Nearby") · current location"
+                             : selectedPlace.name)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { showingLocationPicker = true } label: {
+                        Image(systemName: "magnifyingglass")
+                            .frame(width: 40, height: 40)
+                            .background(CatchCheckColor.seafoam, in: Circle())
+                    }
+                    .accessibilityLabel("Choose weather location")
+                    if selectedID != "current" {
+                        Button(action: toggleSaved) {
+                            Image(systemName: isSaved ? "star.fill" : "star")
+                                .frame(width: 40, height: 40)
+                                .background(CatchCheckColor.seafoam, in: Circle())
+                        }
+                        .accessibilityLabel(isSaved ? "Remove \(selectedPlace.name) from saved weather locations" : "Save \(selectedPlace.name) as a weather location")
+                    }
+                    Button { refreshIndex += 1 } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .frame(width: 40, height: 40)
+                            .background(CatchCheckColor.seafoam, in: Circle())
+                    }
+                    .accessibilityLabel("Refresh \(selectedPlace.name) weather")
+                }
+                .padding(.horizontal, 20).padding(.top, 20)
+
+                if places.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(places) { place in
+                                Button(place.name) { selectedID = place.id }
+                                    .buttonStyle(.bordered)
+                                    .tint(place.id == selectedID ? CatchCheckColor.accent : CatchCheckColor.navy)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .padding(.top, 14)
+                    Text("Swipe left or right to switch weather locations")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(.horizontal, 20).padding(.top, 8)
+                    if selectedID != "current" && !isSaved {
+                        Text("Tap the star to save this location for later")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .padding(.horizontal, 20).padding(.top, 3)
+                    }
+                }
+
+                TabView(selection: $selectedID) {
+                    ForEach(places) { place in
+                        WeatherForecastPage(place: place, isSelected: place.id == selectedID, refreshIndex: refreshIndex)
+                            .tag(place.id)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle("Weather")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showingLocationPicker) {
+                WeatherLocationPicker(selectedID: $selectedID, savedIDs: savedStations.map(\.id))
+            }
+            .onAppear {
+                if selectedID != "current" && !tideStations.contains(where: { $0.id == selectedID }) {
+                    selectedID = "current"
+                }
+            }
+        }
+    }
+}
+
+private struct WeatherPlace: Identifiable {
+    let id: String
+    let name: String
+    let point: GeoPoint?
+
+    init(id: String, name: String, point: GeoPoint?) {
+        self.id = id
+        self.name = name
+        self.point = point
+    }
+
+    init(station: TideStation) {
+        self.init(id: station.id, name: station.name,
+                  point: GeoPoint(latitude: station.latitude, longitude: station.longitude))
+    }
+}
+
+private struct WeatherLocationPicker: View {
     @Environment(\.dismiss) private var dismiss
+    @Binding var selectedID: String
+    let savedIDs: [String]
+    @State private var query = ""
+
+    private var matches: [TideStation] {
+        let sorted = tideStations.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        guard !query.isEmpty else { return sorted }
+        return sorted.filter { $0.name.localizedStandardContains(query) || $0.region.localizedStandardContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        selectedID = "current"
+                        dismiss()
+                    } label: {
+                        Label("Current location", systemImage: "location.fill")
+                    }
+                }
+                Section("New Zealand coastal locations") {
+                    ForEach(matches) { station in
+                        Button {
+                            selectedID = station.id
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(station.name)
+                                    Text(station.region).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if savedIDs.contains(station.id) { Image(systemName: "star.fill") }
+                                if selectedID == station.id { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: "Search weather locations")
+            .navigationTitle("Weather locations")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+private struct WeatherForecastPage: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    let place: WeatherPlace
+    let isSelected: Bool
+    let refreshIndex: Int
     @State private var forecast: WeatherSnapshot?
     @State private var isLoading = false
     @State private var isLocating = false
@@ -10,30 +198,11 @@ struct WeatherView: View {
     @State private var locationMessage: String?
     @State private var locationRequestStartedAt: Date?
     @State private var freshPoint: GeoPoint?
-    @State private var refreshIndex = 0
+    @State private var requestKey = UUID()
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Weather").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                            Text(freshPoint != nil ? "\(vm.devicePlaceName ?? "Your current location") · current location" : "Waiting for current location")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button {
-                            refreshIndex += 1
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.headline)
-                                .frame(width: 40, height: 40)
-                                .background(CatchCheckColor.seafoam, in: Circle())
-                        }
-                        .accessibilityLabel("Refresh current location and weather")
-                    }
-
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
                     if isLocating {
                         Card {
                             ProgressView("Finding a fresh location…")
@@ -49,14 +218,14 @@ struct WeatherView: View {
                             Label("Location needed", systemImage: "location.slash")
                                 .font(.headline).foregroundStyle(CatchCheckColor.navy)
                             Text(locationMessage).foregroundStyle(CatchCheckColor.navy)
-                            Button("Try location again") { refreshIndex += 1 }
+                            Button("Try location again") { requestLocation() }
                                 .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
                         }
                     }
                     if let weatherMessage {
                         Card(background: CatchCheckColor.seafoam) {
                             Text(weatherMessage).foregroundStyle(CatchCheckColor.navy)
-                            Button("Try again") { refreshIndex += 1 }
+                            Button("Try again") { requestKey = UUID() }
                                 .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
                         }
                     }
@@ -69,28 +238,16 @@ struct WeatherView: View {
                     }
                 }
                 .padding(20)
-            }
-            .background(CatchCheckColor.cream)
-            .navigationTitle("Weather")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-            .task(id: refreshIndex) {
-                // A prior app session may still have a coordinate in the view model.
-                // Only a fix timestamped after this request can drive this forecast.
-                freshPoint = nil
-                forecast = nil
-                isLoading = false
-                weatherMessage = nil
+        }
+        .background(CatchCheckColor.cream)
+        .task(id: "\(isSelected)-\(refreshIndex)") {
+            guard isSelected else { return }
+            if let point = place.point {
+                freshPoint = point
                 locationMessage = nil
-                isLocating = true
-                locationRequestStartedAt = .now
-                vm.requestLocation()
-                if let issue = vm.tideLocationIssue {
-                    isLocating = false
-                    locationMessage = issue.contains("access is off")
-                        ? "Allow location access in iPhone Settings to see the weather where you are."
-                        : "Your current location is unavailable. Check Location Services and try again."
-                }
+                requestKey = UUID()
+            } else {
+                requestLocation()
                 try? await Task.sleep(for: .seconds(20))
                 guard !Task.isCancelled else { return }
                 if isLocating {
@@ -98,21 +255,26 @@ struct WeatherView: View {
                     locationMessage = "Couldn’t get a fresh location. Check Location Services and try again."
                 }
             }
-            .onChange(of: vm.deviceLocationUpdatedAt) { _, updatedAt in
+        }
+        .onChange(of: vm.deviceLocationUpdatedAt) { _, updatedAt in
+                guard place.point == nil, isSelected else { return }
                 guard let startedAt = locationRequestStartedAt,
                       let updatedAt, updatedAt > startedAt, vm.hasDeviceLocation, isLocating else { return }
                 freshPoint = vm.location
                 isLocating = false
                 locationMessage = nil
+                requestKey = UUID()
             }
-            .onChange(of: vm.tideLocationIssue) { _, issue in
+        .onChange(of: vm.tideLocationIssue) { _, issue in
+                guard place.point == nil, isSelected else { return }
                 guard isLocating, let issue else { return }
                 isLocating = false
                 locationMessage = issue.contains("access is off")
                     ? "Allow location access in iPhone Settings to see the weather where you are."
                     : "Your current location is unavailable. Check Location Services and try again."
             }
-            .task(id: freshPoint) {
+        .task(id: "\(isSelected)-\(requestKey)") {
+                guard isSelected else { return }
                 guard let freshPoint else { return }
                 isLoading = true
                 defer { isLoading = false }
@@ -124,6 +286,24 @@ struct WeatherView: View {
                     if !Task.isCancelled { weatherMessage = "The forecast could not be loaded. Please try again." }
                 }
             }
+    }
+
+    private func requestLocation() {
+        // A prior app session may still have a coordinate in the view model.
+        // Only a fix timestamped after this request can drive this forecast.
+        freshPoint = nil
+        forecast = nil
+        requestKey = UUID()
+        weatherMessage = nil
+        locationMessage = nil
+        isLocating = true
+        locationRequestStartedAt = .now
+        vm.requestLocation()
+        if let issue = vm.tideLocationIssue {
+            isLocating = false
+            locationMessage = issue.contains("access is off")
+                ? "Allow location access in iPhone Settings to see the weather where you are."
+                : "Your current location is unavailable. Check Location Services and try again."
         }
     }
 

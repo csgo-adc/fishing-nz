@@ -1,11 +1,14 @@
 package nz.fishingnz.app.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,10 +30,13 @@ import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Thunderstorm
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,7 +45,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +71,7 @@ import nz.fishingnz.app.data.LocalWeatherForecast
 import nz.fishingnz.app.data.WeatherRepository
 import nz.fishingnz.app.model.GeoPoint
 import nz.fishingnz.app.model.nearestCityName
+import nz.fishingnz.app.model.tideStations
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -71,8 +80,159 @@ private val hourFormatter = DateTimeFormatter.ofPattern("ha", Locale.ENGLISH)
 private val dayFormatter = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)
 private val refreshedFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
+private data class WeatherPlace(val id: String, val name: String, val point: GeoPoint?)
+
+private class WeatherLocationStore(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("weather_locations", Context.MODE_PRIVATE)
+
+    fun saved(): List<String> = prefs.getString("saved_station_ids", "").orEmpty().split(',')
+        .filter { id -> id.isNotEmpty() && tideStations.any { it.id == id } }.distinct()
+
+    fun selected(): String = prefs.getString("selected_station_id", "current")
+        .orEmpty().takeIf { it == "current" || tideStations.any { station -> station.id == it } } ?: "current"
+
+    fun saveSaved(ids: List<String>) { prefs.edit().putString("saved_station_ids", ids.joinToString(",")).apply() }
+    fun saveSelected(id: String) { prefs.edit().putString("selected_station_id", id).apply() }
+}
+
+private fun weatherPlaces(savedIds: List<String>, extraId: String?): List<WeatherPlace> {
+    val ids = (savedIds + listOfNotNull(extraId)).distinct()
+    return listOf(WeatherPlace("current", "Current location", null)) + ids.mapNotNull { id ->
+        tideStations.firstOrNull { it.id == id }?.let {
+            WeatherPlace(it.id, it.name, GeoPoint(it.latitude, it.longitude))
+        }
+    }
+}
+
 @Composable
 fun WeatherScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val store = remember(context) { WeatherLocationStore(context) }
+    val initiallySelected = remember(store) { store.selected() }
+    var savedIds by remember(store) { mutableStateOf(store.saved()) }
+    var extraId by remember(store) { mutableStateOf(initiallySelected.takeIf { it != "current" && it !in savedIds }) }
+    val places = remember(savedIds, extraId) { weatherPlaces(savedIds, extraId) }
+    val pager = rememberPagerState(initialPage = places.indexOfFirst { it.id == initiallySelected }.coerceAtLeast(0)) { places.size }
+    val selected = places.getOrElse(pager.currentPage) { places.first() }
+    var pendingId by remember { mutableStateOf<String?>(null) }
+    var pickerOpen by remember { mutableStateOf(false) }
+    var refreshIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(pendingId, places) {
+        val target = pendingId ?: return@LaunchedEffect
+        val index = places.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            pager.scrollToPage(index)
+            pendingId = null
+        }
+    }
+    LaunchedEffect(pager.currentPage, places) {
+        store.saveSelected(selected.id)
+    }
+    LaunchedEffect(pager.currentPage, pendingId, places) {
+        if (pendingId == null && extraId != null && extraId !in savedIds && selected.id != extraId) {
+            extraId = null
+        }
+    }
+
+    Column(modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Weather", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(selected.name, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = { pickerOpen = true }) {
+                Icon(Icons.Default.Search, contentDescription = "Choose weather location")
+            }
+            if (selected.id != "current") {
+                val isSaved = selected.id in savedIds
+                IconButton(onClick = {
+                    if (isSaved) {
+                        savedIds = savedIds.filterNot { it == selected.id }
+                        extraId = selected.id
+                    } else {
+                        savedIds = savedIds + selected.id
+                    }
+                    store.saveSaved(savedIds)
+                    pendingId = selected.id
+                }) {
+                    Icon(if (isSaved) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = if (isSaved) "Remove ${selected.name} from saved weather locations" else "Save ${selected.name} as a weather location")
+                }
+            }
+            IconButton(onClick = { refreshIndex++ }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh ${selected.name} weather")
+            }
+        }
+        if (places.size > 1) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                places.forEach { place ->
+                    OutlinedButton(onClick = { pendingId = place.id }) {
+                        Text(place.name, color = if (place.id == selected.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+            Text("Swipe left or right to switch weather locations", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp))
+            if (selected.id != "current" && selected.id !in savedIds) {
+                Text("Tap the star to save this location for later", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
+            }
+        }
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f), key = { places[it].id }) { index ->
+            val place = places[index]
+            WeatherForecastPage(place, place.id == selected.id, refreshIndex)
+        }
+    }
+
+    if (pickerOpen) WeatherLocationPicker(savedIds, onDismiss = { pickerOpen = false }) { id ->
+        if (id != "current" && id !in savedIds) extraId = id
+        pendingId = id
+        pickerOpen = false
+    }
+}
+
+@Composable
+private fun WeatherLocationPicker(savedIds: List<String>, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val matches = remember(query) {
+        tideStations.sortedBy { it.name.lowercase(Locale.getDefault()) }
+            .filter { it.name.contains(query, ignoreCase = true) || it.region.contains(query, ignoreCase = true) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Weather locations") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search locations") }, singleLine = true)
+                Text("New Zealand coastal places", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                    item {
+                        TextButton(onClick = { onSelect("current") }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Current location", modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    items(matches.size) { index ->
+                        val station = matches[index]
+                        TextButton(onClick = { onSelect(station.id) }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth()) {
+                                Text("${station.name}${if (station.id in savedIds) " ★" else ""}")
+                                Text(station.region, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+@Composable
+private fun WeatherForecastPage(place: WeatherPlace, isActive: Boolean, refreshIndex: Int) {
     val context = LocalContext.current
     val repository = remember { WeatherRepository() }
     var point by remember { mutableStateOf<GeoPoint?>(null) }
@@ -81,26 +241,36 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
     var weatherLoading by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf<String?>(null) }
     var weatherMessage by remember { mutableStateOf<String?>(null) }
-    var refreshIndex by remember { mutableIntStateOf(0) }
+    var fetchIndex by remember { mutableIntStateOf(0) }
+    var locationRequestVersion by remember { mutableIntStateOf(0) }
 
     fun locate() {
+        locationRequestVersion++
+        val requestVersion = locationRequestVersion
         locationLoading = true
         locationMessage = null
+        point = null
+        forecast = null
         requestCurrentLocation(context,
             onLocation = { found ->
-                locationLoading = false
-                point = found
-                refreshIndex++
+                if (requestVersion == locationRequestVersion) {
+                    locationLoading = false
+                    point = found
+                    fetchIndex++
+                }
             },
             onUnavailable = {
-                locationLoading = false
-                point = null
-                forecast = null
-                locationMessage = "Your current location is unavailable. Check location services and try again."
+                if (requestVersion == locationRequestVersion) {
+                    locationLoading = false
+                    point = null
+                    forecast = null
+                    locationMessage = "Your current location is unavailable. Check location services and try again."
+                }
             })
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        if (!isActive) return@rememberLauncherForActivityResult
         if (results[Manifest.permission.ACCESS_FINE_LOCATION] == true || results[Manifest.permission.ACCESS_COARSE_LOCATION] == true) locate()
         else {
             point = null
@@ -115,8 +285,19 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
         else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    LaunchedEffect(Unit) { requestWeatherLocation() }
-    LaunchedEffect(point, refreshIndex) {
+    LaunchedEffect(isActive, refreshIndex) {
+        if (!isActive) {
+            locationRequestVersion++
+            return@LaunchedEffect
+        }
+        if (place.point == null) requestWeatherLocation()
+        else {
+            point = place.point
+            fetchIndex++
+        }
+    }
+    LaunchedEffect(point, fetchIndex, isActive) {
+        if (!isActive) return@LaunchedEffect
         val selectedPoint = point ?: return@LaunchedEffect
         weatherLoading = true
         weatherMessage = null
@@ -132,23 +313,14 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Weather", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text(point?.let { name ->
-                        val city = nearestCityName(name)
-                        if (city == "Current location") "At your current location" else "Near $city · current location"
-                    } ?: "At your current location", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = ::requestWeatherLocation, enabled = !locationLoading && !weatherLoading) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh current location and weather")
-                }
-            }
+        if (place.point == null && point != null) item {
+            val city = nearestCityName(point!!)
+            Text(if (city == "Current location") "At your current location" else "Near $city · current location",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (locationLoading || (weatherLoading && forecast == null)) item {
             Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
@@ -156,7 +328,7 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
             }
         }
         locationMessage?.let { message -> item { WeatherNotice(message, ::requestWeatherLocation) } }
-        weatherMessage?.let { message -> item { WeatherNotice(message) { refreshIndex++ } } }
+        weatherMessage?.let { message -> item { WeatherNotice(message) { fetchIndex++ } } }
         forecast?.let { data ->
             item { WeatherNowCard(data, weatherLoading) }
             item { WeatherHourlyCard(data.hourly) }

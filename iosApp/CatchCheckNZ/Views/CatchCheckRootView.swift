@@ -25,7 +25,7 @@ enum CatchCheckColor {
 }
 
 private enum MoreDestination: String, Identifiable {
-    case trips, rules, weather, account, settings
+    case trips, rules, account, settings
     var id: String { rawValue }
 }
 
@@ -47,7 +47,8 @@ struct CatchCheckRootView: View {
             HomeView(openAccount: { moreDestination = .account }).tabItem { Label("Home", systemImage: "house.fill") }.tag(0)
             FishingMapView().tabItem { Label("Map", systemImage: "map.fill") }.tag(1)
             TideForecastView().tabItem { Label("Tide", systemImage: "water.waves") }.tag(2)
-            MoreView(open: { moreDestination = $0 }).tabItem { Label("More", systemImage: "square.grid.2x2.fill") }.tag(3)
+            WeatherView().tabItem { Label("Weather", systemImage: "cloud.sun.fill") }.tag(3)
+            MoreView(open: { moreDestination = $0 }).tabItem { Label("More", systemImage: "square.grid.2x2.fill") }.tag(4)
         }
         .tint(CatchCheckColor.accent)
         .preferredColorScheme(preferredAppearance)
@@ -57,7 +58,6 @@ struct CatchCheckRootView: View {
             switch destination {
             case .trips: TripsView()
             case .rules: RulesView()
-            case .weather: WeatherView()
             case .account: AccountView()
             case .settings: SettingsView()
             }
@@ -84,7 +84,6 @@ private struct MoreView: View {
                     VStack(spacing: 10) {
                         MoreNavigationRow(title: "Trips", subtitle: "Saved spots and active plans", icon: "calendar") { open(.trips) }
                         MoreNavigationRow(title: "Fishing rules", subtitle: "Sizes, limits and local restrictions", icon: "book.closed") { open(.rules) }
-                        MoreNavigationRow(title: "Weather", subtitle: "Current conditions and forecast near you", icon: "cloud.sun") { open(.weather) }
                     }
                     .padding(.bottom, 6)
                     VStack(spacing: 10) {
@@ -483,7 +482,7 @@ private struct FishIdentifierView: View {
         Card {
             HStack { Image(systemName: "camera.fill").font(.title2).foregroundStyle(CatchCheckColor.navy).frame(width: 44, height: 44).background(CatchCheckColor.seafoam, in: Circle()); VStack(alignment: .leading) { Text("What fish is this?").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy); Text("AI ID + local rules check").font(.caption).foregroundStyle(.secondary) }; Spacer() }
             if let photo = vm.selectedPhoto { Image(uiImage: photo).resizable().scaledToFill().frame(height: 160).clipShape(RoundedRectangle(cornerRadius: 12)) }
-            if let result = vm.fishCheck, result.areaID == vm.selectedRulesAreaID { FishCheckCard(result: result) }
+            if let result = vm.fishCheck { FishCheckCard(result: result) }
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack(spacing: 10) {
@@ -504,6 +503,7 @@ private struct FishIdentifierView: View {
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
             }
+            if vm.fishCheck?.isFish != false {
             Menu {
                 Button {
                     vm.useCurrentRulesArea()
@@ -526,6 +526,7 @@ private struct FishIdentifierView: View {
                  ? "Suggested from your current location. Choose the area where you caught the fish for local size and daily limits."
                  : "Choose the area where you caught the fish for local size and daily limits.")
                 .font(.caption).foregroundStyle(.secondary)
+            }
             Button {
                 if vm.fishIdentityAvailable { vm.identifyFish() }
                 else if vm.hasStoredSession { vm.refreshAccount() }
@@ -544,8 +545,21 @@ private struct FishIdentifierView: View {
             }
             Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
         }
-        .onChange(of: photoItem) { _, item in Task { guard let data = try? await item?.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }; vm.selectedPhoto = image; vm.fishCheck = nil } }
-        .sheet(isPresented: $showCamera) { CameraPicker(image: $vm.selectedPhoto) }
+        .onChange(of: photoItem) { _, item in
+            Task {
+                guard let data = try? await item?.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else { return }
+                vm.selectedPhoto = image
+                vm.fishCheck = nil
+                vm.error = nil
+            }
+        }
+        .sheet(isPresented: $showCamera) {
+            CameraPicker(image: Binding(
+                get: { vm.selectedPhoto },
+                set: { vm.selectedPhoto = $0; vm.fishCheck = nil; vm.error = nil }
+            ))
+        }
     }
 }
 
@@ -952,6 +966,8 @@ struct SpotDetailView: View {
                     Text("Area marker only. Local access, wave exposure and fishing closures still need checking.")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if !spot.time.isEmpty {
+                        Text("Wind & rain outlook: \(spot.windowOutlook)")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
                         Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
                         Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
                         Card(background: CatchCheckColor.seafoam) {
@@ -1014,6 +1030,10 @@ struct RecommendationCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(spot.name).font(.title3.bold())
                     Text("\(spot.area) · \(spot.boat ? "Boat" : "Land")").font(.subheadline).foregroundStyle(.secondary)
+                    if !spot.time.isEmpty {
+                        Text("Wind & rain outlook: \(spot.windowOutlook)")
+                            .font(.subheadline.weight(.semibold))
+                    }
                     if !spot.time.isEmpty { Text(spot.time).font(.headline) }
                     Text(spot.distance).font(.caption).foregroundStyle(.secondary)
                 }
@@ -1093,8 +1113,16 @@ private struct FishCheckCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack { Text(result.commonName).bold(); Spacer(); Text("\(result.confidence)% match").bold().foregroundStyle(CatchCheckColor.orange) }
-            Text(result.scientificName).foregroundStyle(.secondary)
+            HStack { Text(result.commonName).bold(); Spacer(); Text(result.isFish ? "\(result.confidence)% AI confidence" : "Not a fish").bold().foregroundStyle(CatchCheckColor.orange) }
+            if !result.scientificName.isEmpty { Text(result.scientificName).foregroundStyle(.secondary) }
+            if !result.visibleClues.isEmpty { Text("Visible clues: \(result.visibleClues)").font(.subheadline) }
+            if !result.otherPossibilities.isEmpty { Text("Could also be: \(result.otherPossibilities.joined(separator: ", "))").font(.subheadline).foregroundStyle(.secondary) }
+            if !result.identificationNote.isEmpty { Text(result.identificationNote).font(.subheadline).foregroundStyle(.secondary) }
+            if result.isFish && result.areaID != vm.selectedRulesAreaID {
+                Text("Your MPI rules area changed. Identify this photo again to check local size and catch limits.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            if result.isFish && result.areaID == vm.selectedRulesAreaID {
             Text("MPI rules · \(fishingRulesAreas.first(where: { $0.id == result.areaID })?.name ?? "Area not selected")").font(.subheadline.bold())
             if nearRaglanWest {
                 Text("Near Raglan: check the Auckland West snapper subarea for the exact catch spot.")
@@ -1137,6 +1165,7 @@ private struct FishCheckCard: View {
             Text("Confirm the species, exact location, closures and current MPI rules before keeping a fish.")
                 .font(.caption).foregroundStyle(.secondary)
             if let reviewed = result.rulesReviewedAt { Text("MPI page reviewed: \(reviewed)").font(.caption).foregroundStyle(.secondary) }
+            }
         }.foregroundStyle(CatchCheckColor.navy).padding(14).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14))
     }
 }

@@ -14,13 +14,14 @@ const schema = {
   properties: {
     is_fish: { type: "boolean" },
     common_name_nz: { type: "string" },
+    subject_name: { type: "string" },
     scientific_name: { type: "string" },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     other_possibilities: { type: "array", items: { type: "string" } },
     visible_clues: { type: "string" },
     note: { type: "string" },
   },
-  required: ["is_fish", "common_name_nz", "scientific_name", "confidence", "other_possibilities", "visible_clues", "note"],
+  required: ["is_fish", "common_name_nz", "subject_name", "scientific_name", "confidence", "other_possibilities", "visible_clues", "note"],
   additionalProperties: false,
 };
 
@@ -69,7 +70,7 @@ const server = createServer(async (request, response) => {
           content: [
             {
               type: "input_text",
-              text: "Identify the fish in this photo for a New Zealand angler. Return the New Zealand common name first (for example snapper, kahawai, kingfish, blue cod, or tarakihi), and the scientific name when you can support it. Use visible features and New Zealand species knowledge. If the photo is not clearly a fish, set is_fish to false. If you cannot distinguish species reliably, say Unknown fish and use low confidence; do not guess. Give up to three plausible alternatives, confidence as high/medium/low, visible identification clues, and a brief note that this is an AI suggestion rather than a confirmed identification. Do not give catch or legal advice.",
+              text: "Identify the main subject of this photo for a New Zealand angler. If it is a fish, put the most likely specific common name in common_name_nz even if it is uncommon in New Zealand. Prefer the familiar NZ name when available, otherwise a widely understood name. Do not use 'Unknown fish' when a plausible leading name can be given; show uncertainty with low confidence and alternatives. Give a scientific name only when supported by visible features. Image captions are clues, not proof. If it is not a fish, set is_fish false, leave common_name_nz and scientific_name empty, and give the subject's concise common name in subject_name, such as 'Sea star (starfish)'. For fish, subject_name should match common_name_nz. Give up to three distinct alternative fish names in likelihood order, excluding the leading name. Describe visible clues and uncertainty in plain language. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
             },
             { type: "input_image", image_url: `data:${mimeType};base64,${base64}`, detail: "high" },
           ],

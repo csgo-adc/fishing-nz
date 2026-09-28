@@ -21,7 +21,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var selectedTab = 0 {
         didSet {
             guard oldValue != selectedTab else { return }
-            let features = ["home", "map", "tide", "more"]
+            let features = ["home", "map", "tide", "weather", "more"]
             guard features.indices.contains(selectedTab) else { return }
             Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
         }
@@ -76,7 +76,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var error: String?
     @Published var selectedPhoto: UIImage?
     @Published var fishCheck: FishCheck?
-    @Published private(set) var selectedRulesAreaID: String? { didSet { if oldValue != selectedRulesAreaID { fishCheck = nil } } }
+    @Published private(set) var selectedRulesAreaID: String?
     @Published var isCheckingFish = false
     @Published var savedSpotNames = Set<String>()
     @Published var savedRecommendations: [String: Recommendation] = [:]
@@ -214,7 +214,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 summary: window.summary,
                 conditions: window.conditions,
                 sourceNote: window.sourceNote,
-                alternative: window.alternative
+                alternative: window.alternative,
+                dataComplete: window.dataComplete
             )
         }
     }
@@ -704,8 +705,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         Task {
             do {
                 let result = try await repository.identifyFish(image: photo, at: point, hasDeviceLocation: hasDeviceLocation, selectedRulesAreaID: requestedAreaID)
-                if selectedRulesAreaID == requestedAreaID && result.areaID == requestedAreaID { fishCheck = result }
-            } catch { self.error = error.localizedDescription }
+                if selectedPhoto === photo { fishCheck = result }
+            } catch { if selectedPhoto === photo { self.error = error.localizedDescription } }
             isCheckingFish = false
         }
     }
