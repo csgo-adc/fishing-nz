@@ -11,6 +11,7 @@ struct PlaceConditionsView: View {
     @State private var recent = false
     @State private var selectedDate: Date?
     @State private var station: TideStation?
+    @State private var selectedStation: TideStation?
     @State private var tide: TideState?
     @State private var tideLoading = false
     @State private var tideIssue = false
@@ -24,11 +25,13 @@ struct PlaceConditionsView: View {
     private var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = zone; return c }
     private var today: Date { calendar.startOfDay(for: .now) }
     private var dates: [Date] {
-        let values = data?.dates.filter { recent ? $0 < today : $0 >= today } ?? []
+        let available = data?.dates ?? []
+        let fallback = (-pastDays..<16).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        let values = (available.isEmpty ? fallback : available).filter { recent ? $0 < today : $0 >= today }
         return recent ? values.reversed() : values
     }
     private var day: Date? { selectedDate.flatMap { dates.contains($0) ? $0 : nil } ?? dates.first }
-    private var tideKey: String { "\(station?.id ?? "none")-\(day?.timeIntervalSince1970 ?? 0)-\(tideRefresh)" }
+    private var tideKey: String { "\(place.id)-\(selectedStation?.id ?? "auto")-\(day?.timeIntervalSince1970 ?? 0)-\(tideRefresh)-\(refresh)" }
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -68,7 +71,7 @@ struct PlaceConditionsView: View {
                 ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("Map", systemImage: "chevron.left") }.accessibilityLabel("Back to map") }
                 ToolbarItem(placement: .topBarTrailing) { Button { refresh += 1 } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Refresh conditions") }
             }
-            .sheet(isPresented: $showStations) { TideReferencePickerView(point: place.point, selected: station) { station = $0; showStations = false } }
+            .sheet(isPresented: $showStations) { TideReferencePickerView(point: place.point, selected: station) { selectedStation = $0; tideRefresh += 1; showStations = false } }
         }
         .onChange(of: recent) { _, _ in selectedDate = nil }
         .onChange(of: pastDays) { _, _ in selectedDate = nil }
@@ -82,11 +85,12 @@ struct PlaceConditionsView: View {
         }
         .task(id: tideKey) {
             tide = nil; tideIssue = false; tideLoading = false
-            guard let station, let day else { return }
+            station = selectedStation ?? place.initialTideStation
+            guard let day else { return }
             tideLoading = true
             do {
-                let result = try await FishingRepository().tide(for: station, date: day)
-                guard !Task.isCancelled else { return }; tide = result; tideLoading = false
+                let result = try await loadPlaceTide(place: place, selected: selectedStation, date: day) { try await FishingRepository().tide(for: $0, date: $1) }
+                guard !Task.isCancelled else { return }; station = result.station; tide = result.tide; tideLoading = false
             } catch { if !Task.isCancelled { tideIssue = true; tideLoading = false } }
         }
     }
@@ -154,7 +158,7 @@ struct PlaceConditionsView: View {
                 Text("Reference station · \(String(format: "%.1f", distance)) km away").font(.subheadline).foregroundStyle(.secondary)
                 Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                 if tideLoading { ProgressView() }
-                else if tideIssue { Text("Tide unavailable for this day."); Button("Retry tide") { tideRefresh += 1 } }
+                else if tideIssue { Text(selectedStation == nil ? "Nearby tide stations could not be loaded." : "Tide unavailable for this station and day."); Button("Retry tide") { tideRefresh += 1 } }
                 else if let tide {
                     ForEach(tide.events) { event in
                         HStack { Text("\(event.type == "High" ? "↗️" : "↘️") \(event.type)").frame(width: 76, alignment: .leading); Text(event.time); Spacer(); Text(event.height).fontWeight(.semibold) }.font(.subheadline)
@@ -223,7 +227,7 @@ private struct TideReferencePickerView: View {
     var body: some View {
         NavigationStack {
             List {
-                Button("No reference station") { choose(nil) }
+                Button("Use nearest available station") { choose(nil) }
                 ForEach(stations) { station in Button { choose(station) } label: {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("\(selected?.id == station.id ? "✓ " : "")\(station.name)")

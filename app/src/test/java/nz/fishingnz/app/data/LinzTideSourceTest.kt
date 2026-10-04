@@ -114,6 +114,58 @@ class LinzTideSourceTest {
         assertEquals(day.plusDays(1), events.last().at.atZone(zone).toLocalDate())
     }
 
+    @Test fun waitawaReferenceAcceptsPublishedApostropheSpacing() {
+        val station = tideStations.first { it.id == "man_owar_bay" }
+        val csv = checkNotNull(javaClass.getResourceAsStream("/tides/man-owar-bay-2026.csv"))
+            .bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val day = LocalDate.of(2026, 10, 5)
+        val events = LinzTideSource.parse(csv, station, 2026, day, day)
+        val daily = events.filter { it.at.atZone(zone).toLocalDate() == day }
+        assertEquals(listOf("02:18", "08:28", "14:53", "21:13"), daily.map { it.at.atZone(zone).toLocalTime().toString() })
+        assertEquals(listOf(2.9, 0.6, 3.0, 0.8), daily.map { it.height })
+        assertEquals(listOf(true, false, true, false), daily.map { it.high })
+        assertEquals(day.minusDays(1), events.first().at.atZone(zone).toLocalDate())
+        assertEquals(day.plusDays(1), events.last().at.atZone(zone).toLocalDate())
+        assertThrows(IllegalArgumentException::class.java) {
+            LinzTideSource.parse(csv.replaceFirst("Man O' War Bay", "Matiatia Bay"), station, 2026, day, day)
+        }
+    }
+
+    @Test fun verifiedFilenameAndHeaderAliasesKeepStationValidation() {
+        val names = listOf(
+            "Halfmoon Bay - Oban" to "Halfmoon Bay / Oban",
+            "Kaituna River Entrance" to "Kaituna River",
+            "Lottin Point - Wakatiri" to "Lottin Point / Wakatiri",
+            "North Cape - Otou" to "North Cape / Otou",
+            "Rangitaiki River Entrance" to "Rangitaiki River",
+            "Town Basin" to "Town Basin - Whangarei"
+        )
+        for ((filename, header) in names) {
+            val station = tideStations.first { it.csvName == filename }
+            val csv = table("5,Mo,10,2026,08:00,0.5,14:00,3.0").replace("180,Raglan", "147,$header")
+            assertEquals(2, LinzTideSource.parse(csv, station, 2026).size)
+            assertThrows(IllegalArgumentException::class.java) {
+                LinzTideSource.parse(csv.replace(header, "Another Bay"), station, 2026)
+            }
+        }
+    }
+
+    @Test fun manaOctoberLoadsDespiteUnrelatedRoundedEqualHeights() {
+        val station = tideStations.first { it.id == "mana_marina" }
+        val csv = checkNotNull(javaClass.getResourceAsStream("/tides/mana-marina-2026.csv"))
+            .bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val day = LocalDate.of(2026, 10, 5)
+        val daily = LinzTideSource.parse(csv, station, 2026, day, day).filter { it.at.atZone(zone).toLocalDate() == day }
+        assertEquals(listOf("04:43", "09:34", "17:48"), daily.map { it.at.atZone(zone).toLocalTime().toString() })
+        assertEquals(listOf(1.3, 1.0, 1.2), daily.map { it.height })
+        assertEquals(listOf(true, false, true), daily.map { it.high })
+        val roundedDay = LocalDate.of(2026, 2, 27)
+        assertThrows(IllegalArgumentException::class.java) { LinzTideSource.parse(csv, station, 2026, roundedDay, roundedDay) }
+        assertThrows(IllegalArgumentException::class.java) {
+            LinzTideSource.parse(csv.replace("03:30,1.2", "03:30,NaN"), station, 2026, day, day)
+        }
+    }
+
     @Test fun thamesRepeatedClockStillRejectsRequestsThatNeedIt() {
         val thames = tideStations.first { it.id == "thames" }
         val csv = thamesFixture()

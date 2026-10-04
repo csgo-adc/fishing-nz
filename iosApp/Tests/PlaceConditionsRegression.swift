@@ -24,6 +24,82 @@ import Foundation
         try expect(ConditionPlace(name: pin.name, point: point).initialTideStation?.id == "thames", "Changed place kept the previous nearby station")
         let linked = tideStations.first { $0.id == "thames" }!
         try expect(ConditionPlace(name: "Named fishing area", point: pin.point, station: linked).initialTideStation == linked, "Linked tide station was replaced by nearest station")
+        let pins = [GeoPoint(latitude: -35.22, longitude: 173.95), GeoPoint(latitude: -36.914, longitude: 175.143),
+                    GeoPoint(latitude: -39.12, longitude: 174.0), GeoPoint(latitude: -41.27, longitude: 174.83),
+                    GeoPoint(latitude: -43.69, longitude: 173.05), GeoPoint(latitude: -46.42, longitude: 168.37)]
+        let places = fishingSpots.map { ConditionPlace(name: $0.name, point: $0.coordinate, station: FishingScoringService.matchingStation(for: $0)) }
+            + pins.map { ConditionPlace(name: "Dropped pin", point: $0) }
+        try expect(places.allSatisfy { $0.tideCandidates.count == 3 && $0.tideCandidates.first == $0.initialTideStation }, "Every location and pin must have nearby reference candidates")
+        try expect(places.allSatisfy { place in
+            let sorted = tideStations.sorted { placeDistanceKm(place.point, .init(latitude: $0.latitude, longitude: $0.longitude)) < placeDistanceKm(place.point, .init(latitude: $1.latitude, longitude: $1.longitude)) }
+            return place.tideCandidates.first == (place.station ?? sorted.first)
+        }, "Automatic references must start with the linked or closest station")
+        let waitawa = ConditionPlace(name: "Waitawa Wharf", point: pins[1])
+        let fakeTide = TideState(currentLevel: "1.0 m", nextEvent: "High", eventTime: "2:00 PM", events: [], points: [], stationName: "")
+        var attempted: [TideStation] = []
+        let fallback = try await loadPlaceTide(place: waitawa, selected: nil, date: date) { station, requested in
+            try expect(requested == date, "Fallback changed the requested date")
+            attempted.append(station)
+            if station == waitawa.tideCandidates.first { throw TideDataError.noPredictions }
+            return fakeTide
+        }
+        try expect(attempted == Array(waitawa.tideCandidates.prefix(2)) && fallback.station == waitawa.tideCandidates[1], "Unavailable nearest station did not try the next nearby source")
+        attempted = []
+        var manualFailed = false
+        do {
+            _ = try await loadPlaceTide(place: waitawa, selected: linked, date: date) { station, _ in
+                attempted.append(station); throw TideDataError.noPredictions
+            }
+        } catch { manualFailed = true }
+        try expect(manualFailed && attempted == [linked], "Manual choices must remain explicit")
+        attempted = []
+        var autoFailed = false
+        do {
+            _ = try await loadPlaceTide(place: waitawa, selected: nil, date: date) { station, _ in
+                attempted.append(station); throw TideDataError.noPredictions
+            }
+        } catch { autoFailed = true }
+        try expect(autoFailed && attempted == waitawa.tideCandidates, "Automatic failure must be bounded and must not fabricate data")
+        attempted = []
+        var cancelled = false
+        do {
+            _ = try await loadPlaceTide(place: waitawa, selected: nil, date: date) { station, _ in
+                attempted.append(station); throw CancellationError()
+            }
+        } catch is CancellationError { cancelled = true }
+        try expect(cancelled && attempted.count == 1, "Cancellation must stop nearby retries")
+        if CommandLine.arguments.contains("--audit-tides") {
+            let tideDay = LINZTideStore.calendar.startOfDay(for: .now)
+            let store = LINZTideStore()
+            var available = Set<String>()
+            var failures: [String] = []
+            for first in stride(from: 0, to: tideStations.count, by: 6) {
+                let stations = Array(tideStations[first..<min(first + 6, tideStations.count)])
+                let results = await withTaskGroup(of: (String, Bool, String).self) { group in
+                    for station in stations {
+                        group.addTask {
+                            do {
+                                let predictions = try await store.predictions(stationName: station.csvName, start: tideDay, end: tideDay)
+                                let valid = predictions.contains { LINZTideStore.calendar.isDate($0.time, inSameDayAs: tideDay) }
+                                return (station.id, valid, valid ? "" : "No events on requested day")
+                            } catch { return (station.id, false, String(describing: error)) }
+                        }
+                    }
+                    var values: [(String, Bool, String)] = []
+                    for await result in group { values.append(result) }
+                    return values
+                }
+                for (id, valid, error) in results { if valid { available.insert(id) } else { failures.append("\(id): \(error)") } }
+            }
+            let uncovered = places.filter { !$0.tideCandidates.contains { available.contains($0.id) } }
+            let defaultsUnavailable = places.filter { !available.contains($0.initialTideStation!.id) }
+            let report = "Live tide audit: \(available.count)/\(tideStations.count) stations verified for \(LINZTideStore.calendar.dateComponents([.year, .month, .day], from: tideDay)).\n" +
+                "Map coverage: \(places.count - uncovered.count)/\(places.count) places (\(fishingSpots.count) catalogue entries and \(pins.count) dropped pins); \(defaultsUnavailable.count) require a nearby fallback.\n" +
+                (failures.isEmpty ? "" : "Unavailable stations: \(failures.sorted().joined(separator: ", "))\n")
+            FileHandle.standardOutput.write(Data(report.utf8))
+            try expect(uncovered.isEmpty, "Map locations without any valid nearby tide data: \(uncovered.map(\.name))")
+            try expect(failures.isEmpty, "Live LINZ tide stations failed verification")
+        }
         func query(_ url: URL, _ name: String) -> String? { URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value }
         try expect(query(PlaceConditionsService.weatherURL(point, pastDays: 92), "forecast_days") == "16", "Weather horizon")
         try expect(query(PlaceConditionsService.marineURL(point, pastDays: 92), "forecast_days") == "8", "Marine horizon")

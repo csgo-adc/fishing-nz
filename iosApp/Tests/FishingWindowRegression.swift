@@ -47,6 +47,33 @@ import Foundation
         }
         try rejects({ _ = try LINZTideStore.parse(thamesCSV.replacingOccurrences(of: "02:59,0.9", with: "02:59,NaN"), stationName: "Thames", year: 2026, start: octoberDay, end: octoberDay) }, "Scoped requests must still validate all heights")
         try rejects({ _ = try LINZTideStore.parse(thamesCSV, stationName: "Raglan", year: 2026, start: octoberDay, end: octoberDay) }, "Scoped requests must still check station identity")
+        let manOWarCSV = try String(contentsOf: root.appendingPathComponent("app/src/test/resources/tides/man-owar-bay-2026.csv"), encoding: .utf8)
+        let waitawaDay = calendar.date(from: DateComponents(year: 2026, month: 10, day: 5))!
+        let waitawaReference = tideStations.first { $0.id == "man-o-war-bay" }!
+        let waitawaTides = try LINZTideStore.parse(manOWarCSV, stationName: waitawaReference.csvName, year: 2026, start: waitawaDay, end: waitawaDay)
+        let dailyWaitawa = waitawaTides.filter { calendar.isDate($0.time, inSameDayAs: waitawaDay) }
+        try expect(dailyWaitawa.map(\.height) == [2.9, 0.6, 3.0, 0.8], "Waitawa reference must accept LINZ's spaced apostrophe in Man O' War Bay")
+        try expect(dailyWaitawa.map { calendar.component(.hour, from: $0.time) * 60 + calendar.component(.minute, from: $0.time) } == [138, 508, 893, 1273], "Waitawa reference must preserve published NZDT clocks")
+        try expect(waitawaTides.count == 6 && waitawaTides.first!.time < waitawaDay && waitawaTides.last!.time > calendar.date(byAdding: .day, value: 1, to: waitawaDay)!, "Waitawa curve needs adjacent events")
+        try rejects({ _ = try LINZTideStore.parse(manOWarCSV.replacingOccurrences(of: "Man O' War Bay", with: "Matiatia Bay"), stationName: waitawaReference.csvName, year: 2026, start: waitawaDay, end: waitawaDay) }, "Apostrophe normalization must still reject a different station")
+        for (filename, sourceName) in [
+            ("Halfmoon Bay - Oban", "Halfmoon Bay / Oban"), ("Kaituna River Entrance", "Kaituna River"),
+            ("Lottin Point - Wakatiri", "Lottin Point / Wakatiri"), ("North Cape - Otou", "North Cape / Otou"),
+            ("Rangitaiki River Entrance", "Rangitaiki River"), ("Town Basin", "Town Basin - Whangarei")
+        ] {
+            let aliasedCSV = header.replacingOccurrences(of: "180,Raglan", with: "147,\(sourceName)") + "5,Mo,10,2026,08:00,0.5,14:00,3.0"
+            let aliasedTides = try LINZTideStore.parse(aliasedCSV, stationName: filename, year: 2026)
+            try expect(aliasedTides.count == 2, "Verified LINZ filename/header alias rejected")
+            try rejects({ _ = try LINZTideStore.parse(aliasedCSV.replacingOccurrences(of: sourceName, with: "Another Bay"), stationName: filename, year: 2026) }, "Verified aliases must reject other station names")
+        }
+        let manaCSV = try String(contentsOf: root.appendingPathComponent("app/src/test/resources/tides/mana-marina-2026.csv"), encoding: .utf8)
+        let mana = try LINZTideStore.parse(manaCSV, stationName: "Mana Marina", year: 2026, start: waitawaDay, end: waitawaDay)
+        let dailyMana = mana.filter { calendar.isDate($0.time, inSameDayAs: waitawaDay) }
+        try expect(dailyMana.map(\.height) == [1.3, 1.0, 1.2], "Unrelated rounded equal-height extrema must not hide valid Mana tides")
+        try expect(dailyMana.map { calendar.component(.hour, from: $0.time) * 60 + calendar.component(.minute, from: $0.time) } == [283, 574, 1068], "Mana published clocks changed")
+        let roundedDay = calendar.date(from: .init(year: 2026, month: 2, day: 27))!
+        try rejects({ _ = try LINZTideStore.parse(manaCSV, stationName: "Mana Marina", year: 2026, start: roundedDay, end: roundedDay) }, "Needed equal-height extrema must remain unclassified")
+        try rejects({ _ = try LINZTideStore.parse(manaCSV.replacingOccurrences(of: "03:30,1.2", with: "03:30,NaN"), stationName: "Mana Marina", year: 2026, start: waitawaDay, end: waitawaDay) }, "Scoped Mana requests must still reject invalid source heights")
         if CommandLine.arguments.contains("--live-tides") {
             let store = LINZTideStore()
             let liveThames = try await store.predictions(stationName: "Thames", start: octoberDay, end: octoberDay)
@@ -54,7 +81,9 @@ import Foundation
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: octoberDay)!
             let cachedTomorrow = try await store.predictions(stationName: "Thames", start: tomorrow, end: tomorrow)
             try expect(cachedTomorrow.contains { calendar.isDate($0.time, inSameDayAs: tomorrow) }, "Cached annual table must serve another date")
-            print("Live Thames tide levels and cached date changes passed.")
+            let liveWaitawa = try await store.predictions(stationName: waitawaReference.csvName, start: waitawaDay, end: waitawaDay)
+            try expect(liveWaitawa.map(\.height) == waitawaTides.map(\.height) && liveWaitawa.map(\.time) == waitawaTides.map(\.time), "Live Waitawa reference differs from the original fixture")
+            print("Live Thames and Waitawa reference tide levels and cached date changes passed.")
         }
         var weather = try JSONDecoder().decode(WeatherPayload.self, from: Data(contentsOf: fixture.appendingPathComponent("weather.json")))
         var marine = try JSONDecoder().decode(MarinePayload.self, from: Data(contentsOf: fixture.appendingPathComponent("marine.json")))

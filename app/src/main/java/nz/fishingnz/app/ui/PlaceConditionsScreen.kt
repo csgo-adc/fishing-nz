@@ -42,6 +42,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
     var more by remember { mutableStateOf(false) }
     var sources by remember { mutableStateOf(false) }
     var station by remember(place.id) { mutableStateOf<TideStation?>(place.initialTideStation) }
+    var selectedStation by remember(place.id) { mutableStateOf<TideStation?>(null) }
     var tide by remember { mutableStateOf<TideState?>(null) }
     var tideLoading by remember { mutableStateOf(false) }
     var tideIssue by remember { mutableStateOf(false) }
@@ -56,13 +57,21 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
         finally { loading = false }
     }
     val today = LocalDate.now(data?.zone ?: java.time.ZoneId.of("Pacific/Auckland"))
-    val dates = data?.dates.orEmpty().filter { if (recent) it < today else it >= today }.let { if (recent) it.reversed() else it }
+    val availableDates = data?.dates.orEmpty().ifEmpty {
+        (-pastDays until PlaceConditionsRepository.WEATHER_DAYS).map { today.plusDays(it.toLong()) }
+    }
+    val dates = availableDates.filter { if (recent) it < today else it >= today }.let { if (recent) it.reversed() else it }
     val day = selectedDate?.takeIf { it in dates } ?: dates.firstOrNull()
-    LaunchedEffect(station?.id, day, tideRefresh) {
+    LaunchedEffect(place.id, selectedStation?.id, day, tideRefresh, refresh) {
         tide = null; tideIssue = false
-        if (station != null && day != null) {
+        station = selectedStation ?: place.initialTideStation
+        if (day != null) {
             tideLoading = true
-            try { tide = FishingRepository().tide(station!!, day) }
+            try {
+                val result = loadPlaceTide(place, selectedStation, day, FishingRepository()::tide)
+                ensureActive()
+                station = result.station; tide = result.tide
+            }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { tideIssue = true }
             finally { tideLoading = false }
@@ -144,7 +153,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                         Text("Reference station · ${PlaceConditionRows.number(distance, 1)} km away", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text("Heights above Chart Datum", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         if (tideLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                                        else if (tideIssue) { Text("Tide unavailable for this day."); TextButton(onClick = { tideRefresh++ }) { Text("Retry tide") } }
+                                        else if (tideIssue) { Text(if (selectedStation == null) "Nearby tide stations could not be loaded." else "Tide unavailable for this station and day."); TextButton(onClick = { tideRefresh++ }) { Text("Retry tide") } }
                                         else tide?.events?.forEach { event -> Row(Modifier.fillMaxWidth()) {
                                             Text("${if (event.type == "High") "↗️" else "↘️"} ${event.type}", Modifier.width(76.dp))
                                             Text(event.time, Modifier.weight(1f)); Text(event.height, fontWeight = FontWeight.SemiBold)
@@ -207,7 +216,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
             }
         }
     }
-    if (showStations) TideReferencePicker(place.point, station, { station = it; showStations = false }, { showStations = false })
+    if (showStations) TideReferencePicker(place.point, station, { selectedStation = it; tideRefresh++; showStations = false }, { showStations = false })
 }
 
 @Composable private fun ConditionRow(row: ConditionItem, details: List<String>) {
@@ -248,7 +257,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
         Column {
             OutlinedTextField(query, { query = it }, label = { Text("Search stations") }, singleLine = true)
             LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                item { TextButton(onClick = { choose(null) }) { Text("No reference station") } }
+                item { TextButton(onClick = { choose(null) }) { Text("Use nearest available station") } }
                 items(stations, key = { it.id }) { station -> TextButton(onClick = { choose(station) }, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth()) {
                         Text("${if (station.id == selected?.id) "✓ " else ""}${station.name}")

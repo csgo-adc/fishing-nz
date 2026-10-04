@@ -1,5 +1,7 @@
 package nz.fishingnz.app.data
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import nz.fishingnz.app.model.*
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -25,6 +27,59 @@ class PlaceConditionsRepositoryTest {
         val linked = tideStations.first { it.id == "thames" }
         val place = ConditionPlace("Named fishing area", GeoPoint(-37.799, 174.87), station = linked)
         assertEquals(linked, place.initialTideStation)
+    }
+
+    @Test fun allMapSpotsAndArbitraryPinsHaveOrderedNearbyReferences() {
+        val pins = listOf(GeoPoint(-35.22, 173.95), GeoPoint(-36.914, 175.143), GeoPoint(-39.12, 174.0),
+            GeoPoint(-41.27, 174.83), GeoPoint(-43.69, 173.05), GeoPoint(-46.42, 168.37))
+        val places = fishingSpots.map {
+            ConditionPlace(it.name, GeoPoint(it.latitude, it.longitude), station = recommendationTideStation(it, null))
+        } + pins.map { ConditionPlace("Dropped pin", it) }
+        assertTrue(fishingSpots.isNotEmpty())
+        for (place in places) {
+            assertEquals(place.initialTideStation, place.tideCandidates.first())
+            assertEquals(3, place.tideCandidates.distinctBy { it.id }.size)
+            val nearest = tideStations.minBy { placeDistanceKm(place.point, GeoPoint(it.latitude, it.longitude)) }
+            assertEquals(place.station ?: nearest, place.tideCandidates.first())
+        }
+    }
+
+    @Test fun automaticTidesTryNearbyStationsUntilOneLoads() = runBlocking {
+        val place = ConditionPlace("Waitawa Wharf", GeoPoint(-36.914, 175.143))
+        val attempted = mutableListOf<TideStation>()
+        val expected = TideState("1.0 m", "High", "2:00 PM")
+        val result = loadPlaceTide(place, null, date) { station, requested ->
+            assertEquals(date, requested); attempted += station
+            if (station == place.tideCandidates.first()) error("Station source unavailable")
+            expected
+        }
+        assertEquals(place.tideCandidates.take(2), attempted)
+        assertEquals(place.tideCandidates[1], result.station)
+        assertEquals(expected, result.tide)
+    }
+
+    @Test fun manualTidesDoNotSilentlySwitchAndAutoFailureIsBounded() = runBlocking {
+        val place = ConditionPlace("Dropped pin", GeoPoint(-36.914, 175.143))
+        val selected = tideStations.first { it.id == "raglan" }
+        val attempted = mutableListOf<TideStation>()
+        suspend fun failing(station: TideStation, requested: LocalDate): TideState {
+            assertEquals(date, requested); attempted += station; error("Unavailable")
+        }
+        try { loadPlaceTide(place, selected, date, ::failing); fail("Manual failure accepted") } catch (_: IllegalStateException) {}
+        assertEquals(listOf(selected), attempted)
+        attempted.clear()
+        try { loadPlaceTide(place, null, date, ::failing); fail("Missing data fabricated") } catch (_: IllegalStateException) {}
+        assertEquals(place.tideCandidates, attempted)
+    }
+
+    @Test fun cancellationStopsTryingNearbyTides() = runBlocking {
+        val place = ConditionPlace("Dropped pin", GeoPoint(-36.914, 175.143))
+        var attempts = 0
+        try {
+            loadPlaceTide(place, null, date) { _, _ -> attempts++; throw CancellationException("Changed pin") }
+            fail("Cancellation swallowed")
+        } catch (_: CancellationException) {}
+        assertEquals(1, attempts)
     }
 
     @Test fun usesSeparateProviderHorizonsAndHistoryCap() {

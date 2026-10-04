@@ -19,7 +19,9 @@ actor LINZTideStore {
     private var annualCache: [String: Cached] = [:]
 
     func load(stationName: String, year: Int) async throws -> [LINZTidePrediction] {
-        try await annual(stationName: stationName, year: year).map(Self.resolve)
+        let events = try await annual(stationName: stationName, year: year)
+        try Self.validateExtrema(events)
+        return try events.map(Self.resolve)
     }
 
     /// Only requested dates and their bracketing events need unambiguous NZ clock times.
@@ -79,13 +81,14 @@ actor LINZTideStore {
         let from = wallClock(start), lastDay = wallClock(end)
         guard lastDay >= from, let until = wallCalendar.date(byAdding: .day, value: 1, to: lastDay) else { throw TideDataError.invalidSource }
         let ordered = events.sorted { $0.clock < $1.clock }
-        try validateExtrema(ordered)
+        try validateChronology(ordered)
         let inRange = ordered.filter { $0.clock >= from && $0.clock < until }
         guard !inRange.isEmpty else { throw TideDataError.noPredictions }
         var selected: [LocalPrediction] = []
         if let previous = ordered.last(where: { $0.clock < from }) { selected.append(previous) }
         selected += inRange
         if let following = ordered.first(where: { $0.clock >= until }) { selected.append(following) }
+        try validateExtrema(selected)
         return try selected.map(resolve)
     }
 
@@ -104,13 +107,30 @@ actor LINZTideStore {
 
     static func identity(_ name: String) -> String {
         name.replacingOccurrences(of: "‘", with: "'").replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "\\s*'\\s*", with: "'", options: .regularExpression)
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_NZ"))
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
+    /// Published CSV headers can differ from LINZ's filenames; checked against the 2026 tables.
+    private static func matchesHeader(_ header: String, stationName: String) -> Bool {
+        let expected = identity(stationName), actual = identity(header)
+        let aliases = [
+            "halfmoon bay - oban": "halfmoon bay / oban",
+            "kaituna river entrance": "kaituna river",
+            "lottin point - wakatiri": "lottin point / wakatiri",
+            "north cape - otou": "north cape / otou",
+            "rangitaiki river entrance": "rangitaiki river",
+            "town basin": "town basin - whangarei"
+        ]
+        return actual == expected || actual == aliases[expected]
+    }
+
     /// Published NZ clock times already include daylight saving. Ambiguity is not guessed.
     static func parse(_ csv: String, stationName: String, year: Int) throws -> [LINZTidePrediction] {
-        try parseLocal(csv, stationName: stationName, year: year).map(resolve)
+        let events = try parseLocal(csv, stationName: stationName, year: year)
+        try validateExtrema(events)
+        return try events.map(resolve)
     }
 
     static func parse(_ csv: String, stationName: String, year: Int, start: Date, end: Date) throws -> [LINZTidePrediction] {
@@ -125,7 +145,7 @@ actor LINZTideStore {
         }
         guard lines.count >= 4 else { throw TideDataError.invalidSource }
         let header = fields(lines[0])
-        guard header.count >= 4, Int(header[0]) != nil, identity(header[1]) == identity(stationName),
+        guard header.count >= 4, Int(header[0]) != nil, matchesHeader(header[1], stationName: stationName),
               lines[1].hasPrefix("Based on constituent set with reference date:"),
               fields(lines[2]) == ["Local Std or Daylight Time", "Tidal heights in metres."] else { throw TideDataError.invalidSource }
         let calendar = Self.wallCalendar
@@ -155,14 +175,21 @@ actor LINZTideStore {
             }
             guard events.count > previousCount else { throw TideDataError.invalidSource }
         }
-        try validateExtrema(events)
+        // Rounded, equal-height extrema on another day must not hide valid requested tides.
+        try validateChronology(events)
         return events
     }
 
-    private static func validateExtrema(_ events: [LocalPrediction]) throws {
+    private static func validateChronology(_ events: [LocalPrediction]) throws {
         guard events.count >= 2 else { throw TideDataError.noPredictions }
+        for index in events.indices where index > 0 {
+            if events[index - 1].clock >= events[index].clock { throw TideDataError.invalidSource }
+        }
+    }
+
+    private static func validateExtrema(_ events: [LocalPrediction]) throws {
+        try validateChronology(events)
         for index in events.indices {
-            if index > 0, events[index - 1].clock >= events[index].clock { throw TideDataError.invalidSource }
             let neighbours = [index - 1, index + 1].filter { events.indices.contains($0) }.map { events[$0].height }
             let height = events[index].height
             guard neighbours.allSatisfy({ height > $0 }) || neighbours.allSatisfy({ height < $0 }) else { throw TideDataError.invalidSource }
