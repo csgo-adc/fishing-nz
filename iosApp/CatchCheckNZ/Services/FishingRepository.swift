@@ -97,19 +97,7 @@ struct FishingRepository {
         let calendar = Self.tideCalendar
         let dayStart = calendar.startOfDay(for: date)
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { throw URLError(.badURL) }
-        let year = calendar.component(.year, from: date)
-        var predictions = try await Self.tideStore.load(stationName: station.csvName, year: year)
-        let month = calendar.component(.month, from: date)
-        let day = calendar.component(.day, from: date)
-        if month == 1 && day == 1,
-           let prior = try? await Self.tideStore.load(stationName: station.csvName, year: year - 1) {
-            predictions.insert(contentsOf: prior.suffix(2), at: 0)
-        }
-        if month == 12 && day == 31,
-           let following = try? await Self.tideStore.load(stationName: station.csvName, year: year + 1) {
-            predictions.append(contentsOf: following.prefix(2))
-        }
-        predictions.sort { $0.time < $1.time }
+        let predictions = try await Self.tideStore.predictions(stationName: station.csvName, start: dayStart, end: dayStart)
 
         let daily = predictions.filter { $0.time >= dayStart && $0.time < dayEnd }
         guard !daily.isEmpty else { throw TideDataError.noPredictions }
@@ -139,9 +127,12 @@ struct FishingRepository {
         let nextPrediction = isToday ? predictions.first(where: { $0.time > now }) : daily.first
         let nextEvent = nextPrediction.flatMap { prediction -> String? in
             if let event = events.first(where: { $0.0 == prediction.time }) { return event.1.type }
-            guard let index = predictions.firstIndex(where: { $0.time == prediction.time }),
-                  predictions.indices.contains(index + 1) else { return nil }
-            return prediction.height > predictions[index + 1].height ? "High" : "Low"
+            guard let index = predictions.firstIndex(where: { $0.time == prediction.time }) else { return nil }
+            if predictions.indices.contains(index + 1) {
+                return prediction.height > predictions[index + 1].height ? "High" : "Low"
+            }
+            guard index > 0 else { return nil }
+            return prediction.height > predictions[index - 1].height ? "High" : "Low"
         }
         let referenceTime = isToday ? now : (calendar.date(byAdding: .hour, value: 12, to: dayStart) ?? dayStart)
         let referenceHeight = Self.interpolatedHeight(at: referenceTime, predictions: predictions)

@@ -230,16 +230,9 @@ struct FishingScoringService: Sendable {
     }
 
     private static func loadTides(station: TideStation?, days: Set<Date>, calendar: Calendar) async -> [LINZTidePrediction] {
-        guard let station else { return [] }
-        // Adjacent years supply events that bracket windows at the year boundary.
-        let years = Set(days.flatMap { day in
-            [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: day) }.map { calendar.component(.year, from: $0) }
-        })
-        var predictions: [LINZTidePrediction] = []
-        for year in years.sorted() {
-            if let values = try? await LINZTideStore.shared.load(stationName: station.csvName, year: year) { predictions += values }
-        }
-        return predictions.sorted { $0.time < $1.time }
+        guard let station, let start = days.min(), let lastDay = days.max(),
+              let end = calendar.date(byAdding: .day, value: 1, to: lastDay) else { return [] }
+        return (try? await LINZTideStore.shared.predictions(stationName: station.csvName, start: start, end: end)) ?? []
     }
 
     static func bestWindows(for candidate: Candidate, weather: WeatherPayload, marine: MarinePayload?, tides: [LINZTidePrediction],

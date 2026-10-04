@@ -100,6 +100,47 @@ class LinzTideSourceTest {
         assertTrue(events.last().high)
     }
 
+    @Test fun thamesOctoberHeightsLoadDespiteAnUnrelatedAprilRepeatedClock() {
+        val thames = tideStations.first { it.id == "thames" }
+        val csv = thamesFixture()
+        val day = LocalDate.of(2026, 10, 4)
+        val events = LinzTideSource.parse(csv, thames, 2026, day, day)
+        val daily = events.filter { it.at.atZone(zone).toLocalDate() == day }
+        assertEquals(listOf("01:20", "07:24", "13:50", "20:07"), daily.map { it.at.atZone(zone).toLocalTime().toString() })
+        assertEquals(listOf(3.5, 0.9, 3.5, 1.1), daily.map { it.height })
+        assertEquals(listOf(true, false, true, false), daily.map { it.high })
+        assertEquals(Instant.parse("2026-10-04T00:50:00Z"), daily[2].at)
+        assertEquals(day.minusDays(1), events.first().at.atZone(zone).toLocalDate())
+        assertEquals(day.plusDays(1), events.last().at.atZone(zone).toLocalDate())
+    }
+
+    @Test fun thamesRepeatedClockStillRejectsRequestsThatNeedIt() {
+        val thames = tideStations.first { it.id == "thames" }
+        val csv = thamesFixture()
+        for (day in listOf(LocalDate.of(2026, 4, 4), LocalDate.of(2026, 4, 5))) {
+            assertThrows(IllegalArgumentException::class.java) { LinzTideSource.parse(csv, thames, 2026, day, day) }
+        }
+        val following = LocalDate.of(2026, 4, 6)
+        assertTrue(LinzTideSource.parse(csv, thames, 2026, following, following).isNotEmpty())
+    }
+
+    @Test fun scopedThamesRequestsStillValidateTheWholeTable() {
+        val thames = tideStations.first { it.id == "thames" }
+        val day = LocalDate.of(2026, 10, 4)
+        assertThrows(IllegalArgumentException::class.java) {
+            LinzTideSource.parse(thamesFixture().replace("02:59,0.9", "02:59,NaN"), thames, 2026, day, day)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            LinzTideSource.parse(thamesFixture(), raglan, 2026, day, day)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            LinzTideSource.parse(thamesFixture(), thames, 2026, day, day.minusDays(1))
+        }
+    }
+
+    private fun thamesFixture(): String = checkNotNull(javaClass.getResourceAsStream("/tides/thames-2026.csv"))
+        .bufferedReader(Charsets.UTF_8).use { it.readText() }
+
     private fun table(rows: String) = """
         180,Raglan,37°48'S,174°53'E
         Based on constituent set with reference date:,01-Jul-2016

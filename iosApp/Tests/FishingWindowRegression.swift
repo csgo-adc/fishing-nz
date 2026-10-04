@@ -32,6 +32,30 @@ import Foundation
         for row in ["27,Su,9,2026,02:30,0.2,08:30,3.2", "5,Su,4,2026,02:30,0.2,08:30,3.2", "30,We,9,2026,07:02,0.2,13:23,1.0,19:24,3.2"] {
             try rejects({ _ = try LINZTideStore.parse(header + row, stationName: "Raglan", year: 2026) }, "Invalid clocks/extrema accepted")
         }
+        let thamesCSV = try String(contentsOf: root.appendingPathComponent("app/src/test/resources/tides/thames-2026.csv"), encoding: .utf8)
+        let octoberDay = calendar.date(from: DateComponents(year: 2026, month: 10, day: 4))!
+        let thames = try LINZTideStore.parse(thamesCSV, stationName: "Thames", year: 2026, start: octoberDay, end: octoberDay)
+        let dailyThames = thames.filter { calendar.isDate($0.time, inSameDayAs: octoberDay) }
+        try expect(dailyThames.map(\.height) == [3.5, 0.9, 3.5, 1.1], "Thames October heights should load despite April's repeated clock")
+        try expect(dailyThames.map { calendar.component(.hour, from: $0.time) * 60 + calendar.component(.minute, from: $0.time) } == [80, 444, 830, 1207], "Thames published clocks changed")
+        let octoberHigh = calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: 13, minute: 50))!
+        try expect(dailyThames[2].time == octoberHigh && calendar.timeZone.secondsFromGMT(for: octoberHigh) == 13 * 3600, "Thames daylight saving must be applied once")
+        try expect(thames.count == 6 && thames.first!.time < octoberDay && thames.last!.time > calendar.date(byAdding: .day, value: 1, to: octoberDay)!, "Thames curve needs adjacent events")
+        for day in [4, 5] {
+            let aprilDay = calendar.date(from: DateComponents(year: 2026, month: 4, day: day))!
+            try rejects({ _ = try LINZTideStore.parse(thamesCSV, stationName: "Thames", year: 2026, start: aprilDay, end: aprilDay) }, "Required repeated clock must remain unverified")
+        }
+        try rejects({ _ = try LINZTideStore.parse(thamesCSV.replacingOccurrences(of: "02:59,0.9", with: "02:59,NaN"), stationName: "Thames", year: 2026, start: octoberDay, end: octoberDay) }, "Scoped requests must still validate all heights")
+        try rejects({ _ = try LINZTideStore.parse(thamesCSV, stationName: "Raglan", year: 2026, start: octoberDay, end: octoberDay) }, "Scoped requests must still check station identity")
+        if CommandLine.arguments.contains("--live-tides") {
+            let store = LINZTideStore()
+            let liveThames = try await store.predictions(stationName: "Thames", start: octoberDay, end: octoberDay)
+            try expect(liveThames.map(\.height) == thames.map(\.height) && liveThames.map(\.time) == thames.map(\.time), "Live Thames table differs from the original fixture")
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: octoberDay)!
+            let cachedTomorrow = try await store.predictions(stationName: "Thames", start: tomorrow, end: tomorrow)
+            try expect(cachedTomorrow.contains { calendar.isDate($0.time, inSameDayAs: tomorrow) }, "Cached annual table must serve another date")
+            print("Live Thames tide levels and cached date changes passed.")
+        }
         var weather = try JSONDecoder().decode(WeatherPayload.self, from: Data(contentsOf: fixture.appendingPathComponent("weather.json")))
         var marine = try JSONDecoder().decode(MarinePayload.self, from: Data(contentsOf: fixture.appendingPathComponent("marine.json")))
         weather.retrievedAt = at(27, 13, 17); marine.retrievedAt = at(27, 13, 17)

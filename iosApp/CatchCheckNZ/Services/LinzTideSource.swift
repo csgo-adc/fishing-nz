@@ -13,10 +13,34 @@ enum TideDataError: LocalizedError {
 /// Shared by the Tide page and fishing-window planner; no offshore sea-level fallback.
 actor LINZTideStore {
     static let shared = LINZTideStore()
-    private struct Cached: Sendable { let fetchedAt: Date; let events: [LINZTidePrediction] }
+    // The UTC calendar stores wall-clock fields here, not actual event instants.
+    private struct LocalPrediction: Sendable { let clock: Date; let height: Double }
+    private struct Cached: Sendable { let fetchedAt: Date; let events: [LocalPrediction] }
     private var annualCache: [String: Cached] = [:]
 
     func load(stationName: String, year: Int) async throws -> [LINZTidePrediction] {
+        try await annual(stationName: stationName, year: year).map(Self.resolve)
+    }
+
+    /// Only requested dates and their bracketing events need unambiguous NZ clock times.
+    func predictions(stationName: String, start: Date, end: Date) async throws -> [LINZTidePrediction] {
+        let calendar = Self.calendar
+        let firstDay = calendar.startOfDay(for: start), lastDay = calendar.startOfDay(for: end)
+        guard lastDay >= firstDay else { throw TideDataError.invalidSource }
+        let firstYear = calendar.component(.year, from: firstDay), lastYear = calendar.component(.year, from: lastDay)
+        var events: [LocalPrediction] = []
+        for year in firstYear...lastYear { events += try await annual(stationName: stationName, year: year) }
+        let from = Self.wallClock(firstDay)
+        let until = Self.wallCalendar.date(byAdding: .day, value: 1, to: Self.wallClock(lastDay))!
+        if calendar.ordinality(of: .day, in: .year, for: firstDay) == 1, !events.contains(where: { $0.clock < from }),
+           let prior = try? await annual(stationName: stationName, year: firstYear - 1) { events += prior }
+        if calendar.date(byAdding: .day, value: 1, to: lastDay).map({ calendar.component(.year, from: $0) }) != lastYear,
+           !events.contains(where: { $0.clock >= until }),
+           let following = try? await annual(stationName: stationName, year: lastYear + 1) { events += following }
+        return try Self.resolveRange(events, start: start, end: end)
+    }
+
+    private func annual(stationName: String, year: Int) async throws -> [LocalPrediction] {
         let key = "\(stationName)-\(year)"
         if let cached = annualCache[key], (0..<86_400).contains(Date().timeIntervalSince(cached.fetchedAt)) { return cached.events }
         let filename = "\(stationName) \(year).csv"
@@ -26,10 +50,10 @@ actor LINZTideStore {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0),
               let csv = String(data: data, encoding: .utf8) else { throw TideDataError.noPredictions }
-        let events = try Self.parse(csv, stationName: stationName, year: year)
-        let calendar = Self.calendar
-        let days = Set(events.map { calendar.startOfDay(for: $0.time) })
-        let expected = calendar.range(of: .day, in: .year, for: events[0].time)?.count
+        let events = try Self.parseLocal(csv, stationName: stationName, year: year)
+        let calendar = Self.wallCalendar
+        let days = Set(events.map { calendar.startOfDay(for: $0.clock) })
+        let expected = calendar.range(of: .day, in: .year, for: events[0].clock)?.count
         guard days.count == expected else { throw TideDataError.invalidSource }
         annualCache[key] = Cached(fetchedAt: Date(), events: events)
         return events
@@ -41,6 +65,43 @@ actor LINZTideStore {
         return calendar
     }
 
+    private static var wallCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private static func wallClock(_ date: Date) -> Date {
+        wallCalendar.date(from: calendar.dateComponents([.year, .month, .day], from: date))!
+    }
+
+    private static func resolveRange(_ events: [LocalPrediction], start: Date, end: Date) throws -> [LINZTidePrediction] {
+        let from = wallClock(start), lastDay = wallClock(end)
+        guard lastDay >= from, let until = wallCalendar.date(byAdding: .day, value: 1, to: lastDay) else { throw TideDataError.invalidSource }
+        let ordered = events.sorted { $0.clock < $1.clock }
+        try validateExtrema(ordered)
+        let inRange = ordered.filter { $0.clock >= from && $0.clock < until }
+        guard !inRange.isEmpty else { throw TideDataError.noPredictions }
+        var selected: [LocalPrediction] = []
+        if let previous = ordered.last(where: { $0.clock < from }) { selected.append(previous) }
+        selected += inRange
+        if let following = ordered.first(where: { $0.clock >= until }) { selected.append(following) }
+        return try selected.map(resolve)
+    }
+
+    private static func resolve(_ event: LocalPrediction) throws -> LINZTidePrediction {
+        let parts = wallCalendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: event.clock)
+        let dayParts = wallCalendar.dateComponents([.year, .month, .day], from: event.clock)
+        let calendar = Self.calendar
+        guard let day = calendar.date(from: dayParts) else { throw TideDataError.invalidSource }
+        let anchor = day.addingTimeInterval(-1)
+        guard let first = calendar.nextDate(after: anchor, matching: parts, matchingPolicy: .strict, repeatedTimePolicy: .first),
+              let last = calendar.nextDate(after: anchor, matching: parts, matchingPolicy: .strict, repeatedTimePolicy: .last),
+              first == last,
+              calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: first) == parts else { throw TideDataError.invalidSource }
+        return .init(time: first, height: event.height)
+    }
+
     static func identity(_ name: String) -> String {
         name.replacingOccurrences(of: "‘", with: "'").replacingOccurrences(of: "’", with: "'")
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_NZ"))
@@ -49,6 +110,14 @@ actor LINZTideStore {
 
     /// Published NZ clock times already include daylight saving. Ambiguity is not guessed.
     static func parse(_ csv: String, stationName: String, year: Int) throws -> [LINZTidePrediction] {
+        try parseLocal(csv, stationName: stationName, year: year).map(resolve)
+    }
+
+    static func parse(_ csv: String, stationName: String, year: Int, start: Date, end: Date) throws -> [LINZTidePrediction] {
+        try resolveRange(parseLocal(csv, stationName: stationName, year: year), start: start, end: end)
+    }
+
+    private static func parseLocal(_ csv: String, stationName: String, year: Int) throws -> [LocalPrediction] {
         let lines = csv.replacingOccurrences(of: "\u{FEFF}", with: "").split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         func fields(_ line: String) -> [String] {
@@ -59,9 +128,9 @@ actor LINZTideStore {
         guard header.count >= 4, Int(header[0]) != nil, identity(header[1]) == identity(stationName),
               lines[1].hasPrefix("Based on constituent set with reference date:"),
               fields(lines[2]) == ["Local Std or Daylight Time", "Tidal heights in metres."] else { throw TideDataError.invalidSource }
-        let calendar = Self.calendar
+        let calendar = Self.wallCalendar
         var previousDay: Date?
-        var events: [LINZTidePrediction] = []
+        var events: [LocalPrediction] = []
         for line in lines.dropFirst(3) {
             let row = fields(line)
             guard row.count >= 6, row.count.isMultiple(of: 2), let day = Int(row[0]), let month = Int(row[2]),
@@ -80,22 +149,23 @@ actor LINZTideStore {
                       (0...23).contains(hour), (0...59).contains(minute),
                       let height = Double(row[index + 1]), height.isFinite else { throw TideDataError.invalidSource }
                 let parts = DateComponents(year: rowYear, month: month, day: day, hour: hour, minute: minute, second: 0)
-                let anchor = localDay.addingTimeInterval(-1)
-                guard let first = calendar.nextDate(after: anchor, matching: parts, matchingPolicy: .strict, repeatedTimePolicy: .first),
-                      let last = calendar.nextDate(after: anchor, matching: parts, matchingPolicy: .strict, repeatedTimePolicy: .last),
-                      first == last,
-                      calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: first) == parts else { throw TideDataError.invalidSource }
-                if let previous = events.last, previous.time >= first { throw TideDataError.invalidSource }
-                events.append(.init(time: first, height: height))
+                guard let clock = calendar.date(from: parts),
+                      calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: clock) == parts else { throw TideDataError.invalidSource }
+                events.append(.init(clock: clock, height: height))
             }
             guard events.count > previousCount else { throw TideDataError.invalidSource }
         }
+        try validateExtrema(events)
+        return events
+    }
+
+    private static func validateExtrema(_ events: [LocalPrediction]) throws {
         guard events.count >= 2 else { throw TideDataError.noPredictions }
         for index in events.indices {
+            if index > 0, events[index - 1].clock >= events[index].clock { throw TideDataError.invalidSource }
             let neighbours = [index - 1, index + 1].filter { events.indices.contains($0) }.map { events[$0].height }
             let height = events[index].height
             guard neighbours.allSatisfy({ height > $0 }) || neighbours.allSatisfy({ height < $0 }) else { throw TideDataError.invalidSource }
         }
-        return events
     }
 }
