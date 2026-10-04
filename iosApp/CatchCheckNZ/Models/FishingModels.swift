@@ -10,6 +10,7 @@ enum WindowPriority: String, CaseIterable, Identifiable, Sendable {
     case weather, lateIncoming
     var id: String { rawValue }
     var title: String { self == .weather ? "Weather balance" : "Late incoming tide" }
+    func title(boat: Bool) -> String { self == .lateIncoming ? "Late incoming tide" : (boat ? "Wave comfort" : "Weather balance") }
 }
 
 /// A subjective planning reaction, not a catch probability or safety clearance.
@@ -46,7 +47,7 @@ struct Recommendation: Identifiable, Equatable {
     var id: String { "\(boat ? "boat" : "land"):\(name)" }
     var windowID: String { "\(id):\(startsAt?.timeIntervalSince1970 ?? 0)" }
     var windowMood: WindowMood {
-        let seriousWarnings = ["Strong gusts", "Elevated offshore waves", "Long-period waves", "Fog may reduce visibility"]
+        let seriousWarnings = ["Strong gusts", "Elevated offshore waves", "Short-period waves", "Long-period waves", "Fog may reduce visibility"]
         let serious = warnings.contains { warning in seriousWarnings.contains { warning.hasPrefix($0) } }
         let mixed = warnings.contains { $0.hasPrefix("Part or all of this session is after dark") || $0.hasPrefix("Rain could affect") }
         switch (serious, dataComplete, rating, mixed) {
@@ -82,7 +83,7 @@ struct Recommendation: Identifiable, Equatable {
         case 3: // Daylight
             return detail.contains("whole fishing session is in daylight") ? .good : WindowMood(emoji: "😕", label: "Limited daylight")
         case 4: // Waves
-            if warned("Elevated offshore waves", "Long-period waves") { return .concern }
+            if warned("Elevated offshore waves", "Short-period waves", "Long-period waves") { return .concern }
             if detail.contains("unavailable") || warned("Wave data is incomplete") { return .unknown }
             if (numberAfter("wave height up to", in: detail) ?? .greatestFiniteMagnitude) <= 0.5 { return .good }
             return .mixed

@@ -199,7 +199,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                     val searchScope = if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION)
                         s.selectedSearchStation?.name ?: "Choose location" else "${s.radiusKm} km"
                     Text("$dateSummary  ·  $time  ·  $searchScope", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
-                    Text(if (s.preference == WindowPriority.LATE_INCOMING) "Late incoming tide" else "Weather balance",
+                    Text(s.preference.label(s.boat),
                         color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().clickable {
                         if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) showSearchStations = true
@@ -298,12 +298,14 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         Text("What matters most?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = s.preference == WindowPriority.WEATHER,
-                onClick = { vm.setWindowPriority(WindowPriority.WEATHER) }, label = { Text("Weather balance") })
+                onClick = { vm.setWindowPriority(WindowPriority.WEATHER) }, label = { Text(WindowPriority.WEATHER.label(s.boat)) })
             FilterChip(selected = s.preference == WindowPriority.LATE_INCOMING,
                 onClick = { vm.setWindowPriority(WindowPriority.LATE_INCOMING) }, label = { Text("Late incoming tide") })
         }
         Text(if (s.preference == WindowPriority.LATE_INCOMING)
-            "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot."
+            "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot." +
+                if (s.boat) " Wave comfort remains the main factor when comparing sessions that fit." else ""
+        else if (s.boat) "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
         else "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Text("Find windows by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
@@ -731,8 +733,10 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
 
 @Composable private fun WindowConditions(item: Recommendation) {
     val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
-    item.conditions.forEachIndexed { index, detail ->
-        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    val indices = if (item.boat) listOf(3) + item.conditions.indices.filter { it != 3 } else item.conditions.indices.toList()
+    indices.filter { it in item.conditions.indices }.forEachIndexed { position, index ->
+        val detail = item.conditions[index]
+        if (position > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val label = labels.getOrElse(index) { "Other" }
         val mood = item.conditionMood(index)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -865,7 +869,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         s.preferredTimeIsSuggested -> "7 AM–9 PM"
                         else -> "${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}"
                     }
-                    Text("$hours · ${if (s.preference == WindowPriority.LATE_INCOMING) "Late incoming tide" else "Weather balance"}",
+                    Text("$hours · ${s.preference.label(s.boat)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } }
@@ -892,7 +896,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 s.recommendationSearch?.items?.isEmpty() == true -> item {
                     Text(when {
                         s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
-                        s.preference == WindowPriority.LATE_INCOMING -> "No two-hour window matches the late-incoming preference with the available tide and weather data. Try Weather balance or another date."
+                        s.preference == WindowPriority.LATE_INCOMING -> "No two-hour window matches the late-incoming preference with the available tide and weather data. Try ${WindowPriority.WEATHER.label(s.boat)} or another date."
                         s.dateLabel == "Today" -> "No two-hour planning window remains today within your selected hours and the available forecasts. Try another date or adjust your hours."
                         else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
                     }, color = Navy)

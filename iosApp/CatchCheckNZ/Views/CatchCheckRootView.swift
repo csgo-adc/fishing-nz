@@ -323,7 +323,7 @@ struct HomeView: View {
                                 Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary)\(vm.selectedSearchStationID == nil ? " · \(vm.radiusKm) km" : "")")
                                     .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
                                     .lineLimit(2)
-                                Text(vm.preference == .lateIncoming ? "Late incoming tide" : "Weather balance")
+                                Text(vm.preference.title(boat: vm.isBoatFishing))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -433,12 +433,14 @@ private struct PlanningSheet: View {
                     Card {
                         Text("What matters most?").font(.headline).foregroundStyle(CatchCheckColor.navy)
                         Picker("Window preference", selection: $vm.preference) {
-                            Text("Weather balance").tag(WindowPriority.weather)
+                            Text(WindowPriority.weather.title(boat: vm.isBoatFishing)).tag(WindowPriority.weather)
                             Text("Late incoming tide").tag(WindowPriority.lateIncoming)
                         }.pickerStyle(.segmented)
                         Text(vm.preference == .lateIncoming
-                             ? "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot."
-                             : "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours.")
+                             ? "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot." + (vm.isBoatFishing ? " Wave comfort remains the main factor when comparing sessions that fit." : "")
+                             : (vm.isBoatFishing
+                                ? "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
+                                : "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Card {
@@ -798,7 +800,7 @@ struct ResultsView: View {
                              ? "\(vm.timeSummary) · within \(vm.radiusKm) km"
                              : vm.timeSummary)
                         Text(vm.locationSummary)
-                        Text(vm.preference == .lateIncoming ? "Late incoming tide" : "Weather balance")
+                        Text(vm.preference.title(boat: vm.isBoatFishing))
                     }.font(.subheadline).foregroundStyle(.secondary)
                     if vm.selectedSearchStationID != nil, vm.hasSearchedRecommendations,
                        !vm.isResolvingRecommendationLocation, !vm.isLoadingRecommendations,
@@ -826,7 +828,7 @@ struct ResultsView: View {
                             Text(vm.nearbySpotCount == 0
                                  ? "No catalogued \(vm.isBoatFishing ? "boat" : "land") areas are within this radius."
                                  : vm.preference == .lateIncoming
-                                 ? "No two-hour window matches the late-incoming preference with the available tide and weather data. Try Weather balance or another date."
+                                 ? "No two-hour window matches the late-incoming preference with the available tide and weather data. Try \(WindowPriority.weather.title(boat: vm.isBoatFishing)) or another date."
                                  : "No two-hour planning window matches these dates, hours and the available forecasts.")
                                 .foregroundStyle(.secondary)
                             if vm.nearbySpotCount == 0, let hint = vm.nearestSpotHint {
@@ -1119,11 +1121,15 @@ private struct WindowOutlook: View {
 private struct WindowConditions: View {
     let spot: Recommendation
     private let labels = ["Wind", "Rain", "Tide", "Daylight", "Waves"]
+    private var indices: [Int] {
+        let order = spot.boat ? [4] + spot.conditions.indices.filter { $0 != 4 } : Array(spot.conditions.indices)
+        return order.filter { spot.conditions.indices.contains($0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(spot.conditions.enumerated()), id: \.offset) { index, detail in
-                if index > 0 { Divider().padding(.vertical, 8) }
+            ForEach(Array(indices.enumerated()), id: \.element) { position, index in
+                if position > 0 { Divider().padding(.vertical, 8) }
                 let label = index < labels.count ? labels[index] : "Other"
                 let mood = spot.conditionMood(index)
                 VStack(alignment: .leading, spacing: 3) {
@@ -1131,7 +1137,7 @@ private struct WindowConditions: View {
                         Text(label).font(.caption.bold()).foregroundStyle(CatchCheckColor.accent)
                         Text("\(mood.emoji) \(mood.label)").font(.caption)
                     }
-                    Text(detail).font(.subheadline).foregroundStyle(CatchCheckColor.navy)
+                    Text(spot.conditions[index]).font(.subheadline).foregroundStyle(CatchCheckColor.navy)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

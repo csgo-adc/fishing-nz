@@ -272,8 +272,9 @@ struct FishingScoringService: Sendable {
             guard var selected = eligible.sorted(by: { isBetter($0, than: $1) }).first else { return nil }
             let alternatives = priority == .weather ? pool.filter { $0.tidePreferenceFit >= 0.8 } : pool
             if let other = alternatives.sorted(by: { isBetter($0, than: $1) }).first, other.start != selected.start {
-                let label = priority == .weather ? "Late-incoming alternative" : "Weather-balance alternative"
-                selected.alternative = "\(label): \(clock(other.start))–\(clock(other.end)). \(other.conditions.prefix(2).joined(separator: " "))"
+                let label = priority == .weather ? "Late-incoming alternative" : (candidate.spot.boat ? "Alternative for wave comfort" : "Weather-balance alternative")
+                let details = candidate.spot.boat ? [other.conditions[4], other.conditions[0]] : Array(other.conditions.prefix(2))
+                selected.alternative = "\(label): \(clock(other.start))–\(clock(other.end)). \(details.joined(separator: " "))"
             }
             return selected
         }
@@ -322,7 +323,9 @@ struct FishingScoringService: Sendable {
         let wind = 0.65 * lowerIsBetter(maximumWind, best: spot.boat ? 10 : 12, worst: spot.boat ? 40 : 55)
             + 0.35 * lowerIsBetter(maximumGust, best: spot.boat ? 18 : 20, worst: spot.boat ? 55 : 70)
         let rain = 0.5 * (1 - rainChance / 100) + 0.5 * lowerIsBetter(meanRain, best: 0, worst: 2.5)
-        let comfort = 0.6 * wind + 0.4 * rain
+        // Subjective boat comfort: waves dominate, and missing marine data earns no wave credit.
+        let waveComfort = waveComplete ? (marineSamples.map(boatWaveComfort).min() ?? 0) : 0
+        let comfort = spot.boat ? 0.6 * waveComfort + 0.3 * wind + 0.1 * rain : 0.6 * wind + 0.4 * rain
         let meanWind = (winds[0] + 2 * winds[1] + winds[2]) / 4
         let directions = samples.compactMap(\.windDirection)
         let directionText = directions.count == 3
@@ -330,21 +333,31 @@ struct FishingScoringService: Sendable {
         let windText = String(format: "Wind averages %.0f km/h, up to %.0f km/h; gusts up to %.0f km/h.", meanWind, maximumWind, maximumGust) + directionText
         let rainText = String(format: "%.1f mm rain forecast across these two hours; highest hourly rain chance %.0f%%.", rainTotal, rainChance)
         let lightText = daylight == 1 ? "The whole fishing session is in daylight." : String(format: "%.0f%% of the fishing session is in daylight.", daylight * 100)
+        let comfortReason = spot.boat ? "wave comfort as the main factor, alongside wind and rain" : "the balance of wind and rain"
         let why = priority == .lateIncoming
-            ? "Selected to fit your late-incoming preference, then favour daylight and the balance of wind and rain."
-            : "Selected for daylight and the balance of wind and rain among the available two-hour windows."
+            ? "Selected to fit your late-incoming preference, then favour daylight and \(comfortReason)."
+            : "Selected for daylight and \(comfortReason) among the available two-hour windows."
         var conditions = [windText, rainText, tideFacts.description, lightText]
+        let waveText: String
         if let worstWave {
             let qualifier = waveComplete ? "" : "Available samples: "
-            let periodText = periods.max().map { String(format: "; mean wave period up to %.0f s", $0) } ?? ""
-            conditions.append(String(format: "\(qualifier)offshore significant wave height up to %.1f m\(periodText). This is not a wave-height forecast at a wharf or on rocks.", worstWave))
-        } else { conditions.append("Offshore wave data is unavailable for this session.") }
+            let periodText = spot.boat && !periods.isEmpty
+                ? String(format: "; mean wave periods %.1f–%.1f s", periods.min()!, periods.max()!)
+                : periods.max().map { String(format: "; mean wave period up to %.0f s", $0) } ?? ""
+            let exposure = spot.boat ? "Actual conditions depend on the boat, route and local sea state." : "This is not a wave-height forecast at a wharf or on rocks."
+            waveText = String(format: "\(qualifier)offshore significant wave height up to %.1f m\(periodText). \(exposure)", worstWave)
+        } else { waveText = "Offshore wave data is unavailable for this session." }
+        conditions.append(waveText)
         var warnings: [String] = []
         if !waveComplete { warnings.append("Wave data is incomplete; local wave conditions need checking.") }
         if !tideFacts.complete { warnings.append("Verified local tide coverage is unavailable for this session.") }
         if daylight < 1 { warnings.append("Part or all of this session is after dark; check access, lighting and navigation.") }
         if maximumGust >= (spot.boat ? 40 : 55) { warnings.append("Strong gusts are forecast.") }
         if let worstWave, worstWave >= (spot.boat ? 1.2 : 1.5) { warnings.append("Elevated offshore waves: assess the exposure of your actual fishing spot.") }
+        if spot.boat, marineSamples.contains(where: { sample in
+            guard let height = nonnegative(sample?.wave), let period = nonnegative(sample?.period) else { return false }
+            return height >= 0.5 && period > 0 && period <= 5
+        }) { warnings.append("Short-period waves may make the boat ride and fishing uncomfortable.") }
         if let worstWave, let period = periods.max(), worstWave >= (spot.boat ? 1 : 0.8), period >= (spot.boat ? 10 : 12) {
             warnings.append("Long-period waves can increase surf and surge at exposed locations.")
         }
@@ -358,7 +371,7 @@ struct FishingScoringService: Sendable {
         return .init(id: "\(spot.name)|\(spot.boat)|\(Int(start.timeIntervalSince1970))", spotName: spot.name,
                      area: spot.area, boat: spot.boat, score: Int((comfort * 100).rounded()), start: start, end: end,
                      distanceKm: distanceKm, reasons: ["\(qualification)\(why)"], warnings: warnings,
-                     summary: "\(qualification)\(why) \(windText) \(rainText) \(tideFacts.description)", conditions: conditions,
+                     summary: "\(qualification)\(why) \(spot.boat ? waveText + " " : "")\(windText) \(rainText) \(tideFacts.description)", conditions: conditions,
                      sourceNote: sourceNote, rankingValue: comfort, dataComplete: complete,
                      daylightFraction: daylight, tidePreferenceFit: tideFacts.fit)
     }
@@ -437,6 +450,13 @@ struct FishingScoringService: Sendable {
         return formatter.string(from: time)
     }
     private static func lowerIsBetter(_ value: Double, best: Double, worst: Double) -> Double { clamp((worst - value) / (worst - best)) }
+    /// Default comfort preference, not a vessel motion model or a safe wave-height threshold.
+    private static func boatWaveComfort(_ sample: MarineHour?) -> Double {
+        guard let height = nonnegative(sample?.wave), let period = nonnegative(sample?.period), period > 0 else { return 0 }
+        let heightComfort = lowerIsBetter(height, best: 0.3, worst: 2)
+        let shortPeriodPenalty = 0.25 * lowerIsBetter(period, best: 3, worst: 8) * clamp(height / 0.75)
+        return clamp(heightComfort - shortPeriodPenalty)
+    }
     private static func clamp(_ value: Double) -> Double { min(1, max(0, value)) }
     private static func nonnegative(_ value: Double?) -> Double? { value.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } }
     private static func probability(_ value: Double?) -> Double? { nonnegative(value).flatMap { $0 <= 100 ? $0 : nil } }

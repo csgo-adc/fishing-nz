@@ -19,6 +19,9 @@ class WindowEvaluationTest {
     private fun marine(hours: List<ForecastHour>) = hours.associate { it.time to MarineSample(1.0, 8.0) }
     private fun evaluate(hours: List<ForecastHour> = samples(), waves: Map<Instant, MarineSample> = marine(hours)) =
         WindowEvaluation.evaluate(spot, 0.0, hours, waves, solar, tides, station, now, "Frozen test", WindowPriority.WEATHER)
+    private fun evaluateBoat(hours: List<ForecastHour> = samples(), waves: Map<Instant, MarineSample> = marine(hours),
+                             priority: WindowPriority = WindowPriority.WEATHER) =
+        WindowEvaluation.evaluate(spot.copy(boat = true), 0.0, hours, waves, solar, tides, station, now, "Frozen test", priority)
     private fun resource(path: String) = checkNotNull(javaClass.getResourceAsStream(path)).bufferedReader().use { it.readText() }
 
     @Test fun precedingHourRainAndGustUseEightAndNineNotSeven() {
@@ -52,6 +55,59 @@ class WindowEvaluationTest {
         assertTrue(windowOrder.compare(complete, partial) < 0)
         assertTrue(partial.summary.contains("missing"))
         assertTrue(partial.warnings.any { it.contains("incomplete") })
+    }
+    @Test fun boatLowerWavesOutrankDryCalmWindWithRoughWater() {
+        val calmSeaHours = samples().map { it.copy(wind = 20.0, gust = 25.0, rain = .3, rainProbability = 50.0) }
+        val calmSea = checkNotNull(evaluateBoat(calmSeaHours, calmSeaHours.associate { it.time to MarineSample(.5, 8.0) }))
+        val roughSea = checkNotNull(evaluateBoat(waves = samples().associate { it.time to MarineSample(1.5, 4.0) }))
+        assertTrue(windowOrder.compare(calmSea, roughSea) < 0)
+        assertTrue(calmSea.rankingValue > roughSea.rankingValue)
+        assertTrue(calmSea.summary.contains("waves as the main comfort factor"))
+        assertTrue(roughSea.summary.contains("wave height up to 1.5 m"))
+    }
+    @Test fun boatShortPeriodsLowerComfortAndShowConcernDespiteLowWind() {
+        val short = checkNotNull(evaluateBoat(waves = samples().associate { it.time to MarineSample(1.0, 4.0) }))
+        val spaced = checkNotNull(evaluateBoat(waves = samples().associate { it.time to MarineSample(1.0, 8.0) }))
+        assertTrue(windowOrder.compare(spaced, short) < 0)
+        assertTrue(short.warnings.any { it.startsWith("Short-period waves") })
+        assertEquals("Check conditions", short.windowMood.label)
+        assertEquals("Concerning", short.conditionMood(3).label)
+        assertFalse(spaced.warnings.any { it.startsWith("Short-period waves") })
+    }
+    @Test fun boatWorstPairedSampleIncludesTheFinalEndpoint() {
+        val hours = samples()
+        val steady = hours.associate { it.time to MarineSample(.6, 8.0) }
+        val ending = steady.toMutableMap().apply { put(at(9), MarineSample(.6, 4.0)) }
+        val steadyResult = checkNotNull(evaluateBoat(hours, steady))
+        val endingResult = checkNotNull(evaluateBoat(hours, ending))
+        assertTrue(endingResult.rankingValue < steadyResult.rankingValue)
+        assertTrue(endingResult.conditions[3].contains("4.0–8.0 s"))
+        assertTrue(endingResult.warnings.any { it.startsWith("Short-period waves") })
+    }
+    @Test fun boatMissingPeriodCannotEarnWaveComfortCreditOrHideAdverseHeight() {
+        val hours = samples()
+        val complete = hours.associate { it.time to MarineSample(.6, 4.0) }
+        val incomplete = complete.toMutableMap().apply { put(at(8), MarineSample(.6, null)) }
+        val known = checkNotNull(evaluateBoat(hours, complete))
+        val missing = checkNotNull(evaluateBoat(hours, incomplete))
+        assertFalse(missing.dataComplete)
+        assertTrue(missing.rankingValue < known.rankingValue)
+        assertTrue(missing.rating <= 40)
+        assertNull(evaluateBoat(hours, incomplete.toMutableMap().apply { put(at(9), MarineSample(2.0, null)) }))
+    }
+    @Test fun boatLateIncomingStillExplainsWaveComfortAndUsesTheSameRanking() {
+        val hours = samples(11)
+        val result = checkNotNull(evaluateBoat(hours, marine(hours), WindowPriority.LATE_INCOMING))
+        assertTrue(result.tidePreferenceFit >= .8)
+        assertTrue(result.summary.contains("Wave comfort is the main factor"))
+        assertEquals(checkNotNull(evaluateBoat(hours, marine(hours))).rankingValue, result.rankingValue, .0001)
+    }
+    @Test fun landComfortDoesNotChangeWithTheNewBoatWavePreference() {
+        val hours = samples()
+        val lower = checkNotNull(evaluate(hours, hours.associate { it.time to MarineSample(.5, 8.0) }))
+        val higher = checkNotNull(evaluate(hours, hours.associate { it.time to MarineSample(1.0, 4.0) }))
+        assertEquals(lower.rankingValue, higher.rankingValue, .0001)
+        assertFalse(higher.warnings.any { it.startsWith("Short-period waves") })
     }
     @Test fun partialDaylightCannotReceiveFullSessionDaylight() {
         assertEquals(.5, checkNotNull(evaluate(samples(6))).daylightFraction, .0001)

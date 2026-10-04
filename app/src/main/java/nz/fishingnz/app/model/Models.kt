@@ -12,7 +12,10 @@ data class FishingSpot(val name: String, val area: String, val latitude: Double,
 data class SearchOrigin(val name: String, val point: GeoPoint)
 /** A daily interval; an end before the start means it continues into the next day. */
 data class PreferredTimeRange(val start: LocalTime, val end: LocalTime)
-enum class WindowPriority { WEATHER, LATE_INCOMING }
+enum class WindowPriority {
+    WEATHER, LATE_INCOMING;
+    fun label(boat: Boolean) = if (this == LATE_INCOMING) "Late incoming tide" else if (boat) "Wave comfort" else "Weather balance"
+}
 data class ScoreFactor(val name: String, val score: Int, val weight: Int, val explanation: String)
 data class Recommendation(
     val name: String,
@@ -51,7 +54,7 @@ private val unknownMood = WindowMood("🤔", "Unverified")
 val Recommendation.windowMood: WindowMood
     get() {
         val serious = warnings.any { warning -> listOf(
-            "Strong gusts", "Elevated offshore waves", "Long wave periods", "Fog may reduce visibility"
+            "Strong gusts", "Elevated offshore waves", "Short-period waves", "Long wave periods", "Fog may reduce visibility"
         ).any(warning::startsWith) }
         val mixed = warnings.any { it.startsWith("Part of this session is outside daylight") || it.startsWith("Rain could affect") }
         return when {
@@ -93,7 +96,7 @@ fun Recommendation.conditionMood(index: Int): WindowMood {
             else -> mixedMood
         }
         3 -> when {
-            warned("Elevated offshore waves", "Long wave periods") -> concernMood
+            warned("Elevated offshore waves", "Short-period waves", "Long wave periods") -> concernMood
             detail.contains("unavailable", ignoreCase = true) || warned("Wave forecast is incomplete") -> unknownMood
             (numberAfter(detail, "wave height up to") ?: Double.MAX_VALUE) <= 0.5 -> goodMood
             else -> mixedMood

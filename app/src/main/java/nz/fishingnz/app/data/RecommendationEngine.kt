@@ -109,8 +109,10 @@ class RecommendationEngine {
                     (priority == WindowPriority.LATE_INCOMING || it.tidePreferenceFit >= .8)
             }.minWithOrNull(windowOrder)?.takeIf { it.startsAtEpochSeconds != selected.startsAtEpochSeconds }
             selected.copy(alternative = alternative?.let {
-                val title = if (priority == WindowPriority.WEATHER) "If you prefer late incoming tide" else "For a weather-focused alternative"
-                "$title: ${it.time}. ${it.conditions[1]} ${it.conditions[2]} Compare its tide timing and conditions before changing your plan."
+                val title = if (priority == WindowPriority.WEATHER) "If you prefer late incoming tide"
+                    else if (spot.boat) "For an alternative focused on wave comfort" else "For a weather-focused alternative"
+                val details = if (spot.boat) "${it.conditions[3]} ${it.conditions[1]}" else "${it.conditions[1]} ${it.conditions[2]}"
+                "$title: ${it.time}. $details Compare its tide timing and conditions before changing your plan."
             })
         }
         return SpotOutcome(windows, hours.any { it.wind != null })

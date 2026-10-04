@@ -114,7 +114,10 @@ internal object WindowEvaluation {
         val windComfort = .65 * lowerIsBetter(maxWind, if (spot.boat) 10.0 else 12.0, if (spot.boat) 40.0 else 55.0) +
             .35 * lowerIsBetter(maxGust, if (spot.boat) 18.0 else 20.0, if (spot.boat) 55.0 else 70.0)
         val rainComfort = .5 * (1 - rainProbability / 100) + .5 * lowerIsBetter(meanRain, 0.0, 2.5)
-        val comfort = 60 * windComfort + 40 * rainComfort
+        // Subjective boat comfort: waves dominate, and missing marine data earns no wave credit.
+        val waveComfort = if (completeWaves) marineSamples.minOf(::boatWaveComfort) else 0.0
+        val comfort = if (spot.boat) 60 * waveComfort + 30 * windComfort + 10 * rainComfort
+            else 60 * windComfort + 40 * rainComfort
         val tideFit = tideFit(start, end, tides)
         val tideText = tideDescription(start, end, tides, station)
         val daylightText = if (daylight >= .9999) "The fishing session is entirely in daylight."
@@ -124,11 +127,19 @@ internal object WindowEvaluation {
             totalRain <= .001 -> "No rain accumulation is forecast, but hourly rain chance reaches ${rainProbability.roundToInt()}%."
             else -> "Around ${"%.1f".format(Locale.US, totalRain)} mm of rain is forecast during the session; hourly chance reaches ${rainProbability.roundToInt()}%."
         }
+        val comfortReason = if (spot.boat) "waves as the main comfort factor, alongside wind and rain" else "its balance of wind and rain"
         val selectionReason = if (priority == WindowPriority.LATE_INCOMING)
-            "This session fits your preference for late incoming tide around high water."
-        else "Chosen for its balance of wind and rain, with daylight sessions preferred within your selected hours."
+            "This session fits your preference for late incoming tide around high water." +
+                if (spot.boat) " Wave comfort is the main factor when comparing sessions that fit." else ""
+        else "Chosen for $comfortReason, with daylight sessions preferred within your selected hours."
         val qualification = if (completeWaves && completeTides) "" else "Some local forecast data is missing; treat this as a time to investigate. "
-        val summary = "$qualification$selectionReason ${tideText.substringBefore(". LINZ").trimEnd('.')}. Wind averages ${meanWind.roundToInt()} km/h, with gusts up to ${maxGust.roundToInt()} km/h. $rainText $daylightText"
+        val periodText = if (spot.boat && periods.isNotEmpty())
+            "; mean wave periods ${"%.1f".format(Locale.US, periods.min())}–${"%.1f".format(Locale.US, periods.max())} s"
+            else longestPeriod?.let { "; mean wave period up to ${it.roundToInt()} s" }.orEmpty()
+        val waveText = if (worstWave == null) "Offshore wave forecast unavailable." else
+            "Offshore significant wave height up to ${"%.1f".format(Locale.US, worstWave)} m$periodText${if (!completeWaves) " in available samples; some data is missing" else ""}. " +
+                if (spot.boat) "Actual conditions depend on the boat, route and local sea state." else "Local shore waves may differ."
+        val summary = "$qualification$selectionReason ${if (spot.boat) "$waveText " else ""}${tideText.substringBefore(". LINZ").trimEnd('.')}. Wind averages ${meanWind.roundToInt()} km/h, with gusts up to ${maxGust.roundToInt()} km/h. $rainText $daylightText"
         val direction = samples.mapNotNull { it.windDirection }.takeIf { it.size == samples.size }?.let { directions ->
             val labels = directions.map(::compass).distinct()
             " Wind from ${labels.joinToString(" / ")}."
@@ -137,8 +148,7 @@ internal object WindowEvaluation {
             tideText,
             "Wind: ${meanWind.roundToInt()} km/h average, ${maxWind.roundToInt()} km/h maximum; gusts up to ${maxGust.roundToInt()} km/h.$direction",
             rainText,
-            if (worstWave == null) "Offshore wave forecast unavailable." else
-                "Offshore significant wave height up to ${"%.1f".format(Locale.US, worstWave)} m${longestPeriod?.let { "; mean wave period up to ${it.roundToInt()} s" } ?: ""}${if (!completeWaves) " in available samples; some data is missing" else ""}. Local shore waves may differ.",
+            waveText,
             daylightText
         )
         val warnings = buildList {
@@ -147,6 +157,10 @@ internal object WindowEvaluation {
             if (daylight < .9999) add("Part of this session is outside daylight; check access, lighting and your return route.")
             if (maxGust >= (if (spot.boat) 40 else 55)) add("Strong gusts forecast.")
             if (worstWave != null && worstWave >= (if (spot.boat) 1.2 else 1.5)) add("Elevated offshore waves; local exposure must be checked before using this window.")
+            if (spot.boat && marineSamples.any { sample ->
+                sample?.wave?.let { it.isFinite() && it >= .5 } == true &&
+                    sample?.period?.let { it.isFinite() && it > 0 && it <= 5 } == true
+            }) add("Short-period waves may make the boat ride and fishing uncomfortable.")
             if (worstWave != null && longestPeriod != null && worstWave >= (if (spot.boat) 1.0 else .8) && longestPeriod >= (if (spot.boat) 10 else 12))
                 add("Long wave periods may increase surf and surge at exposed locations.")
             if (rainProbability >= 60 || meanRain >= 1.5) add("Rain could affect this session.")
@@ -167,6 +181,15 @@ internal object WindowEvaluation {
 
     private fun compass(degrees: Double): String = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")[(degrees / 45).roundToInt().mod(8)]
     private fun lowerIsBetter(value: Double, best: Double, worst: Double): Double = ((worst - value) / (worst - best)).coerceIn(0.0, 1.0)
+
+    /** Default comfort preference, not a vessel motion model or a safe wave-height threshold. */
+    private fun boatWaveComfort(sample: MarineSample?): Double {
+        val height = sample?.wave?.takeIf { it.isFinite() && it >= 0 } ?: return 0.0
+        val period = sample?.period?.takeIf { it.isFinite() && it > 0 } ?: return 0.0
+        val heightComfort = lowerIsBetter(height, .3, 2.0)
+        val shortPeriodPenalty = .25 * lowerIsBetter(period, 3.0, 8.0) * (height / .75).coerceIn(0.0, 1.0)
+        return (heightComfort - shortPeriodPenalty).coerceIn(0.0, 1.0)
+    }
 }
 
 /** Stable planning order; no rounded score, distance or dawn bonus can change it. */
