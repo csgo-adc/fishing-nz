@@ -41,6 +41,7 @@ data class FishingUiState(
     val tab: Int = 0, val boat: Boolean = false, val dateLabel: String = "In 3 days", val dateStart: LocalDate = LocalDate.now(nzZone).plusDays(3), val dateEnd: LocalDate = LocalDate.now(nzZone).plusDays(3),
     val radiusKm: Int = 100, val preferredTime: PreferredTimeRange? = suggestedHours, val preferredTimeIsSuggested: Boolean = true,
     val preference: WindowPriority = WindowPriority.WEATHER,
+    val landPreferences: LandPreferences = LandPreferences(),
     val searchLocationMode: SearchLocationMode = SearchLocationMode.NEAR_ME, val selectedSearchStation: TideStation? = null,
     val manualOriginSelected: Boolean = false,
     val location: GeoPoint = GeoPoint(-36.85, 174.76), val deviceLocation: GeoPoint? = null, val hasDeviceLocation: Boolean = false,
@@ -98,6 +99,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         preferredTime = savedPreferredTime,
         preferredTimeIsSuggested = savedHoursMode != "ANYTIME" && !(savedHoursMode == "CUSTOM" && savedCustomHours != null),
         preference = runCatching { WindowPriority.valueOf(SearchPreferencesStore.savedPriority() ?: "WEATHER") }.getOrDefault(WindowPriority.WEATHER),
+        landPreferences = SearchPreferencesStore.savedLandPreferences(),
         searchLocationMode = savedSearchMode,
         selectedSearchStation = savedSearchStation,
         manualOriginSelected = savedSearchMode == SearchLocationMode.NEAR_ME && savedManualOrigin != null,
@@ -154,6 +156,11 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         if (km !in listOf(10, 30, 50, 100, 200, 300, 400, 500)) return
         _state.value = _state.value.copy(radiusKm = km, recommendationSearch = null)
         SearchPreferencesStore.saveRadiusKm(km)
+        if (_state.value.showResults) refreshRecommendations()
+    }
+    fun setLandPreferences(value: LandPreferences) {
+        _state.value = _state.value.copy(landPreferences = value, recommendationSearch = null)
+        SearchPreferencesStore.saveLandPreferences(value)
         if (_state.value.showResults) refreshRecommendations()
     }
     fun setSuggestedHours() {
@@ -335,7 +342,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             try {
                 val result = recommendationEngine.search(query.location, query.radiusKm, query.dateStart, query.dateEnd, query.boat,
                     query.preferredTime, query.selectedSearchStation.takeIf { query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION },
-                    priority = query.preference)
+                    priority = query.preference, land = query.landPreferences)
                 _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false)
             } catch (cancelled: CancellationException) {
                 throw cancelled

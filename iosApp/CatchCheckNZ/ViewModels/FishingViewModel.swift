@@ -44,6 +44,17 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var preference: WindowPriority = .weather {
         didSet { if oldValue != preference { UserDefaults.standard.set(preference.rawValue, forKey: Self.planPriorityKey); invalidateRecommendations() } }
     }
+    @Published var landPreferences = LandPreferences() {
+        didSet {
+            guard oldValue != landPreferences else { return }
+            UserDefaults.standard.set([
+                "setting": landPreferences.setting.rawValue, "priority": landPreferences.priority.rawValue,
+                "maxBand": landPreferences.maxBand, "arrival": landPreferences.arrivalMinutes ?? -1,
+                "return": landPreferences.returnMinutes ?? -1, "daylight": landPreferences.daylightOnly
+            ] as [String: Any], forKey: "land_preferences")
+            invalidateRecommendations()
+        }
+    }
     @Published var preferredStartMinute = 8 * 60 {
         didSet { if oldValue != preferredStartMinute { UserDefaults.standard.set(preferredStartMinute, forKey: Self.planStartMinuteKey); invalidateRecommendations() } }
     }
@@ -237,7 +248,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 sourceNote: window.sourceNote,
                 alternative: window.alternative,
                 dataComplete: window.dataComplete,
-                tidePreferenceFit: window.tidePreferenceFit
+                tidePreferenceFit: window.tidePreferenceFit,
+                assessment: window.assessment
             )
         }
     }
@@ -456,6 +468,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         let boat = isBoatFishing
         let hours = preferredHours
         let priority = preference
+        let land = landPreferences
         scoredWindows = []
         recommendationError = nil
         hasSearchedRecommendations = true
@@ -463,7 +476,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         recommendationTask = Task {
             do {
                 let windows = try await scoringService.rank(origin: origin, radiusKm: radius, selectedStation: station,
-                                                            days: days, boat: boat, preferredHours: hours, priority: priority)
+                                                            days: days, boat: boat, preferredHours: hours, priority: priority, land: land)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
                 scoredWindows = windows
             } catch is CancellationError {
@@ -480,6 +493,15 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     override init() {
         super.init()
         let defaults = UserDefaults.standard
+        if let stored = defaults.dictionary(forKey: "land_preferences") {
+            landPreferences = LandPreferences(
+                setting: ShoreSetting(rawValue: stored["setting"] as? String ?? "") ?? .unknown,
+                priority: LandPriority(rawValue: stored["priority"] as? String ?? "") ?? .balanced,
+                maxBand: min(3, max(0, stored["maxBand"] as? Int ?? 1)),
+                arrivalMinutes: (stored["arrival"] as? Int).flatMap { (0...180).contains($0) ? $0 : nil },
+                returnMinutes: (stored["return"] as? Int).flatMap { (0...180).contains($0) ? $0 : nil },
+                daylightOnly: stored["daylight"] as? Bool ?? false)
+        }
         isBoatFishing = defaults.bool(forKey: Self.planBoatKey)
         if let stored = defaults.string(forKey: Self.planDatePresetKey), let preset = FishingDatePreset(rawValue: stored) {
             datePreset = preset

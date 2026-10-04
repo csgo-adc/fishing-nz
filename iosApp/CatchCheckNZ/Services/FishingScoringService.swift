@@ -27,6 +27,7 @@ struct ScoredFishingWindow: Identifiable, Sendable {
     var dataComplete: Bool = true
     var daylightFraction: Double = 0
     var tidePreferenceFit: Double = 0
+    var assessment: WindowAssessment? = nil
 }
 
 struct PreferredFishingHours: Sendable {
@@ -140,7 +141,9 @@ struct FishingScoringService: Sendable {
     private static let maximumConcurrentSpots = 5
 
     func rank(origin: GeoPoint, radiusKm: Double, selectedStation: TideStation? = nil, days: [Date], boat: Bool,
-              preferredHours: PreferredFishingHours?, priority: WindowPriority = .weather) async throws -> [ScoredFishingWindow] {
+              preferredHours: PreferredFishingHours?, priority: WindowPriority = .weather,
+              land: LandPreferences = LandPreferences()) async throws -> [ScoredFishingWindow] {
+        if !boat && land.daylightOnly && (land.arrivalMinutes == nil || land.returnMinutes == nil) { throw ScoringError.missingAccessTime }
         if selectedStation == nil {
             guard radiusKm.isFinite, radiusKm > 0 else { throw ScoringError.invalidRadius }
         }
@@ -152,7 +155,7 @@ struct FishingScoringService: Sendable {
         let lastDay = calendar.date(byAdding: .day, value: 15, to: today)!
         let selectedDays = Set(days.map { calendar.startOfDay(for: $0) }.filter { $0 >= today && $0 <= lastDay })
         guard !selectedDays.isEmpty else { throw ScoringError.datesOutsideForecast }
-        let mayCrossMidnight = preferredHours.map { $0.startMinute >= $0.endMinute } ?? true
+        let mayCrossMidnight = (preferredHours.map { $0.startMinute >= $0.endMinute } ?? true) || (!boat && (land.returnMinutes ?? 0) > 0)
         let forecastDays = min(16, 1 + selectedDays.compactMap { calendar.dateComponents([.day], from: today, to: $0).day }.max()! + (mayCrossMidnight ? 1 : 0))
         let candidates: [Candidate]
         if let station = selectedStation {
@@ -176,7 +179,7 @@ struct FishingScoringService: Sendable {
             for _ in 0..<min(Self.maximumConcurrentSpots, candidates.count) {
                 let candidate = candidates[next]; next += 1
                 group.addTask { await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
-                                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority) }
+                                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land) }
             }
             while let outcome = await group.next() {
                 if Task.isCancelled { group.cancelAll(); break }
@@ -190,7 +193,7 @@ struct FishingScoringService: Sendable {
                 if next < candidates.count {
                     let candidate = candidates[next]; next += 1
                     group.addTask { await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
-                                                         now: now, calendar: calendar, preferredHours: preferredHours, priority: priority) }
+                                                         now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land) }
                 }
             }
         }
@@ -215,7 +218,7 @@ struct FishingScoringService: Sendable {
     }
 
     private static func scoreSpot(_ candidate: Candidate, days: Set<Date>, forecastDays: Int, now: Date,
-                                  calendar: Calendar, preferredHours: PreferredFishingHours?, priority: WindowPriority) async -> SpotOutcome {
+                                  calendar: Calendar, preferredHours: PreferredFishingHours?, priority: WindowPriority, land: LandPreferences) async -> SpotOutcome {
         let marineTask = Task { try? await fetchMarine(at: candidate.spot.coordinate, forecastDays: forecastDays) }
         let tideTask = Task { await loadTides(station: candidate.tideStation, days: days, calendar: calendar) }
         defer { marineTask.cancel(); tideTask.cancel() }
@@ -224,7 +227,7 @@ struct FishingScoringService: Sendable {
             let marine = await marineTask.value
             let tides = await tideTask.value
             let result = bestWindows(for: candidate, weather: weather, marine: marine, tides: tides, days: days,
-                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority)
+                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land)
             return .forecastAvailable(result.windows, result.hasUsableWeather)
         } catch { return .forecastFailed }
     }
@@ -237,7 +240,7 @@ struct FishingScoringService: Sendable {
 
     static func bestWindows(for candidate: Candidate, weather: WeatherPayload, marine: MarinePayload?, tides: [LINZTidePrediction],
                             days: Set<Date>, now: Date, calendar: Calendar, preferredHours: PreferredFishingHours?,
-                            priority: WindowPriority) -> (windows: [ScoredFishingWindow], hasUsableWeather: Bool) {
+                            priority: WindowPriority, land: LandPreferences = LandPreferences()) -> (windows: [ScoredFishingWindow], hasUsableWeather: Bool) {
         guard weather.isValid else { return ([], false) }
         let solar = solarByDay(weather.daily, calendar: calendar)
         let marineHours = marineHoursByTime(marine?.isValid == true ? marine?.hourly : nil)
@@ -246,9 +249,10 @@ struct FishingScoringService: Sendable {
             WeatherHour(time: Date(timeIntervalSince1970: TimeInterval(data.time[index])),
                         wind: nonnegative(data.windSpeed10m[index]), gust: nonnegative(data.windGusts10m[index]),
                         precipitation: nonnegative(data.precipitation[index]),
-                        rainProbability: probability(data.precipitationProbability[index]),
+                        rainProbability: probability(data.precipitationProbability?[index]),
                         code: data.weatherCode[index].flatMap { (0...99).contains($0) ? $0 : nil },
-                        windDirection: data.windDirection10m[index].flatMap { $0.isFinite && (0...360).contains($0) ? $0 : nil })
+                        windDirection: data.windDirection10m[index].flatMap { $0.isFinite && (0...360).contains($0) ? $0 : nil },
+                        feelsLike: data.apparentTemperature?[index].flatMap { $0.isFinite && (-100...80).contains($0) ? $0 : nil })
         }
         let hasUsableWeather = hours.contains { days.contains(calendar.startOfDay(for: $0.time)) && $0.wind != nil }
         var byDay: [Date: [ScoredFishingWindow]] = [:]
@@ -264,7 +268,8 @@ struct FishingScoringService: Sendable {
                                         isTideStation: candidate.isTideStation, solar: solar, marineHours: marineHours,
                                         tides: tides, tideStation: candidate.tideStation, now: now, calendar: calendar,
                                         priority: priority, sourceNote: sourceNote(weather: weather, marine: marine,
-                                                                                station: tides.isEmpty ? nil : candidate.tideStation)) else { continue }
+                                                                                station: tides.isEmpty ? nil : candidate.tideStation),
+                                        land: land, allHours: hours, retrievedAt: weather.retrievedAt) else { continue }
             byDay[day, default: []].append(result)
         }
         let best = byDay.values.compactMap { pool -> ScoredFishingWindow? in
@@ -272,9 +277,10 @@ struct FishingScoringService: Sendable {
             guard var selected = eligible.sorted(by: { isBetter($0, than: $1) }).first else { return nil }
             let alternatives = priority == .weather ? pool.filter { $0.tidePreferenceFit >= 0.8 } : pool
             if let other = alternatives.sorted(by: { isBetter($0, than: $1) }).first, other.start != selected.start {
-                let label = priority == .weather ? "Late-incoming alternative" : (candidate.spot.boat ? "Alternative for wave comfort" : "Weather-balance alternative")
-                let details = candidate.spot.boat ? [other.conditions[4], other.conditions[0]] : Array(other.conditions.prefix(2))
-                selected.alternative = "\(label): \(clock(other.start))–\(clock(other.end)). \(details.joined(separator: " "))"
+                let label = priority == .weather ? "Late incoming" : "Comfort alternative"
+                selected.alternative = "\(label): \(clock(other.start))–\(clock(other.end)) · \(other.assessment?.mood.label ?? "Compare conditions")\(other.assessment?.matchesComfort == false ? " · outside comfort preference" : "")"
+            } else if priority == .weather, let (label, other) = landTradeoff(selected: selected, pool: pool) {
+                selected.alternative = "\(label): \(clock(other.start))–\(clock(other.end)) · \(other.assessment!.mood.emoji) \(other.assessment!.mood.label)"
             }
             return selected
         }
@@ -283,18 +289,63 @@ struct FishingScoringService: Sendable {
     }
 
     static func isBetter(_ candidate: ScoredFishingWindow, than current: ScoredFishingWindow) -> Bool {
+        if !candidate.boat, !current.boat, let a = candidate.assessment, let b = current.assessment {
+            if a.comfortComplete != b.comfortComplete { return a.comfortComplete }
+            if a.matchesComfort != b.matchesComfort { return a.matchesComfort }
+            if candidate.daylightFraction != current.daylightFraction { return candidate.daylightFraction > current.daylightFraction }
+            if a.band != b.band { return a.band < b.band }
+            if a.demandingHours != b.demandingHours { return a.demandingHours < b.demandingHours }
+            if a.uncomfortableHours != b.uncomfortableHours { return a.uncomfortableHours < b.uncomfortableHours }
+            if a.priority == .casting {
+                if a.maxGust != b.maxGust { return a.maxGust < b.maxGust }
+                if a.maxWind != b.maxWind { return a.maxWind < b.maxWind }
+            } else if a.priority == .dry {
+                if a.rainTotal != b.rainTotal { return a.rainTotal < b.rainTotal }
+                if a.maxGust != b.maxGust { return a.maxGust < b.maxGust }
+            }
+            return candidate.start < current.start
+        }
         if candidate.dataComplete != current.dataComplete { return candidate.dataComplete }
         if candidate.daylightFraction != current.daylightFraction { return candidate.daylightFraction > current.daylightFraction }
         if candidate.rankingValue != current.rankingValue { return candidate.rankingValue > current.rankingValue }
+        if let a = candidate.assessment, let b = current.assessment, a.band != b.band { return a.band < b.band }
         return candidate.start < current.start
+    }
+
+    static func landTradeoff(selected: ScoredFishingWindow, pool: [ScoredFishingWindow]) -> (String, ScoredFishingWindow)? {
+        guard !selected.boat, let chosen = selected.assessment, chosen.priority == .balanced, chosen.matchesComfort else { return nil }
+        let peers = pool.filter {
+            guard !$0.boat, $0.start != selected.start, let value = $0.assessment else { return false }
+            return value.matchesComfort && value.band <= chosen.band && $0.daylightFraction >= selected.daylightFraction
+        }
+        let calmer = peers.filter { $0.assessment!.maxGust < chosen.maxGust && $0.assessment!.rainTotal > chosen.rainTotal }.sorted {
+            let a = $0.assessment!, b = $1.assessment!
+            if a.maxGust != b.maxGust { return a.maxGust < b.maxGust }
+            if a.rainTotal != b.rainTotal { return a.rainTotal < b.rainTotal }
+            return $0.start < $1.start
+        }.first
+        if let calmer { return ("Calmer alternative", calmer) }
+        let drier = peers.filter { $0.assessment!.rainTotal < chosen.rainTotal && $0.assessment!.maxGust > chosen.maxGust }.sorted {
+            let a = $0.assessment!, b = $1.assessment!
+            if a.rainTotal != b.rainTotal { return a.rainTotal < b.rainTotal }
+            if a.maxGust != b.maxGust { return a.maxGust < b.maxGust }
+            return $0.start < $1.start
+        }.first
+        return drier.map { ("Drier alternative", $0) }
     }
 
     static func evaluate(samples: [WeatherHour], spot: FishingSpot, distanceKm: Double, isTideStation: Bool,
                          solar: [Date: SolarDay], marineHours: [Int: MarineHour], tides: [LINZTidePrediction],
                          tideStation: TideStation?, now: Date, calendar: Calendar, priority: WindowPriority,
-                         sourceNote: String) -> ScoredFishingWindow? {
+                         sourceNote: String, land: LandPreferences = LandPreferences(),
+                         allHours: [WeatherHour]? = nil, retrievedAt: Date? = nil) -> ScoredFishingWindow? {
         guard samples.count == 3,
               zip(samples, samples.dropFirst()).allSatisfy({ $1.time.timeIntervalSince($0.time) == 3_600 }) else { return nil }
+        if !spot.boat {
+            return LandAssessment.evaluate(core: samples, hours: allHours ?? samples, spot: spot, distance: distanceKm,
+                solar: solar, marine: marineHours, tides: tides, station: tideStation, now: now, calendar: calendar,
+                sourceNote: sourceNote, priority: priority, preferences: land, retrievedAt: retrievedAt)
+        }
         let start = samples[0].time, end = samples[2].time
         let winds = samples.compactMap(\.wind)
         let codes = samples.compactMap(\.code)
@@ -333,10 +384,6 @@ struct FishingScoringService: Sendable {
         let windText = String(format: "Wind averages %.0f km/h, up to %.0f km/h; gusts up to %.0f km/h.", meanWind, maximumWind, maximumGust) + directionText
         let rainText = String(format: "%.1f mm rain forecast across these two hours; highest hourly rain chance %.0f%%.", rainTotal, rainChance)
         let lightText = daylight == 1 ? "The whole fishing session is in daylight." : String(format: "%.0f%% of the fishing session is in daylight.", daylight * 100)
-        let comfortReason = spot.boat ? "wave comfort as the main factor, alongside wind and rain" : "the balance of wind and rain"
-        let why = priority == .lateIncoming
-            ? "Selected to fit your late-incoming preference, then favour daylight and \(comfortReason)."
-            : "Selected for daylight and \(comfortReason) among the available two-hour windows."
         var conditions = [windText, rainText, tideFacts.description, lightText]
         let waveText: String
         if let worstWave {
@@ -358,7 +405,7 @@ struct FishingScoringService: Sendable {
             guard let height = nonnegative(sample?.wave), let period = nonnegative(sample?.period) else { return false }
             return height >= 0.5 && period > 0 && period <= 5
         }) { warnings.append("Short-period waves may make the boat ride and fishing uncomfortable.") }
-        if let worstWave, let period = periods.max(), worstWave >= (spot.boat ? 1 : 0.8), period >= (spot.boat ? 10 : 12) {
+        if marineSamples.contains(where: { ($0?.wave ?? 0) >= 1 && ($0?.period ?? 0) >= 10 }) {
             warnings.append("Long-period waves can increase surf and surge at exposed locations.")
         }
         if rainChance >= 60 || meanRain >= 1.5 { warnings.append("Rain could affect this session.") }
@@ -366,14 +413,53 @@ struct FishingScoringService: Sendable {
         if start.timeIntervalSince(now) > 7 * 86_400 { warnings.append("Long-range forecast: recheck closer to the day.") }
         if isTideStation { warnings.append("The tide station is a reference location, not a verified fishing access point.") }
         warnings.append("Local access, shelter and official marine warnings have not been assessed; check them before deciding to go.")
-        let complete = waveComplete && tideFacts.complete
-        let qualification = complete ? "" : "Some essential local data is missing; treat this as a time to investigate. "
+        let temperature = samples.compactMap { $0.feelsLike.flatMap { $0.isFinite && (-100...80).contains($0) ? $0 : nil } }
+        let complete = waveComplete && tideFacts.complete && temperature.count == 3
+        let thermalBand = temperature.map(LandAssessment.temperatureBand).max() ?? 0
+        let comfortBand = max(thermalBand, comfort >= 0.85 ? 0 : comfort >= 0.7 ? 1 : comfort >= 0.5 ? 2 : 3)
+        func range(_ values: [Double], decimals: Int) -> String {
+            guard let lo = values.min(), let hi = values.max() else { return "—" }
+            let a = String(format: "%.*f", decimals, lo), b = String(format: "%.*f", decimals, hi)
+            return a == b ? a : a + "–" + b
+        }
+        var windDirections: [String] = []
+        for d in directions where d.isFinite && (0...360).contains(d) {
+            let label = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Int((d/45).rounded()) % 8]
+            if !windDirections.contains(label) { windDirections.append(label) }
+        }
+        let peakRain = rainfall.max()!
+        func high(_ index: Int) -> Bool { [index-1, index+1].filter { tides.indices.contains($0) }.allSatisfy { tides[index].height > tides[$0].height } }
+        let eventIndex = tides.indices.first { tides[$0].time >= start && tides[$0].time <= end }
+            ?? tides.indices.first { tides[$0].time > start && high($0) }
+        let tideValue = tideFacts.complete ? eventIndex.map { index in
+            "\(tides[index].time > end ? "Next " : "")\(high(index) ? "high" : "low") \(clock(tides[index].time)) · \(String(format: "%.1f", tides[index].height)) m CD"
+        } ?? "—" : "—"
+        let choppy = marineSamples.contains { ($0?.wave ?? 0) >= 0.5 && ($0?.period ?? 99) <= 5 }
+        let rows: [ConditionItem] = [
+            .init(title: "Offshore waves", value: worstWave.map { "\(String(format: "%.1f", $0)) m · \(range(periods, decimals: 1)) s" } ?? "—",
+                  mood: !waveComplete ? needsDataMood : .init(emoji: "🌊", label: choppy ? "Choppy" : (worstWave ?? 0) >= 1.2 ? "More motion" : "Lower waves")),
+            .init(title: "Wind", value: "\(Int(maximumWind.rounded())) km/h · gust \(Int(maximumGust.rounded()))\(windDirections.isEmpty ? "" : " · " + windDirections.joined(separator: "/"))", mood: comfortMood(LandAssessment.windBand(maximumWind, maximumGust))),
+            .init(title: "Rain", value: "\(String(format: "%.1f", rainTotal)) mm · peak \(String(format: "%.1f", peakRain)) mm/h · \(Int(rainChance.rounded()))% hourly", mood: .init(emoji: peakRain > 0.2 ? "🌧️" : rainChance >= 60 ? "🌦️" : "🌤️", label: peakRain > 0.8 ? "Wet" : rainTotal > 0 ? "Light rain" : rainChance >= 60 ? "Rain possible" : "Mostly dry")),
+            .init(title: "Feels like", value: temperature.isEmpty ? "—" : "\(range(temperature, decimals: 0))°C", mood: temperature.count != 3 ? needsDataMood : temperature.min()! < 12 ? .init(emoji: "🥶", label: "Cold") : temperature.max()! > 26 ? .init(emoji: "🥵", label: "Hot") : .init(emoji: "😌", label: "Mild")),
+            .init(title: "Tide", value: tideValue, mood: tideFacts.complete ? .init(emoji: "🕒", label: "Tide timing") : needsDataMood),
+            .init(title: "Daylight", value: "\(Int((daylight*100).rounded()))% session", mood: .init(emoji: daylight == 1 ? "🌞" : "🌙", label: daylight == 1 ? "Daylight" : "After dark"))
+        ]
+        let age = start.timeIntervalSince(now)
+        let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "🤔", label: "Limited confidence")
+        var details = warnings + ["Waves lead boat ranking. Feels-like temperature limits the outlook and breaks comfort ties. Route, vessel response, model timing, agreement and return conditions unchecked. CD = Chart Datum.",
+            "Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period."]
+        if temperature.count != 3 { details.append("Feels-like temperature coverage incomplete.") }
+        if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }
+        let assessment = WindowAssessment(mood: complete ? comfortMood(comfortBand) : needsDataMood,
+            conditions: rows, confidence: confidence,
+            details: details, band: comfortBand, comfortComplete: complete)
+        let briefReason = priority == .lateIncoming ? "Fits late incoming · waves first" : "Waves first"
         return .init(id: "\(spot.name)|\(spot.boat)|\(Int(start.timeIntervalSince1970))", spotName: spot.name,
                      area: spot.area, boat: spot.boat, score: Int((comfort * 100).rounded()), start: start, end: end,
-                     distanceKm: distanceKm, reasons: ["\(qualification)\(why)"], warnings: warnings,
-                     summary: "\(qualification)\(why) \(spot.boat ? waveText + " " : "")\(windText) \(rainText) \(tideFacts.description)", conditions: conditions,
+                     distanceKm: distanceKm, reasons: [briefReason], warnings: warnings,
+                     summary: briefReason, conditions: conditions,
                      sourceNote: sourceNote, rankingValue: comfort, dataComplete: complete,
-                     daylightFraction: daylight, tidePreferenceFit: tideFacts.fit)
+                     daylightFraction: daylight, tidePreferenceFit: tideFacts.fit, assessment: assessment)
     }
 
     static func tideContext(start: Date, end: Date, tides: [LINZTidePrediction], station: TideStation?) -> (description: String, fit: Double, complete: Bool) {
@@ -487,9 +573,9 @@ struct FishingScoringService: Sendable {
     }
     private static func fetchWeather(at coordinate: GeoPoint, boat: Bool, forecastDays: Int) async throws -> WeatherPayload {
         let url = apiURL(host: "api.open-meteo.com", path: "/v1/forecast", coordinate: coordinate, forecastDays: forecastDays, items: [
-            .init(name: "hourly", value: "wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,precipitation_probability,weather_code"),
+            .init(name: "hourly", value: "wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,precipitation_probability,weather_code,apparent_temperature"),
             .init(name: "daily", value: "sunrise,sunset"), .init(name: "wind_speed_unit", value: "kmh"),
-            .init(name: "precipitation_unit", value: "mm"), .init(name: "cell_selection", value: boat ? "sea" : "land")
+            .init(name: "precipitation_unit", value: "mm"), .init(name: "temperature_unit", value: "celsius"), .init(name: "cell_selection", value: boat ? "sea" : "land")
         ])
         var payload = try await fetch(WeatherPayload.self, from: url)
         guard payload.isValid else { throw ScoringError.invalidForecast }
@@ -529,6 +615,7 @@ struct SolarDay: Sendable { let sunrise: Date; let sunset: Date }
 struct WeatherHour: Sendable {
     let time: Date; let wind: Double?; let gust: Double?; let precipitation: Double?; let rainProbability: Double?; let code: Int?
     var windDirection: Double? = nil
+    var feelsLike: Double? = nil
 }
 struct MarineHour: Sendable { let wave: Double?; let period: Double? }
 
@@ -545,23 +632,27 @@ struct WeatherPayload: Decodable, Sendable {
         latitude.isFinite && longitude.isFinite && (-90...90).contains(latitude) && (-180...180).contains(longitude)
             && hourlyUnits["time"] == "unixtime" && hourlyUnits["wind_speed_10m"] == "km/h"
             && hourlyUnits["wind_gusts_10m"] == "km/h" && hourlyUnits["precipitation"] == "mm"
-            && hourlyUnits["precipitation_probability"] == "%" && hourlyUnits["weather_code"] == "wmo code"
+            && (hourly.precipitationProbability == nil || hourlyUnits["precipitation_probability"] == "%") && hourlyUnits["weather_code"] == "wmo code"
+            && (hourly.apparentTemperature == nil || hourlyUnits["apparent_temperature"] == "°C")
             && hourlyUnits["wind_direction_10m"] == "°"
             && dailyUnits["time"] == "unixtime" && dailyUnits["sunrise"] == "unixtime" && dailyUnits["sunset"] == "unixtime"
             && validTimes(hourly.time) && validTimes(daily.time)
             && [hourly.windSpeed10m.count, hourly.windGusts10m.count, hourly.precipitation.count,
-                hourly.precipitationProbability.count, hourly.weatherCode.count, hourly.windDirection10m.count].allSatisfy { $0 == hourly.time.count }
+                hourly.weatherCode.count, hourly.windDirection10m.count].allSatisfy { $0 == hourly.time.count }
+            && [hourly.precipitationProbability, hourly.apparentTemperature].compactMap { $0 }.allSatisfy { $0.count == hourly.time.count }
             && daily.sunrise.count == daily.time.count && daily.sunset.count == daily.time.count
     }
     struct Hourly: Decodable, Sendable {
         let time: [Int]; let windSpeed10m: [Double?]; let windGusts10m: [Double?]
-        let precipitation: [Double?]; let precipitationProbability: [Double?]; let weatherCode: [Int?]
+        let precipitation: [Double?]; let precipitationProbability: [Double?]?; let weatherCode: [Int?]
         let windDirection10m: [Double?]
+        let apparentTemperature: [Double?]?
         enum CodingKeys: String, CodingKey {
             case time, precipitation
             case windSpeed10m = "wind_speed_10m", windGusts10m = "wind_gusts_10m"
             case precipitationProbability = "precipitation_probability", weatherCode = "weather_code"
             case windDirection10m = "wind_direction_10m"
+            case apparentTemperature = "apparent_temperature"
         }
     }
     struct Daily: Decodable, Sendable { let time: [Int]; let sunrise: [Int?]; let sunset: [Int?] }
@@ -583,9 +674,170 @@ struct MarinePayload: Decodable, Sendable {
         enum CodingKeys: String, CodingKey { case time; case waveHeight = "wave_height", wavePeriod = "wave_period" }
     }
 }
+/// Trial human-comfort bands; independent from local exposure and warning checks.
+enum LandAssessment {
+    static func band(_ value: Double, _ limits: [Double]) -> Int { limits.firstIndex { value <= $0 } ?? 3 }
+    static func windBand(_ wind: Double, _ gust: Double) -> Int { max(band(wind, [12, 20, 30]), band(gust, [20, 30, 45])) }
+    static func temperatureBand(_ value: Double) -> Int {
+        if (12...26).contains(value) { return 0 }
+        if (8...30).contains(value) { return 1 }
+        if (5...33).contains(value) { return 2 }
+        return 3
+    }
+    private static func valid(_ value: Double?, temperature: Bool = false) -> Double? {
+        guard let value, value.isFinite, temperature ? (-100...80).contains(value) : value >= 0 else { return nil }
+        return value
+    }
+    private static func at(_ hours: [WeatherHour], _ time: Date, temperature: Bool = false) -> Double? {
+        func value(_ hour: WeatherHour) -> Double? { valid(temperature ? hour.feelsLike : hour.wind, temperature: temperature) }
+        if let exact = hours.first(where: { $0.time == time }) { return value(exact) }
+        guard let left = hours.last(where: { $0.time < time }), let right = hours.first(where: { $0.time > time }),
+              right.time.timeIntervalSince(left.time) == 3600, let a = value(left), let b = value(right) else { return nil }
+        return a + (b - a) * time.timeIntervalSince(left.time) / 3600
+    }
+    private static func waveAt(_ marine: [Int: MarineHour], _ time: Date) -> MarineHour? {
+        let stamp = Int(time.timeIntervalSince1970)
+        if let exact = marine[stamp] { return exact }
+        let times = marine.keys.sorted()
+        guard let left = times.last(where: { $0 < stamp }), let right = times.first(where: { $0 > stamp }), right-left == 3600 else { return nil }
+        func interpolate(_ a: Double?, _ b: Double?, period: Bool = false) -> Double? {
+            guard let a = valid(a), let b = valid(b), !period || (a > 0 && b > 0) else { return nil }
+            return a + (b-a) * Double(stamp-left)/3600
+        }
+        return MarineHour(wave: interpolate(marine[left]?.wave, marine[right]?.wave), period: interpolate(marine[left]?.period, marine[right]?.period, period: true))
+    }
+    static func evaluate(core: [WeatherHour], hours: [WeatherHour], spot: FishingSpot, distance: Double,
+                         solar: [Date: SolarDay], marine: [Int: MarineHour], tides: [LINZTidePrediction],
+                         station: TideStation?, now: Date, calendar: Calendar, sourceNote: String,
+                         priority: WindowPriority, preferences: LandPreferences, retrievedAt: Date?) -> ScoredFishingWindow? {
+        let start = core[0].time, end = core[2].time
+        let arrival = preferences.arrivalMinutes, returning = preferences.returnMinutes
+        guard (0...3).contains(preferences.maxBand), [arrival, returning].compactMap({ $0 }).allSatisfy({ (0...180).contains($0) }) else { return nil }
+        let visitKnown = arrival != nil && returning != nil
+        if preferences.daylightOnly && !visitKnown { return nil }
+        let visitStart = start.addingTimeInterval(-Double(arrival ?? 0)*60), visitEnd = end.addingTimeInterval(Double(returning ?? 0)*60)
+        if arrival != nil && visitStart < now { return nil }
+        let points = Set([visitStart, visitEnd] + hours.filter { $0.time > visitStart && $0.time < visitEnd }.map(\.time)).sorted()
+        let winds = points.map { at(hours, $0) }, temperatures = points.map { at(hours, $0, temperature: true) }
+        let intervals = hours.filter { $0.time > visitStart && $0.time.addingTimeInterval(-3600) < visitEnd }
+        let gusts = intervals.map { valid($0.gust) }, rain = intervals.map { valid($0.precipitation) }
+        let probabilities = intervals.compactMap { value -> Double? in
+            guard let p = value.rainProbability, p.isFinite, (0...100).contains(p) else { return nil }; return p
+        }
+        let codes = hours.filter { $0.time >= visitStart && $0.time <= visitEnd }.map(\.code)
+        guard let maxWind = winds.compactMap({ $0 }).max(), let maxGust = gusts.compactMap({ $0 }).max() else { return nil }
+        let marineSamples = points.map { waveAt(marine, $0) }
+        let completeMarine = marineSamples.allSatisfy { valid($0?.wave) != nil && (valid($0?.period) ?? 0) > 0 }
+        let marineHours = marineSamples.compactMap { $0 } + marine.filter {
+            let time = Date(timeIntervalSince1970: Double($0.key))
+            return time >= visitStart && time <= visitEnd && !points.contains(time)
+        }.map(\.value)
+        let waves = marineHours.compactMap { valid($0.wave) }, periods = marineHours.compactMap { valid($0.period).flatMap { $0 > 0 ? $0 : nil } }
+        // Preserve known adverse conditions before considering missing coverage.
+        if maxWind >= 55 || maxGust >= 70 || waves.contains(where: { $0 >= 3 }) || codes.contains(where: { $0.map { (95...99).contains($0) } ?? false }) { return nil }
+        guard core.allSatisfy({ valid($0.wind) != nil && $0.code.map { (0...99).contains($0) } == true }),
+              core.dropFirst().allSatisfy({ valid($0.gust) != nil && valid($0.precipitation) != nil }) else { return nil }
+        func overlap(_ hour: WeatherHour) -> Double { min(visitEnd, hour.time).timeIntervalSince(max(visitStart, hour.time.addingTimeInterval(-3600))) }
+        let covered = intervals.reduce(0) { $0 + overlap($1) }
+        let completeWeather = covered == visitEnd.timeIntervalSince(visitStart)
+            && winds.allSatisfy { $0 != nil } && gusts.allSatisfy { $0 != nil } && rain.allSatisfy { $0 != nil }
+            && codes.allSatisfy { $0.map { (0...99).contains($0) } ?? false }
+        let completeTemperature = temperatures.allSatisfy { $0 != nil }, complete = completeWeather && completeTemperature
+        let totalRain = intervals.reduce(0) { $0 + (valid($1.precipitation) ?? 0) * overlap($1)/3600 }
+        guard let peakRain = rain.compactMap({ $0 }).max() else { return nil }
+        let windGrade = windBand(maxWind, maxGust), rainGrade = band(peakRain, [0.2, 0.8, 1.5])
+        let tempGrade = temperatures.compactMap { $0 }.map(temperatureBand).max() ?? 0
+        let grade = max(windGrade, rainGrade, tempGrade)
+        var demanding: Double = 0, uncomfortable: Double = 0
+        for hour in intervals {
+            let left = max(visitStart, hour.time.addingTimeInterval(-3600)), right = min(visitEnd, hour.time)
+            guard let w = [at(hours, left), at(hours, right)].compactMap({ $0 }).max(), let g = valid(hour.gust), let r = valid(hour.precipitation) else { continue }
+            let t = [at(hours, left, temperature: true), at(hours, right, temperature: true)].compactMap { $0 }.map(temperatureBand).max() ?? 0
+            let b = max(windBand(w, g), band(r, [0.2, 0.8, 1.5]), t)
+            if b >= 2 { demanding += overlap(hour)/3600 }; if b >= 1 { uncomfortable += overlap(hour)/3600 }
+        }
+        let daylight = FishingScoringService.daylightFraction(start: visitStart, end: visitEnd, solar: solar, calendar: calendar)
+        if preferences.daylightOnly && daylight != 1 { return nil }
+        let tideFacts = FishingScoringService.tideContext(start: start, end: end, tides: tides, station: station)
+        let turns = tides.indices.filter { tides[$0].time >= start && tides[$0].time <= end }
+        func high(_ index: Int) -> Bool {
+            [index-1, index+1].filter { tides.indices.contains($0) }.allSatisfy { tides[index].height > tides[$0].height }
+        }
+        let eventIndex = turns.first ?? tides.indices.first { tides[$0].time > start && high($0) }
+        let beforeIndex = tides.indices.last { tides[$0].time <= start }
+        let rising = beforeIndex.map { !high($0) } ?? false
+        let tideMood: WindowMood
+        if !tideFacts.complete { tideMood = WindowMood(emoji: "❓", label: "Unverified") }
+        else if priority == .lateIncoming && tideFacts.fit >= 0.8 { tideMood = WindowMood(emoji: "🎯", label: "Late incoming") }
+        else if !turns.isEmpty { tideMood = WindowMood(emoji: "🔄", label: "Tide turns") }
+        else { tideMood = WindowMood(emoji: rising ? "↗️" : "↘️", label: rising ? "Rising" : "Falling") }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = calendar.timeZone
+        func time(_ at: Date) -> String { formatter.dateFormat = calendar.isDate(at, inSameDayAs: start) ? "h:mm a" : "EEE h:mm a"; return formatter.string(from: at) }
+        func range(_ values: [Double], decimals: Int = 0) -> String {
+            guard let lo = values.min(), let hi = values.max() else { return "—" }
+            let a = String(format: "%.*f", decimals, lo), b = String(format: "%.*f", decimals, hi)
+            return a == b ? a : a + "–" + b
+        }
+        let probability = probabilities.max(), temps = temperatures.compactMap { $0 }
+        var directions: [String] = []
+        for hour in hours where hour.time >= visitStart && hour.time <= visitEnd {
+            if let d = hour.windDirection, d.isFinite, (0...360).contains(d) {
+                let label = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Int((d/45).rounded()) % 8]
+                if !directions.contains(label) { directions.append(label) }
+            }
+        }
+        let tideValue = tideFacts.complete ? eventIndex.map { index in
+            "\(turns.isEmpty ? "Next " : "")\(high(index) ? "high" : "low") \(time(tides[index].time)) · \(String(format: "%.1f", tides[index].height)) m CD"
+        } ?? "—" : "—"
+        let waveFeeling: String = preferences.setting == .rocks ? "Check surge" : preferences.setting == .beach ? "Check surf" : "Check exposure"
+        let rows: [ConditionItem] = [
+            .init(title: "Wind", value: "\(Int(maxWind.rounded())) km/h · gust \(Int(maxGust.rounded()))\(directions.isEmpty ? "" : " · " + directions.joined(separator: "/"))", mood: winds.contains(where: { $0 == nil }) || gusts.contains(where: { $0 == nil }) ? needsDataMood : comfortMood(windGrade)),
+            .init(title: "Rain", value: "\(String(format: "%.1f", totalRain)) mm · peak \(String(format: "%.1f", peakRain)) mm/h · \(probability.map { "\(Int($0.rounded()))% hourly" } ?? "chance —")",
+                  mood: covered != visitEnd.timeIntervalSince(visitStart) || rain.contains(where: { $0 == nil }) ? needsDataMood : .init(emoji: peakRain > 0.2 ? "🌧️" : (probability ?? 0) >= 60 ? "🌦️" : "🌤️", label: peakRain > 0.8 ? "Wet" : peakRain > 0 ? "Light rain" : (probability ?? 0) >= 60 ? "Rain possible" : "Mostly dry")),
+            .init(title: "Feels like", value: temps.isEmpty ? "—" : "\(range(temps))°C", mood: !completeTemperature ? needsDataMood : temps.min()! < 12 ? .init(emoji: "🥶", label: "Cold") : temps.max()! > 26 ? .init(emoji: "🥵", label: "Hot") : .init(emoji: "😌", label: "Mild")),
+            .init(title: "Tide", value: tideValue, mood: tideMood),
+            .init(title: "Offshore waves", value: waves.max().map { "\(String(format: "%.1f", $0)) m · \(range(periods, decimals: 1)) s" } ?? "—", mood: completeMarine ? .init(emoji: "🌊", label: waveFeeling) : needsDataMood),
+            .init(title: "Daylight", value: daylight.map { "\(Int(($0*100).rounded()))% \(visitKnown ? "visit" : arrival != nil || returning != nil ? "known time" : "session")" } ?? "—", mood: daylight == nil ? needsDataMood : daylight! < 1 ? .init(emoji: "🌙", label: "After dark") : !visitKnown ? .init(emoji: "🔎", label: "Visit times needed") : .init(emoji: "🌞", label: "Daylight")),
+            .init(title: "Shore plan", value: "\(preferences.setting.rawValue) · before \(arrival.map { "\($0) min" } ?? "—") · return \(returning.map { "\($0) min" } ?? "—")", mood: .init(emoji: "🔎", label: "Access unchecked"))
+        ]
+        let localReason: String
+        switch preferences.setting {
+        case .rocks: localReason = "Rock footing, surge and escape route unchecked."
+        case .beach: localReason = "Surf, wading and beach access unchecked."
+        case .wharf: localReason = "Wharf access and exposure unchecked."
+        case .bank: localReason = "Bank footing and tide access unchecked."
+        case .unknown: localReason = "Shore type and access unchecked."
+        }
+        var details = [localReason, "Official warnings unchecked. Single forecast; model timing and agreement unverified."]
+        if !visitKnown { details.append("Access/setup or return time not set; only the session and known extra time are assessed.") }
+        if !completeWeather { details.append("Visit weather coverage incomplete; displayed amounts use available samples.") }
+        if !completeTemperature { details.append("Feels-like temperature coverage incomplete.") }
+        if !tideFacts.complete { details.append("Local tide coverage unverified.") }
+        if !completeMarine { details.append("Offshore wave coverage incomplete.") }
+        if probabilities.count != intervals.count { details.append("Rain likelihood incomplete.") }
+        if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }
+        if waves.contains(where: { $0 >= 1.5 }) { details.append("Elevated offshore waves; local exposure unchecked.") }
+        if marineHours.contains(where: { (valid($0.wave) ?? 0) >= 0.8 && (valid($0.period) ?? 0) >= 12 }) { details.append("Long-period waves; local surge unchecked.") }
+        if codes.contains(where: { $0 == 45 || $0 == 48 }) { details.append("Fog forecast; visibility needs checking.") }
+        if temps.contains(where: { $0 < 12 }) && peakRain > 0.2 { details.append("Cold and wet conditions.") }
+        details.append("Rain chance is the highest hourly likelihood, not the chance for the whole visit. Offshore waves show significant height and mean period.")
+        details.append("Trial comfort bands; not a catch forecast. CD = Chart Datum. Hourly weather timing is approximate.")
+        let age = start.timeIntervalSince(now)
+        let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "🤔", label: "Limited confidence")
+        let assessment = WindowAssessment(mood: complete ? comfortMood(grade) : needsDataMood, conditions: rows, confidence: confidence,
+            details: details, band: grade, demandingHours: demanding, uncomfortableHours: uncomfortable,
+            matchesComfort: complete && grade <= preferences.maxBand, comfortComplete: complete, maxWind: maxWind, maxGust: maxGust, rainTotal: totalRain, priority: preferences.priority)
+        let reason = !complete ? "Comfort assessment incomplete" : grade > preferences.maxBand ? "Outside your comfort preference" : priority == .lateIncoming ? "Fits late incoming" : "Lower discomfort"
+        return .init(id: "\(spot.name)|false|\(Int(start.timeIntervalSince1970))", spotName: spot.name, area: spot.area, boat: false,
+                     score: 100-grade*25, start: start, end: end, distanceKm: distance, reasons: [reason], warnings: details,
+                     summary: reason, conditions: rows.map { "\($0.title): \($0.value) · \($0.mood.emoji) \($0.mood.label)" },
+                     sourceNote: sourceNote, rankingValue: Double(3-grade), dataComplete: complete,
+                     daylightFraction: daylight ?? 0, tidePreferenceFit: tideFacts.fit, assessment: assessment)
+    }
+}
 private func validTimes(_ values: [Int]) -> Bool { !values.isEmpty && zip(values, values.dropFirst()).allSatisfy { $1 > $0 } }
 private enum ScoringError: LocalizedError {
-    case invalidRadius, datesOutsideForecast, forecastsUnavailable, noUsableForecast, invalidForecast
+    case invalidRadius, datesOutsideForecast, forecastsUnavailable, noUsableForecast, invalidForecast, missingAccessTime
     var errorDescription: String? {
         switch self {
         case .invalidRadius: return "Choose a search distance greater than zero."
@@ -593,6 +845,7 @@ private enum ScoringError: LocalizedError {
         case .forecastsUnavailable: return "Weather forecasts are unavailable for nearby spots. Please try again later."
         case .noUsableForecast: return "No usable hourly weather forecast was available for the selected days."
         case .invalidForecast: return "Forecast units or timestamps could not be verified."
+        case .missingAccessTime: return "Set access/setup and return time for daylight only."
         }
     }
 }

@@ -26,14 +26,15 @@ class RecommendationEngine {
     suspend fun search(
         origin: GeoPoint, radiusKm: Int, start: LocalDate, end: LocalDate, boat: Boolean,
         preferredTime: PreferredTimeRange?, specificStation: TideStation? = null,
-        priority: WindowPriority = WindowPriority.WEATHER
+        priority: WindowPriority = WindowPriority.WEATHER, land: LandPreferences = LandPreferences()
     ): RecommendationSearch = coroutineScope {
         val today = LocalDate.now(zone)
         require(!start.isBefore(today) && !end.isBefore(start) && !end.isAfter(today.plusDays(15))) {
             "Choose dates within the next 16 days."
         }
         val now = Instant.now()
-        val mayCrossMidnight = preferredTime == null || preferredTime.end.isBefore(preferredTime.start)
+        require(boat || !land.daylightOnly || (land.arrivalMinutes != null && land.returnMinutes != null)) { "Set access/setup and return time for daylight only." }
+        val mayCrossMidnight = preferredTime == null || preferredTime.end.isBefore(preferredTime.start) || (!boat && (land.returnMinutes ?: 0) > 0)
         val forecastDays = min(16, ChronoUnit.DAYS.between(today, end).toInt() + 1 + if (mayCrossMidnight) 1 else 0)
         val candidates = if (specificStation != null) {
             listOf(FishingSpot(specificStation.name, specificStation.region, specificStation.latitude, specificStation.longitude, boat) to 0.0)
@@ -47,7 +48,7 @@ class RecommendationEngine {
         val outcomes = nearby.map { (spot, distance) ->
             async(Dispatchers.IO) {
                 limiter.withPermit {
-                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation, priority)) }
+                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation, priority, land)) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) { Result.failure<SpotOutcome>(error) }
                 }
@@ -69,7 +70,7 @@ class RecommendationEngine {
     private fun bestWindows(
         spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int,
         now: Instant, preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean,
-        selectedStation: TideStation?, priority: WindowPriority
+        selectedStation: TideStation?, priority: WindowPriority, land: LandPreferences
     ): SpotOutcome {
         val weather = weather(spot, forecastDays)
         val marine = try { marine(spot, forecastDays) }
@@ -95,7 +96,7 @@ class RecommendationEngine {
                 if (startDay !in start..end) continue
                 if (!withinPreferredTime(samples.first().time, samples.last().time, startDay, preferredTime)) continue
                 WindowEvaluation.evaluate(spot, distance, samples, marine?.hours.orEmpty(), weather.solar,
-                    tides, station, now, source, priority)?.let { add(it) }
+                    tides, station, now, source, priority, land, weather.hours, weather.retrievedAt)?.let { add(it) }
             }
         }
         val selection = WindowSelection(selectedStation != null)
@@ -104,15 +105,13 @@ class RecommendationEngine {
         }
         val windows = selection.windows().map { selected ->
             val day = Instant.ofEpochSecond(selected.startsAtEpochSeconds).atZone(zone).toLocalDate()
-            val alternative = evaluated.filter {
-                Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(zone).toLocalDate() == day &&
-                    (priority == WindowPriority.LATE_INCOMING || it.tidePreferenceFit >= .8)
-            }.minWithOrNull(windowOrder)?.takeIf { it.startsAtEpochSeconds != selected.startsAtEpochSeconds }
-            selected.copy(alternative = alternative?.let {
-                val title = if (priority == WindowPriority.WEATHER) "If you prefer late incoming tide"
-                    else if (spot.boat) "For an alternative focused on wave comfort" else "For a weather-focused alternative"
-                val details = if (spot.boat) "${it.conditions[3]} ${it.conditions[1]}" else "${it.conditions[1]} ${it.conditions[2]}"
-                "$title: ${it.time}. $details Compare its tide timing and conditions before changing your plan."
+            val pool = evaluated.filter { Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(zone).toLocalDate() == day }
+            val alternative = pool.filter { priority == WindowPriority.LATE_INCOMING || it.tidePreferenceFit >= .8 }
+                .minWithOrNull(windowOrder)?.takeIf { it.startsAtEpochSeconds != selected.startsAtEpochSeconds }
+                ?.let { (if (priority == WindowPriority.WEATHER) "Late incoming" else "Comfort alternative") to it }
+                ?: if (priority == WindowPriority.WEATHER) landTradeoff(selected, pool) else null
+            selected.copy(alternative = alternative?.let { (title, other) ->
+                "$title: ${other.time} · ${other.windowOutlook}${if (other.assessment?.matchesComfort == false) " · outside comfort preference" else ""}"
             })
         }
         return SpotOutcome(windows, hours.any { it.wind != null })
@@ -132,15 +131,17 @@ class RecommendationEngine {
 
     private fun weather(spot: FishingSpot, forecastDays: Int): WeatherForecast {
         val json = getJson("https://api.open-meteo.com/v1/forecast?latitude=${spot.latitude}&longitude=${spot.longitude}" +
-            "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,precipitation_probability,weather_code" +
-            "&daily=sunrise,sunset&wind_speed_unit=kmh&precipitation_unit=mm&cell_selection=${if (spot.boat) "sea" else "land"}" +
+            "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,precipitation_probability,weather_code,apparent_temperature" +
+            "&daily=sunrise,sunset&wind_speed_unit=kmh&precipitation_unit=mm&temperature_unit=celsius&cell_selection=${if (spot.boat) "sea" else "land"}" +
             "&forecast_days=$forecastDays&timeformat=unixtime&timezone=Pacific%2FAuckland")
         return decodeWeather(json, Instant.now())
     }
 
     internal fun decodeWeather(json: JSONObject, retrievedAt: Instant): WeatherForecast {
-        checkUnits(json.getJSONObject("hourly_units"), mapOf("time" to "unixtime", "wind_speed_10m" to "km/h", "wind_gusts_10m" to "km/h", "precipitation" to "mm", "precipitation_probability" to "%", "weather_code" to "wmo code", "wind_direction_10m" to "°"))
+        checkUnits(json.getJSONObject("hourly_units"), mapOf("time" to "unixtime", "wind_speed_10m" to "km/h", "wind_gusts_10m" to "km/h", "precipitation" to "mm", "weather_code" to "wmo code", "wind_direction_10m" to "°"))
         val hourly = json.getJSONObject("hourly")
+        if (hourly.has("precipitation_probability")) checkUnits(json.getJSONObject("hourly_units"), mapOf("precipitation_probability" to "%"))
+        if (hourly.has("apparent_temperature")) checkUnits(json.getJSONObject("hourly_units"), mapOf("apparent_temperature" to "°C"))
         val times = checkedTimes(hourly)
         checkLengths(hourly, times.size)
         val wind = hourly.optJSONArray("wind_speed_10m")
@@ -149,11 +150,12 @@ class RecommendationEngine {
         val probabilities = hourly.optJSONArray("precipitation_probability")
         val codes = hourly.optJSONArray("weather_code")
         val direction = hourly.optJSONArray("wind_direction_10m")
+        val temperature = hourly.optJSONArray("apparent_temperature")
         val hours = times.mapIndexed { i, at ->
             ForecastHour(at, wind?.number(i)?.takeIf { it >= 0 }, gust?.number(i)?.takeIf { it >= 0 },
                 rain?.number(i)?.takeIf { it >= 0 }, probabilities?.number(i)?.takeIf { it in 0.0..100.0 },
                 codes?.number(i)?.takeIf { it in 0.0..99.0 && it % 1.0 == 0.0 }?.toInt(),
-                direction?.number(i)?.takeIf { it in 0.0..360.0 })
+                direction?.number(i)?.takeIf { it in 0.0..360.0 }, temperature?.number(i)?.takeIf { it in -100.0..80.0 })
         }
         val daily = json.getJSONObject("daily")
         checkUnits(json.getJSONObject("daily_units"), mapOf("time" to "unixtime", "sunrise" to "unixtime", "sunset" to "unixtime"))

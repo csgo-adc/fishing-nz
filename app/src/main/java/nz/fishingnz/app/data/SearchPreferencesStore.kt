@@ -3,6 +3,7 @@ package nz.fishingnz.app.data
 import android.content.Context
 import java.time.LocalDate
 import java.time.LocalTime
+import nz.fishingnz.app.model.*
 
 /** The last window-search scope is shared across app launches. */
 object SearchPreferencesStore {
@@ -57,6 +58,24 @@ object SearchPreferencesStore {
 
     fun savedPriority(): String? = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         ?.getString(PRIORITY_KEY, null)
+
+    fun savedLandPreferences(): LandPreferences {
+        val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return LandPreferences()
+        return LandPreferences(
+            setting = runCatching { ShoreSetting.valueOf(prefs.getString("shore_setting", "UNKNOWN")!!) }.getOrDefault(ShoreSetting.UNKNOWN),
+            priority = runCatching { LandPriority.valueOf(prefs.getString("land_priority", "BALANCED")!!) }.getOrDefault(LandPriority.BALANCED),
+            maxBand = prefs.getInt("comfort_band", 1).coerceIn(0, 3),
+            arrivalMinutes = prefs.getInt("arrival_minutes", -1).takeIf { it in 0..180 },
+            returnMinutes = prefs.getInt("return_minutes", -1).takeIf { it in 0..180 },
+            daylightOnly = prefs.getBoolean("daylight_only", false)
+        )
+    }
+    fun saveLandPreferences(value: LandPreferences) {
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
+            ?.putString("shore_setting", value.setting.name)?.putString("land_priority", value.priority.name)
+            ?.putInt("comfort_band", value.maxBand)?.putInt("arrival_minutes", value.arrivalMinutes ?: -1)
+            ?.putInt("return_minutes", value.returnMinutes ?: -1)?.putBoolean("daylight_only", value.daylightOnly)?.apply()
+    }
 
     fun saveBoat(boat: Boolean) {
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.putBoolean(BOAT_KEY, boat)?.apply()

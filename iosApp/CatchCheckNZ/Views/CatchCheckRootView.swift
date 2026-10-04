@@ -440,9 +440,10 @@ private struct PlanningSheet: View {
                              ? "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot." + (vm.isBoatFishing ? " Wave comfort remains the main factor when comparing sessions that fit." : "")
                              : (vm.isBoatFishing
                                 ? "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
-                                : "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours."))
+                                : "Compare wind, rain and feels-like temperature."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    if !vm.isBoatFishing { Card { LandOptions() } }
                     Card {
                         Text("Search from").font(.headline).foregroundStyle(CatchCheckColor.navy)
                         SearchPlaceMenu()
@@ -844,6 +845,12 @@ struct ResultsView: View {
                             }
                         }.padding(.vertical, 14)
                     } else {
+                        if !vm.isBoatFishing && !vm.recommendations.contains(where: { $0.assessment?.matchesComfort == true }) {
+                            Text(vm.recommendations.allSatisfy { $0.assessment?.comfortComplete == false }
+                                 ? "More data needed · partial options below"
+                                 : "No window meets your comfort preference · alternatives below")
+                                .font(.subheadline).foregroundStyle(CatchCheckColor.orange)
+                        }
                         ForEach(vm.recommendations, id: \.windowID) { spot in
                             RecommendationCard(spot: spot, showWhy: shouldShowWindowReason(spot, among: vm.recommendations)) {
                                 vm.showingResults = false; vm.selectedSpot = spot
@@ -976,10 +983,11 @@ struct SpotDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text(spot.area).foregroundStyle(.secondary)
-                    Text("Area marker only. Local access, wave exposure and fishing closures still need checking.")
+                    Text("Area marker · access and closures unchecked.")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if !spot.time.isEmpty {
                         WindowOutlook(outlook: spot.windowOutlook)
+                        WindowChecks(spot: spot)
                         Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
                         Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
                         if shouldShowWindowReason(spot, among: vm.recommendations) {
@@ -999,17 +1007,17 @@ struct SpotDetailView: View {
                         }
                         if !spot.conditions.isEmpty {
                             Card {
-                                Text("Conditions during your session").bold().foregroundStyle(CatchCheckColor.navy)
+                                Text("Conditions").bold().foregroundStyle(CatchCheckColor.navy)
                                 WindowConditions(spot: spot)
                             }
                         }
-                        if !spot.warnings.isEmpty {
+                        if !spot.warnings.isEmpty && spot.assessment == nil {
                             Card {
                                 Text("Check before you go").bold().foregroundStyle(CatchCheckColor.navy)
                                 WindowWarnings(warnings: spot.warnings)
                             }
                         }
-                        if !spot.sourceNote.isEmpty {
+                        if !spot.sourceNote.isEmpty && spot.assessment == nil {
                             Text(spot.sourceNote).font(.caption).foregroundStyle(.secondary)
                         }
                     } else {
@@ -1050,6 +1058,7 @@ struct RecommendationCard: View {
                     Text("\(spot.area) · \(spot.boat ? "Boat" : "Land")").font(.subheadline).foregroundStyle(.secondary)
                     if !spot.time.isEmpty {
                         WindowOutlook(outlook: spot.windowOutlook)
+                        WindowChecks(spot: spot, showDetails: false)
                     }
                     if !spot.time.isEmpty { Text(spot.time).font(.headline) }
                     Text(spot.distance).font(.caption).foregroundStyle(.secondary)
@@ -1068,7 +1077,7 @@ struct RecommendationCard: View {
                         WindowConditions(spot: spot)
                     }
                 }
-                if !spot.warnings.isEmpty {
+                if !spot.warnings.isEmpty && spot.assessment == nil {
                     WindowWarnings(warnings: spot.warnings)
                 }
             }
@@ -1127,6 +1136,18 @@ private struct WindowConditions: View {
     }
 
     var body: some View {
+        if let assessment = spot.assessment {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(assessment.conditions.enumerated()), id: \.offset) { position, condition in
+                    if position > 0 { Divider().padding(.vertical, 6) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(condition.title)  \(condition.value)").font(.subheadline)
+                            .foregroundStyle(CatchCheckColor.navy).fixedSize(horizontal: false, vertical: true)
+                        Text("\(condition.mood.emoji) \(condition.mood.label)").font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        } else {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(indices.enumerated()), id: \.element) { position, index in
                 if position > 0 { Divider().padding(.vertical, 8) }
@@ -1142,6 +1163,60 @@ private struct WindowConditions: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+        }
+    }
+}
+
+private struct WindowChecks: View {
+    let spot: Recommendation
+    var showDetails = true
+    var body: some View {
+        if let assessment = spot.assessment {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(assessment.checks.emoji) \(assessment.checks.label)")
+                Text("\(assessment.confidence.emoji) \(assessment.confidence.label)")
+                if assessment.comfortComplete && !assessment.matchesComfort { Text("Outside your comfort preference").foregroundStyle(CatchCheckColor.orange) }
+                if showDetails {
+                    DisclosureGroup("Details & sources") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(assessment.details, id: \.self) { Text($0) }
+                            if !spot.sourceNote.isEmpty { Text(spot.sourceNote) }
+                        }.padding(.top, 6).foregroundStyle(.secondary)
+                    }
+                }
+            }.font(.caption)
+        }
+    }
+}
+
+private struct LandOptions: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    var body: some View {
+        DisclosureGroup("Shore options") {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("Your shore setting", selection: $vm.landPreferences.setting) {
+                    ForEach(ShoreSetting.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                Picker("Comfort limit", selection: $vm.landPreferences.maxBand) {
+                    ForEach(0...3, id: \.self) { Text("\(comfortMood($0).emoji) \(comfortMood($0).label)").tag($0) }
+                }
+                Picker("Prefer", selection: $vm.landPreferences.priority) {
+                    ForEach(LandPriority.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                Picker("Access + setup", selection: $vm.landPreferences.arrivalMinutes) {
+                    Text("Not set").tag(Optional<Int>.none)
+                    ForEach([0, 15, 30, 60, 120, 180], id: \.self) { Text("\($0) min").tag(Optional($0)) }
+                }
+                Picker("Return", selection: $vm.landPreferences.returnMinutes) {
+                    Text("Not set").tag(Optional<Int>.none)
+                    ForEach([0, 15, 30, 60, 120, 180], id: \.self) { Text("\($0) min").tag(Optional($0)) }
+                }
+                Toggle("Whole visit in daylight", isOn: $vm.landPreferences.daylightOnly)
+                if vm.landPreferences.daylightOnly && (vm.landPreferences.arrivalMinutes == nil || vm.landPreferences.returnMinutes == nil) {
+                    Text("Set access/setup and return time.").font(.caption).foregroundStyle(.secondary)
+                }
+            }.padding(.top, 8)
         }
     }
 }

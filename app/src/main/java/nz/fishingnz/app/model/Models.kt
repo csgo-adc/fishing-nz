@@ -14,8 +14,42 @@ data class SearchOrigin(val name: String, val point: GeoPoint)
 data class PreferredTimeRange(val start: LocalTime, val end: LocalTime)
 enum class WindowPriority {
     WEATHER, LATE_INCOMING;
-    fun label(boat: Boolean) = if (this == LATE_INCOMING) "Late incoming tide" else if (boat) "Wave comfort" else "Weather balance"
+    fun label(boat: Boolean) = if (this == LATE_INCOMING) "Late incoming tide" else if (boat) "Wave comfort" else "Comfort"
 }
+enum class ShoreSetting(val label: String) { UNKNOWN("Not set"), WHARF("Wharf"), BANK("Harbour bank"), BEACH("Beach"), ROCKS("Rocks") }
+enum class LandPriority(val label: String) { BALANCED("Comfort"), CASTING("Easier casting"), DRY("Less rain") }
+data class LandPreferences(
+    val setting: ShoreSetting = ShoreSetting.UNKNOWN,
+    val priority: LandPriority = LandPriority.BALANCED,
+    val maxBand: Int = 1,
+    val arrivalMinutes: Int? = null,
+    val returnMinutes: Int? = null,
+    val daylightOnly: Boolean = false
+)
+data class ConditionItem(val title: String, val value: String, val mood: WindowMood)
+data class WindowAssessment(
+    val mood: WindowMood,
+    val conditions: List<ConditionItem>,
+    val confidence: WindowMood,
+    val checks: WindowMood = WindowMood("🔎", "Local checks needed"),
+    val details: List<String> = emptyList(),
+    val band: Int = 0,
+    val demandingHours: Double = 0.0,
+    val uncomfortableHours: Double = 0.0,
+    val matchesComfort: Boolean = true,
+    val comfortComplete: Boolean = true,
+    val maxWind: Double = 0.0,
+    val maxGust: Double = 0.0,
+    val rainTotal: Double = 0.0,
+    val priority: LandPriority = LandPriority.BALANCED
+)
+fun comfortMood(band: Int) = when (band) {
+    0 -> WindowMood("😌", "Comfortable")
+    1 -> WindowMood("🙂", "Okay")
+    2 -> WindowMood("😕", "Demanding")
+    else -> WindowMood("😣", "Uncomfortable")
+}
+val needsDataMood = WindowMood("❓", "Needs more data")
 data class ScoreFactor(val name: String, val score: Int, val weight: Int, val explanation: String)
 data class Recommendation(
     val name: String,
@@ -40,7 +74,8 @@ data class Recommendation(
     val rankingValue: Double = rating.toDouble(),
     val dataComplete: Boolean = true,
     val daylightFraction: Double = 1.0,
-    val tidePreferenceFit: Double = 0.0
+    val tidePreferenceFit: Double = 0.0,
+    val assessment: WindowAssessment? = null
 )
 /** Subjective planning reactions, never a catch probability or a safety clearance. */
 data class WindowMood(val emoji: String, val label: String)
@@ -53,6 +88,7 @@ private val unknownMood = WindowMood("🤔", "Unverified")
 
 val Recommendation.windowMood: WindowMood
     get() {
+        assessment?.let { return it.mood }
         val serious = warnings.any { warning -> listOf(
             "Strong gusts", "Elevated offshore waves", "Short-period waves", "Long wave periods", "Fog may reduce visibility"
         ).any(warning::startsWith) }

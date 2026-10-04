@@ -306,8 +306,9 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
             "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot." +
                 if (s.boat) " Wave comfort remains the main factor when comparing sessions that fit." else ""
         else if (s.boat) "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
-        else "Compare wind, gusts and rain across complete sessions, preferring daylight within your selected hours.",
+        else "Compare wind, rain and feels-like temperature.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        if (!s.boat) LandOptions(s.landPreferences, vm::setLandPreferences)
         Text("Find windows by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = s.searchLocationMode == SearchLocationMode.NEAR_ME,
@@ -732,6 +733,17 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
 }
 
 @Composable private fun WindowConditions(item: Recommendation) {
+    item.assessment?.let { assessment ->
+        assessment.conditions.forEachIndexed { position, condition ->
+            if (position > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("${condition.title}  ${condition.value}", color = Navy, style = MaterialTheme.typography.bodyMedium)
+                Text("${condition.mood.emoji} ${condition.mood.label}", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        return
+    }
     val labels = listOf("Tide", "Wind", "Rain", "Waves", "Daylight")
     val indices = if (item.boat) listOf(3) + item.conditions.indices.filter { it != 3 } else item.conditions.indices.toList()
     indices.filter { it in item.conditions.indices }.forEachIndexed { position, index ->
@@ -757,13 +769,14 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
             Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             WindowOutlook(item.windowOutlook)
+            WindowChecks(item)
             Text(item.time, color = Navy, fontWeight = FontWeight.SemiBold)
             Text(item.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             if (showWhy) Column(Modifier.fillMaxWidth().background(Seafoam, RoundedCornerShape(12.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("WHY THIS WINDOW", color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                if (!item.dataComplete) Text("Some local forecast data is missing; treat this as a time to investigate.",
+                if (!item.dataComplete && item.assessment == null) Text("Some local forecast data is missing; treat this as a time to investigate.",
                     color = Navy, style = MaterialTheme.typography.bodySmall)
                 Text(windowReason(item).orEmpty(),
                     color = Navy, style = MaterialTheme.typography.bodyMedium)
@@ -773,7 +786,7 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
                 WindowConditions(item)
             }
             val warnings = (item.warnings + listOfNotNull(item.warning)).distinct()
-            if (warnings.isNotEmpty()) Column(
+            if (warnings.isNotEmpty() && item.assessment == null) Column(
                 Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiary.copy(alpha = .10f), RoundedCornerShape(12.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("CHECK BEFORE YOU GO", color = MaterialTheme.colorScheme.tertiary,
@@ -783,6 +796,55 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
                 }
             }
         }
+    }
+}
+@Composable private fun WindowChecks(item: Recommendation) {
+    val assessment = item.assessment ?: return
+    var expanded by rememberSaveable(item.startsAtEpochSeconds, item.name) { mutableStateOf(false) }
+    Text("${assessment.checks.emoji} ${assessment.checks.label}", style = MaterialTheme.typography.labelMedium)
+    Text("${assessment.confidence.emoji} ${assessment.confidence.label}", style = MaterialTheme.typography.labelMedium)
+    if (assessment.comfortComplete && !assessment.matchesComfort) Text("Outside your comfort preference", color = MaterialTheme.colorScheme.tertiary,
+        style = MaterialTheme.typography.labelMedium)
+    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { Text(if (expanded) "Hide details" else "Details & sources") }
+    if (expanded) {
+        assessment.details.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (item.sourceNote.isNotEmpty()) Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable private fun LandOptions(value: LandPreferences, change: (LandPreferences) -> Unit) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { Text(if (expanded) "Hide shore options" else "Shore options") }
+    if (!expanded) return
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text("Your shore setting", fontWeight = FontWeight.SemiBold)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ShoreSetting.entries.forEach { setting -> FilterChip(value.setting == setting, { change(value.copy(setting = setting)) }, label = { Text(setting.label) }) }
+        }
+        Text("Comfort limit", fontWeight = FontWeight.SemiBold)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (0..3).forEach { band -> FilterChip(value.maxBand == band, { change(value.copy(maxBand = band)) }, label = { Text("${comfortMood(band).emoji} ${comfortMood(band).label}") }) }
+        }
+        Text("Prefer", fontWeight = FontWeight.SemiBold)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            LandPriority.entries.forEach { priority -> FilterChip(value.priority == priority, { change(value.copy(priority = priority)) }, label = { Text(priority.label) }) }
+        }
+        listOf("Access + setup" to value.arrivalMinutes, "Return" to value.returnMinutes).forEachIndexed { index, (title, selected) ->
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(null, 0, 15, 30, 60, 120, 180).forEach { minutes ->
+                    FilterChip(selected == minutes, {
+                        change(if (index == 0) value.copy(arrivalMinutes = minutes) else value.copy(returnMinutes = minutes))
+                    }, label = { Text(minutes?.let { "$it min" } ?: "Not set") })
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Whole visit in daylight", Modifier.weight(1f))
+            Switch(value.daylightOnly, { change(value.copy(daylightOnly = it)) })
+        }
+        if (value.daylightOnly && (value.arrivalMinutes == null || value.returnMinutes == null))
+            Text("Set access/setup and return time.", style = MaterialTheme.typography.bodySmall)
     }
 }
 @Composable private fun Metric(label: String, value: String) { Column { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall); Text(value, color = Navy, fontWeight = FontWeight.SemiBold) } }
@@ -901,8 +963,13 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
                     }, color = Navy)
                 }
-                else -> items(s.recommendationSearch?.items ?: emptyList()) {
-                    RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty())) { vm.openSpot(it) }
+                else -> {
+                    val results = s.recommendationSearch?.items.orEmpty()
+                    if (!s.boat && results.isNotEmpty() && results.none { it.assessment?.matchesComfort == true }) item {
+                        Text(if (results.all { it.assessment?.comfortComplete == false }) "More data needed · partial options below"
+                            else "No window meets your comfort preference · alternatives below", color = Orange)
+                    }
+                    items(results) { RecommendationCard(it, showWhy = shouldShowWindowReason(it, results)) { vm.openSpot(it) } }
                 }
             }
             if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); no planning windows are shown for those spots.", color = Orange, style = MaterialTheme.typography.bodySmall) }
@@ -922,12 +989,13 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
             WindowOutlook(spot.windowOutlook)
+            WindowChecks(spot)
             Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (shouldShowWindowReason(spot, reasonPeers)) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Why this window", fontWeight = FontWeight.Bold, color = Navy)
-                    if (!spot.dataComplete) Text("Some local forecast data is missing; treat this as a time to investigate.", color = Navy)
+                    if (!spot.dataComplete && spot.assessment == null) Text("Some local forecast data is missing; treat this as a time to investigate.", color = Navy)
                     Text(windowReason(spot).orEmpty(), color = Navy)
                     spot.alternative?.takeIf { it.isNotBlank() }?.let {
                         Text("Another option", fontWeight = FontWeight.SemiBold, color = Navy)
@@ -945,18 +1013,18 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             }
             if (spot.conditions.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Conditions during your session", fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Conditions", fontWeight = FontWeight.Bold, color = Navy)
                     WindowConditions(spot)
                 }
             }
             val warnings = (spot.warnings + listOfNotNull(spot.warning)).distinct()
-            if (warnings.isNotEmpty()) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiary.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp)) {
+            if (warnings.isNotEmpty() && spot.assessment == null) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiary.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Check before you go", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                     warnings.forEach { Text("${warningMood(it).emoji} $it", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall) }
                 }
             }
-            if (spot.sourceNote.isNotBlank()) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            if (spot.sourceNote.isNotBlank() && spot.assessment == null) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { vm.toggleSaved(spot) }, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Remove saved spot" else "Save spot") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = addToCalendar, onCheckedChange = { addToCalendar = it })

@@ -10,11 +10,49 @@ enum WindowPriority: String, CaseIterable, Identifiable, Sendable {
     case weather, lateIncoming
     var id: String { rawValue }
     var title: String { self == .weather ? "Weather balance" : "Late incoming tide" }
-    func title(boat: Bool) -> String { self == .lateIncoming ? "Late incoming tide" : (boat ? "Wave comfort" : "Weather balance") }
+    func title(boat: Bool) -> String { self == .lateIncoming ? "Late incoming tide" : (boat ? "Wave comfort" : "Comfort") }
 }
+enum ShoreSetting: String, CaseIterable, Sendable {
+    case unknown = "Not set", wharf = "Wharf", bank = "Harbour bank", beach = "Beach", rocks = "Rocks"
+}
+enum LandPriority: String, CaseIterable, Sendable { case balanced = "Comfort", casting = "Easier casting", dry = "Less rain" }
+struct LandPreferences: Equatable, Sendable {
+    var setting: ShoreSetting = .unknown
+    var priority: LandPriority = .balanced
+    var maxBand = 1
+    var arrivalMinutes: Int? = nil
+    var returnMinutes: Int? = nil
+    var daylightOnly = false
+}
+struct ConditionItem: Equatable, Sendable { let title: String; let value: String; let mood: WindowMood }
+struct WindowAssessment: Equatable, Sendable {
+    let mood: WindowMood
+    let conditions: [ConditionItem]
+    let confidence: WindowMood
+    var checks = WindowMood(emoji: "🔎", label: "Local checks needed")
+    var details: [String] = []
+    var band = 0
+    var demandingHours: Double = 0
+    var uncomfortableHours: Double = 0
+    var matchesComfort = true
+    var comfortComplete = true
+    var maxWind: Double = 0
+    var maxGust: Double = 0
+    var rainTotal: Double = 0
+    var priority: LandPriority = .balanced
+}
+func comfortMood(_ band: Int) -> WindowMood {
+    switch band {
+    case 0: WindowMood(emoji: "😌", label: "Comfortable")
+    case 1: WindowMood(emoji: "🙂", label: "Okay")
+    case 2: WindowMood(emoji: "😕", label: "Demanding")
+    default: WindowMood(emoji: "😣", label: "Uncomfortable")
+    }
+}
+let needsDataMood = WindowMood(emoji: "❓", label: "Needs more data")
 
 /// A subjective planning reaction, not a catch probability or safety clearance.
-struct WindowMood {
+struct WindowMood: Equatable, Sendable {
     let emoji: String
     let label: String
 
@@ -44,9 +82,11 @@ struct Recommendation: Identifiable, Equatable {
     var alternative: String? = nil
     var dataComplete: Bool = true
     var tidePreferenceFit: Double = 0
+    var assessment: WindowAssessment? = nil
     var id: String { "\(boat ? "boat" : "land"):\(name)" }
     var windowID: String { "\(id):\(startsAt?.timeIntervalSince1970 ?? 0)" }
     var windowMood: WindowMood {
+        if let assessment { return assessment.mood }
         let seriousWarnings = ["Strong gusts", "Elevated offshore waves", "Short-period waves", "Long-period waves", "Fog may reduce visibility"]
         let serious = warnings.contains { warning in seriousWarnings.contains { warning.hasPrefix($0) } }
         let mixed = warnings.contains { $0.hasPrefix("Part or all of this session is after dark") || $0.hasPrefix("Rain could affect") }
