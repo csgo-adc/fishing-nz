@@ -67,7 +67,7 @@ class RecommendationEngine {
         )
     }
 
-    private fun bestWindows(
+    private suspend fun bestWindows(
         spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int,
         now: Instant, preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean,
         selectedStation: TideStation?, priority: WindowPriority, land: LandPreferences
@@ -76,14 +76,19 @@ class RecommendationEngine {
         val marine = try { marine(spot, forecastDays) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null }
-        val station = recommendationTideStation(spot, selectedStation)
-        val tides = try { station?.let { LinzTideSource.predictions(it, start, end.plusDays(if (mayCrossMidnight) 1 else 0)) }.orEmpty() }
+        val reference = try {
+            loadTideReference(GeoPoint(spot.latitude, spot.longitude), recommendationTideStation(spot, null), selectedStation) {
+                LinzTideSource.predictions(it, start, end.plusDays(if (mayCrossMidnight) 1 else 0))
+            }
+        }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { emptyList() }
+            catch (_: Exception) { null }
+        val station = reference?.station
+        val tides = reference?.value.orEmpty()
         val retrieval = DateTimeFormatter.ofPattern("d MMM, h:mm a z", Locale.US)
         val source = "Weather: Open-Meteo automatic best match, retrieved ${weather.retrievedAt.atZone(zone).format(retrieval)}; forecast grid ${weather.grid}. " +
             (marine?.let { "Offshore waves: Open-Meteo automatic best match, retrieved ${it.retrievedAt.atZone(zone).format(retrieval)}; grid ${it.grid}. " } ?: "Offshore wave data unavailable. ") +
-            (station?.takeIf { tides.isNotEmpty() }?.let { "Tides: LINZ ${it.name}, published NZ local times. " } ?: "No verified local LINZ tide data. ") +
+            (station?.takeIf { tides.isNotEmpty() }?.let { "Tide reference: ${tideReferenceLabel(spot, it)}, published NZ local times. Times and heights are for this station; local timing can differ. " } ?: "No LINZ tide reference data available. ") +
             "Retrieval times are not model issue times. These are planning conditions, not a prediction of catches."
         val hours = weather.hours.filter {
             val day = it.time.atZone(zone).toLocalDate()

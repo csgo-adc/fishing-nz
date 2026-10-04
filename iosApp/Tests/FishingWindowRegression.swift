@@ -74,6 +74,22 @@ import Foundation
         let roundedDay = calendar.date(from: .init(year: 2026, month: 2, day: 27))!
         try rejects({ _ = try LINZTideStore.parse(manaCSV, stationName: "Mana Marina", year: 2026, start: roundedDay, end: roundedDay) }, "Needed equal-height extrema must remain unclassified")
         try rejects({ _ = try LINZTideStore.parse(manaCSV.replacingOccurrences(of: "03:30,1.2", with: "03:30,NaN"), stationName: "Mana Marina", year: 2026, start: waitawaDay, end: waitawaDay) }, "Scoped Mana requests must still reject invalid source heights")
+        let waitawaSpot = fishingSpots.first { $0.name == "Waitawa Wharf" }!
+        let loadedWaitawa = try await loadTideReference(point: waitawaSpot.coordinate, linked: FishingScoringService.matchingStation(for: waitawaSpot)) {
+            try LINZTideStore.parse(manOWarCSV, stationName: $0.csvName, year: 2026, start: waitawaDay, end: waitawaDay)
+        }
+        try expect(loadedWaitawa.station == waitawaReference, "Planner did not automatically load Waitawa's nearby tide reference")
+        func waitawaAt(_ hour: Int) -> Date { calendar.date(bySettingHour: hour, minute: 0, second: 0, of: waitawaDay)! }
+        let waitawaHours = (12...14).map { WeatherHour(time: waitawaAt($0), wind: 5, gust: 10, precipitation: 0, rainProbability: 0, code: 0, feelsLike: 16) }
+        let waitawaWaves = Dictionary(uniqueKeysWithValues: waitawaHours.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: 1, period: 8)) })
+        let waitawaWindow = FishingScoringService.evaluate(samples: waitawaHours, spot: waitawaSpot, distanceKm: 0, isTideStation: false,
+            solar: [waitawaDay: SolarDay(sunrise: waitawaAt(7), sunset: waitawaAt(19))], marineHours: waitawaWaves,
+            tides: loadedWaitawa.value, tideStation: loadedWaitawa.station, now: waitawaAt(0), calendar: calendar, priority: .lateIncoming, sourceNote: "Test")!
+        let waitawaRow = waitawaWindow.assessment!.conditions.first { $0.title == "Tide" }!
+        try expect(waitawaRow.mood.label == "Late incoming" && waitawaWindow.tidePreferenceFit >= 0.8, "Waitawa reference was not used for late incoming selection")
+        try expect(waitawaRow.value.contains("2:53 PM") && waitawaRow.value.contains("3.0 m CD"), "Waitawa window omitted published tide events")
+        try expect(waitawaRow.value.contains("LINZ Man o‘War Bay · 14.5 km away"), "Waitawa window must identify the actual nearby reference")
+        try expect(!waitawaWindow.assessment!.details.contains("Local tide coverage unverified."), "Loaded Waitawa tides still show unverified")
         if CommandLine.arguments.contains("--live-tides") {
             let store = LINZTideStore()
             let liveThames = try await store.predictions(stationName: "Thames", start: octoberDay, end: octoberDay)
@@ -83,7 +99,11 @@ import Foundation
             try expect(cachedTomorrow.contains { calendar.isDate($0.time, inSameDayAs: tomorrow) }, "Cached annual table must serve another date")
             let liveWaitawa = try await store.predictions(stationName: waitawaReference.csvName, start: waitawaDay, end: waitawaDay)
             try expect(liveWaitawa.map(\.height) == waitawaTides.map(\.height) && liveWaitawa.map(\.time) == waitawaTides.map(\.time), "Live Waitawa reference differs from the original fixture")
-            print("Live Thames and Waitawa reference tide levels and cached date changes passed.")
+            let plannerDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: .now))!
+            let liveWindows = try await FishingScoringService().rank(origin: waitawaSpot.coordinate, radiusKm: 1, days: [plannerDay], boat: false, preferredHours: nil)
+            try expect(!liveWindows.isEmpty && liveWindows.allSatisfy { $0.spotName == "Waitawa Wharf" }, "Live planner did not return Waitawa windows")
+            try expect(liveWindows.allSatisfy { $0.assessment?.conditions.first(where: { $0.title == "Tide" })?.value.contains("LINZ Man o‘War Bay · 14.5 km away") == true }, "Live planner failed to populate the nearby tide reference")
+            print("Live Thames and Waitawa tides, cached date changes and Waitawa fishing windows passed.")
         }
         var weather = try JSONDecoder().decode(WeatherPayload.self, from: Data(contentsOf: fixture.appendingPathComponent("weather.json")))
         var marine = try JSONDecoder().decode(MarinePayload.self, from: Data(contentsOf: fixture.appendingPathComponent("marine.json")))

@@ -265,7 +265,7 @@ struct FishingScoringService: Sendable {
         }
     }
 
-    // No nearest-station fallback: coastal proximity does not establish tidal connectivity.
+    // Finds an exact link; loadTideReference supplies automatic nearby references.
     static func matchingStation(for spot: FishingSpot) -> TideStation? {
         let name = spot.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_NZ"))
         return tideStations.first {
@@ -277,22 +277,26 @@ struct FishingScoringService: Sendable {
     private static func scoreSpot(_ candidate: Candidate, days: Set<Date>, forecastDays: Int, now: Date,
                                   calendar: Calendar, preferredHours: PreferredFishingHours?, priority: WindowPriority, land: LandPreferences) async -> SpotOutcome {
         let marineTask = Task { try? await fetchMarine(at: candidate.spot.coordinate, forecastDays: forecastDays) }
-        let tideTask = Task { await loadTides(station: candidate.tideStation, days: days, calendar: calendar) }
+        let tideTask = Task { await loadTides(candidate: candidate, days: days, calendar: calendar) }
         defer { marineTask.cancel(); tideTask.cancel() }
         do {
             let weather = try await fetchWeather(at: candidate.spot.coordinate, boat: candidate.spot.boat, forecastDays: forecastDays)
             let marine = await marineTask.value
-            let tides = await tideTask.value
-            let result = bestWindows(for: candidate, weather: weather, marine: marine, tides: tides, days: days,
+            let reference = await tideTask.value
+            let resolved = Candidate(spot: candidate.spot, distanceKm: candidate.distanceKm, isTideStation: candidate.isTideStation, tideStation: reference?.station)
+            let result = bestWindows(for: resolved, weather: weather, marine: marine, tides: reference?.value ?? [], days: days,
                                      now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land)
             return .forecastAvailable(result.windows, result.hasUsableWeather)
         } catch { return .forecastFailed }
     }
 
-    private static func loadTides(station: TideStation?, days: Set<Date>, calendar: Calendar) async -> [LINZTidePrediction] {
-        guard let station, let start = days.min(), let lastDay = days.max(),
-              let end = calendar.date(byAdding: .day, value: 1, to: lastDay) else { return [] }
-        return (try? await LINZTideStore.shared.predictions(stationName: station.csvName, start: start, end: end)) ?? []
+    private static func loadTides(candidate: Candidate, days: Set<Date>, calendar: Calendar) async -> TideReference<[LINZTidePrediction]>? {
+        guard let start = days.min(), let lastDay = days.max(),
+              let end = calendar.date(byAdding: .day, value: 1, to: lastDay) else { return nil }
+        return try? await loadTideReference(point: candidate.spot.coordinate, linked: candidate.tideStation,
+                                            selected: candidate.isTideStation ? candidate.tideStation : nil) {
+            try await LINZTideStore.shared.predictions(stationName: $0.csvName, start: start, end: end)
+        }
     }
 
     static func bestWindows(for candidate: Candidate, weather: WeatherPayload, marine: MarinePayload?, tides: [LINZTidePrediction],
@@ -324,7 +328,7 @@ struct FishingScoringService: Sendable {
             guard let result = evaluate(samples: samples, spot: candidate.spot, distanceKm: candidate.distanceKm,
                                         isTideStation: candidate.isTideStation, solar: solar, marineHours: marineHours,
                                         tides: tides, tideStation: candidate.tideStation, now: now, calendar: calendar,
-                                        priority: priority, sourceNote: sourceNote(weather: weather, marine: marine,
+                                        priority: priority, sourceNote: sourceNote(spot: candidate.spot, weather: weather, marine: marine,
                                                                                 station: tides.isEmpty ? nil : candidate.tideStation),
                                         land: land, allHours: hours, retrievedAt: weather.retrievedAt) else { continue }
             byDay[day, default: []].append(result)
@@ -488,9 +492,10 @@ struct FishingScoringService: Sendable {
         func high(_ index: Int) -> Bool { [index-1, index+1].filter { tides.indices.contains($0) }.allSatisfy { tides[index].height > tides[$0].height } }
         let eventIndex = tides.indices.first { tides[$0].time >= start && tides[$0].time <= end }
             ?? tides.indices.first { tides[$0].time > start && high($0) }
-        let tideValue = tideFacts.complete ? eventIndex.map { index in
+        var tideValue = tideFacts.complete ? eventIndex.map { index in
             "\(tides[index].time > end ? "Next " : "")\(high(index) ? "high" : "low") \(clock(tides[index].time)) · \(String(format: "%.1f", tides[index].height)) m CD"
         } ?? "—" : "—"
+        if tideFacts.complete, let tideStation { tideValue += "\n" + tideReferenceLabel(spot: spot, station: tideStation) }
         let choppy = marineSamples.contains { ($0?.wave ?? 0) >= 0.5 && ($0?.period ?? 99) <= 5 }
         let rows: [ConditionItem] = [
             .init(title: "Offshore waves", value: worstWave.map { "\(String(format: "%.1f", $0)) m · \(range(periods, decimals: 1)) s" } ?? "—",
@@ -505,6 +510,7 @@ struct FishingScoringService: Sendable {
         let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "🤔", label: "Limited confidence")
         var details = warnings + ["Waves lead boat ranking. Feels-like temperature limits the outlook and breaks comfort ties. Route, vessel response, model timing, agreement and return conditions unchecked. CD = Chart Datum.",
             "Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period."]
+        if tideFacts.complete { details.append("Tide times and heights are for the named reference station; local timing can differ.") }
         if temperature.count != 3 { details.append("Feels-like temperature coverage incomplete.") }
         if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }
         let assessment = WindowAssessment(mood: complete ? comfortMood(comfortBand) : needsDataMood,
@@ -575,13 +581,13 @@ struct FishingScoringService: Sendable {
         return clamp(daylight / end.timeIntervalSince(start))
     }
 
-    private static func sourceNote(weather: WeatherPayload, marine: MarinePayload?, station: TideStation?) -> String {
+    private static func sourceNote(spot: FishingSpot, weather: WeatherPayload, marine: MarinePayload?, station: TideStation?) -> String {
         let weatherGrid = String(format: "%.4f, %.4f", weather.latitude, weather.longitude)
         var text = "Open-Meteo best-match weather grid \(weatherGrid); retrieved \(stamp(weather.retrievedAt)) NZ time."
         if let marine {
             text += String(format: " Marine grid %.4f, %.4f; retrieved %@.", marine.latitude, marine.longitude, stamp(marine.retrievedAt))
         }
-        text += station.map { " Tide reference: LINZ \($0.name), published local times (NZST/NZDT)." } ?? " No verified LINZ station match."
+        text += station.map { " Tide reference: \(tideReferenceLabel(spot: spot, station: $0)), published local times (NZST/NZDT). Times and heights are for this station; local timing can differ." } ?? " No LINZ tide reference data available."
         return text + " Retrieval time is not the forecast model's issue time."
     }
 
@@ -843,9 +849,10 @@ enum LandAssessment {
                 if !directions.contains(label) { directions.append(label) }
             }
         }
-        let tideValue = tideFacts.complete ? eventIndex.map { index in
+        var tideValue = tideFacts.complete ? eventIndex.map { index in
             "\(turns.isEmpty ? "Next " : "")\(high(index) ? "high" : "low") \(time(tides[index].time)) · \(String(format: "%.1f", tides[index].height)) m CD"
         } ?? "—" : "—"
+        if tideFacts.complete, let station { tideValue += "\n" + tideReferenceLabel(spot: spot, station: station) }
         let waveFeeling: String = preferences.setting == .rocks ? "Check surge" : preferences.setting == .beach ? "Check surf" : "Check exposure"
         let rows: [ConditionItem] = [
             .init(title: "Wind", value: "\(Int(maxWind.rounded())) km/h · gust \(Int(maxGust.rounded()))\(directions.isEmpty ? "" : " · " + directions.joined(separator: "/"))", mood: winds.contains(where: { $0 == nil }) || gusts.contains(where: { $0 == nil }) ? needsDataMood : comfortMood(windGrade)),
@@ -870,6 +877,7 @@ enum LandAssessment {
         if !completeWeather { details.append("Visit weather coverage incomplete; displayed amounts use available samples.") }
         if !completeTemperature { details.append("Feels-like temperature coverage incomplete.") }
         if !tideFacts.complete { details.append("Local tide coverage unverified.") }
+        else { details.append("Tide times and heights are for the named reference station; local timing can differ.") }
         if !completeMarine { details.append("Offshore wave coverage incomplete.") }
         if probabilities.count != intervals.count { details.append("Rain likelihood incomplete.") }
         if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }

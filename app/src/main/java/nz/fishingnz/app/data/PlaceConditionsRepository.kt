@@ -13,9 +13,7 @@ data class ConditionPlace(val name: String, val point: GeoPoint, val region: Str
                           val boat: Boolean = false, val station: TideStation? = null) {
     val id get() = "$name:${point.latitude}:${point.longitude}"
     val initialTideStation get() = station ?: nearestTideStation(point)
-    val tideCandidates get() = (listOfNotNull(station) + tideStations.sortedBy {
-        placeDistanceKm(point, GeoPoint(it.latitude, it.longitude))
-    }).distinctBy { it.id }.take(3)
+    val tideCandidates get() = nearbyTideStations(point, station)
 }
 
 data class PlaceTide(val station: TideStation, val tide: TideState)
@@ -23,15 +21,8 @@ data class PlaceTide(val station: TideStation, val tide: TideState)
 /** Automatic references try up to three nearest stations; a manual choice remains explicit. */
 internal suspend fun loadPlaceTide(place: ConditionPlace, selected: TideStation?, date: LocalDate,
                                   load: suspend (TideStation, LocalDate) -> TideState): PlaceTide {
-    val candidates = selected?.let(::listOf) ?: place.tideCandidates
-    var failure: Exception? = null
-    for (station in candidates) {
-        currentCoroutineContext().ensureActive()
-        try { return PlaceTide(station, load(station, date)) }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { failure = error }
-    }
-    throw failure ?: IllegalStateException("No nearby LINZ tide stations.")
+    val reference = loadTideReference(place.point, place.station, selected) { load(it, date) }
+    return PlaceTide(reference.station, reference.value)
 }
 data class PlaceWeatherHour(val at: Instant, val temperature: Double?, val feelsLike: Double?,
     val wind: Double?, val gust: Double?, val direction: Double?, val rain: Double?, val chance: Double?,

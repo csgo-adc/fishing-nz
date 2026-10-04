@@ -1,5 +1,6 @@
 package nz.fishingnz.app.data
 
+import kotlinx.coroutines.runBlocking
 import nz.fishingnz.app.model.*
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -23,6 +24,26 @@ class WindowEvaluationTest {
                              priority: WindowPriority = WindowPriority.WEATHER) =
         WindowEvaluation.evaluate(spot.copy(boat = true), 0.0, hours, waves, solar, tides, station, now, "Frozen test", priority)
     private fun resource(path: String) = checkNotNull(javaClass.getResourceAsStream(path)).bufferedReader().use { it.readText() }
+
+    @Test fun waitawaWindowsUseNearbyReferenceInsteadOfUnverifiedTides() = runBlocking {
+        val waitawa = fishingSpots.first { it.name == "Waitawa Wharf" }
+        val day = LocalDate.of(2026, 10, 5)
+        val reference = loadTideReference(GeoPoint(waitawa.latitude, waitawa.longitude), recommendationTideStation(waitawa, null)) {
+            LinzTideSource.parse(resource("/tides/man-owar-bay-2026.csv"), it, 2026, day, day)
+        }
+        assertEquals("man_owar_bay", reference.station.id)
+        fun at(hour: Int) = day.atTime(hour, 0).atZone(WindowEvaluation.zone).toInstant()
+        val hours = (12..14).map { ForecastHour(at(it), 5.0, 10.0, 0.0, 0.0, 0, feelsLike = 16.0) }
+        val result = checkNotNull(WindowEvaluation.evaluate(waitawa, 0.0, hours, marine(hours),
+            mapOf(day to DaylightPeriod(at(7), at(19))), reference.value, reference.station,
+            at(0), "Test", WindowPriority.LATE_INCOMING))
+        val row = result.assessment!!.conditions.first { it.title == "Tide" }
+        assertEquals("Late incoming", row.mood.label)
+        assertTrue(row.value.contains("2:53 PM") && row.value.contains("3.0 m CD"))
+        assertTrue(row.value.contains("LINZ Man o‘War Bay · 14.5 km away"))
+        assertFalse(result.assessment.details.contains("Local tide coverage unverified."))
+        assertTrue(result.tidePreferenceFit >= .8)
+    }
 
     @Test fun precedingHourRainAndGustUseEightAndNineNotSeven() {
         val hours = samples().mapIndexed { i, hour -> hour.copy(gust = if (i == 0) 90.0 else 14.0, rain = if (i == 0) 20.0 else .25) }

@@ -185,13 +185,14 @@ internal object WindowEvaluation {
             worstWave != null && worstWave >= 1.2 -> WindowMood("🌊", "More motion")
             else -> WindowMood("🌊", "Lower waves")
         }
+        val tideValue = if (completeTides && event != null) "${if (event.at > end) "Next " else ""}${if (event.high) "high" else "low"} ${eventTime(event.at, start)} · ${"%.1f".format(Locale.US, event.height)} m CD\n${tideReferenceLabel(spot, station!!)}" else "—"
         val rows = listOf(
             ConditionItem("Offshore waves", worstWave?.let { "${"%.1f".format(Locale.US, it)} m · ${range(periods, 1)} s" } ?: "—", waveMood),
             ConditionItem("Wind", "${maxWind.roundToInt()} km/h · gust ${maxGust.roundToInt()}${if (windDirections.isEmpty()) "" else " · $windDirections"}", comfortMood(LandAssessment.windBand(maxWind, maxGust))),
             ConditionItem("Rain", "${"%.1f".format(Locale.US, totalRain)} mm · peak ${"%.1f".format(Locale.US, peakRain)} mm/h · ${rainProbability.roundToInt()}% hourly", WindowMood(if (peakRain > .2) "🌧️" else if (rainProbability >= 60) "🌦️" else "🌤️", if (peakRain > .8) "Wet" else if (totalRain > 0) "Light rain" else if (rainProbability >= 60) "Rain possible" else "Mostly dry")),
             ConditionItem("Feels like", if (temperature.isEmpty()) "—" else "${range(temperature, 0)}°C",
                 if (temperature.size != 3) needsDataMood else if (temperature.min() < 12) WindowMood("🥶", "Cold") else if (temperature.max() > 26) WindowMood("🥵", "Hot") else WindowMood("😌", "Mild")),
-            ConditionItem("Tide", if (completeTides && event != null) "${if (event.at > end) "Next " else ""}${if (event.high) "high" else "low"} ${eventTime(event.at, start)} · ${"%.1f".format(Locale.US, event.height)} m CD" else "—", if (!completeTides) needsDataMood else WindowMood("🕒", "Tide timing")),
+            ConditionItem("Tide", tideValue, if (!completeTides) needsDataMood else WindowMood("🕒", "Tide timing")),
             ConditionItem("Daylight", "${(daylight * 100).roundToInt()}% session", WindowMood(if (daylight == 1.0) "🌞" else "🌙", if (daylight == 1.0) "Daylight" else "After dark"))
         )
         val age = Duration.between(now, start).seconds
@@ -202,6 +203,7 @@ internal object WindowEvaluation {
             details = warnings + buildList {
                 add("Waves lead boat ranking. Feels-like temperature limits the outlook and breaks comfort ties. Route, vessel response, model timing, agreement and return conditions unchecked. CD = Chart Datum.")
                 add("Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period.")
+                if (completeTides) add("Tide times and heights are for the named reference station; local timing can differ.")
                 if (temperature.size != 3) add("Feels-like temperature coverage incomplete.")
                 if (retrievedAt == null || Duration.between(retrievedAt, now).seconds > 3 * 3600) add("Forecast freshness unverified or older than 3 hours.")
             })

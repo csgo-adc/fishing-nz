@@ -127,12 +127,13 @@ internal object LandAssessment {
             fun f(value: Double) = String.format(Locale.US, "%.$decimals" + "f", value)
             return if (f(min) == f(max)) f(min) else "${f(min)}–${f(max)}"
         }
+        val tideValue = if (tideComplete && event != null) "${if (turn == null) "Next " else ""}${if (event.high) "high" else "low"} ${time(event.at)} · ${"%.1f".format(Locale.US, event.height)} m CD\n${tideReferenceLabel(spot, station!!)}" else "—"
         val rows = listOf(
             ConditionItem("Wind", "${maxWind.roundToInt()} km/h · gust ${maxGust.roundToInt()}${if (directions.isNotEmpty()) " · $directions" else ""}", if (winds.any { it == null } || gusts.any { it == null }) needsDataMood else comfortMood(windBand)),
             ConditionItem("Rain", "${"%.1f".format(Locale.US, totalRain)} mm · peak ${"%.1f".format(Locale.US, peakRain)} mm/h · ${probability?.let { "${it.roundToInt()}% hourly" } ?: "chance —"}",
                 if (covered != duration || rain.any { it == null }) needsDataMood else WindowMood(if (peakRain > .2) "🌧️" else if ((probability ?: 0.0) >= 60) "🌦️" else "🌤️", if (peakRain > .8) "Wet" else if (peakRain > 0) "Light rain" else if ((probability ?: 0.0) >= 60) "Rain possible" else "Mostly dry")),
             ConditionItem("Feels like", if (temps.isEmpty()) "—" else "${range(temps)}°C", if (!completeTemperature) needsDataMood else if (temps.min() < 12) WindowMood("🥶", "Cold") else if (temps.max() > 26) WindowMood("🥵", "Hot") else WindowMood("😌", "Mild")),
-            ConditionItem("Tide", if (tideComplete && event != null) "${if (turn == null) "Next " else ""}${if (event.high) "high" else "low"} ${time(event.at)} · ${"%.1f".format(Locale.US, event.height)} m CD" else "—", tideMood),
+            ConditionItem("Tide", tideValue, tideMood),
             ConditionItem("Offshore waves", if (waves.isEmpty()) "—" else "${"%.1f".format(Locale.US, waves.max())} m · ${range(periods, 1)} s", if (!completeMarine) needsDataMood else WindowMood("🌊", when (preferences.setting) { ShoreSetting.ROCKS -> "Check surge"; ShoreSetting.BEACH -> "Check surf"; else -> "Check exposure" })),
             ConditionItem("Daylight", daylight?.let { "${(it * 100).roundToInt()}% ${if (visitKnown) "visit" else if (arrival != null || returning != null) "known time" else "session"}" } ?: "—", when {
                 daylight == null -> needsDataMood
@@ -149,6 +150,7 @@ internal object LandAssessment {
             if (!completeWeather) add("Visit weather coverage incomplete; displayed amounts use available samples.")
             if (!completeTemperature) add("Feels-like temperature coverage incomplete.")
             if (!tideComplete) add("Local tide coverage unverified.")
+            else add("Tide times and heights are for the named reference station; local timing can differ.")
             if (!completeMarine) add("Offshore wave coverage incomplete.")
             if (probabilities.size != intervals.size) add("Rain likelihood incomplete.")
             if (retrievedAt == null || Duration.between(retrievedAt, now).seconds > 3 * 3600) add("Forecast freshness unverified or older than 3 hours.")

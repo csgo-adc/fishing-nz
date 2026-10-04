@@ -5,6 +5,42 @@ struct LINZTidePrediction: Sendable {
     let height: Double
 }
 
+func placeDistanceKm(_ a: GeoPoint, _ b: GeoPoint) -> Double {
+    let lat = (b.latitude - a.latitude) * .pi / 180, lon = (b.longitude - a.longitude) * .pi / 180
+    let h = pow(sin(lat / 2), 2) + cos(a.latitude * .pi / 180) * cos(b.latitude * .pi / 180) * pow(sin(lon / 2), 2)
+    return 6371 * 2 * asin(sqrt(min(1, max(0, h))))
+}
+
+struct TideReference<Value> { let station: TideStation; let value: Value }
+extension TideReference: Sendable where Value: Sendable {}
+
+func nearbyTideStations(point: GeoPoint, linked: TideStation? = nil) -> [TideStation] {
+    let nearby = tideStations.sorted {
+        placeDistanceKm(point, .init(latitude: $0.latitude, longitude: $0.longitude)) <
+            placeDistanceKm(point, .init(latitude: $1.latitude, longitude: $1.longitude))
+    }
+    return Array(((linked.map { [$0] } ?? []) + nearby.filter { $0.id != linked?.id }).prefix(3))
+}
+
+/// Shared by map conditions and fishing windows; manual references do not silently switch.
+func loadTideReference<Value>(point: GeoPoint, linked: TideStation? = nil, selected: TideStation? = nil,
+                              isolation: isolated (any Actor)? = #isolation,
+                              load: (TideStation) async throws -> Value) async throws -> TideReference<Value> {
+    let candidates = selected.map { [$0] } ?? nearbyTideStations(point: point, linked: linked)
+    var failure: Error = TideDataError.noPredictions
+    for station in candidates {
+        try Task.checkCancellation()
+        do { return TideReference(station: station, value: try await load(station)) }
+        catch { if Task.isCancelled || error is CancellationError { throw CancellationError() }; failure = error }
+    }
+    throw failure
+}
+
+func tideReferenceLabel(spot: FishingSpot, station: TideStation) -> String {
+    let distance = placeDistanceKm(spot.coordinate, .init(latitude: station.latitude, longitude: station.longitude))
+    return "LINZ \(station.name)" + (distance >= 0.1 ? String(format: " · %.1f km away", distance) : "")
+}
+
 enum TideDataError: LocalizedError {
     case noPredictions, invalidSource
     var errorDescription: String? { "LINZ tide predictions could not be verified for this station and date." }

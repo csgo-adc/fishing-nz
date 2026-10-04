@@ -303,7 +303,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                 onClick = { vm.setWindowPriority(WindowPriority.LATE_INCOMING) }, label = { Text("Late incoming tide") })
         }
         Text(if (s.preference == WindowPriority.LATE_INCOMING)
-            "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot." +
+            "Focus on the last part of the incoming tide, around high water, using the shown LINZ reference station. Tide timing at your spot can differ; this does not guarantee better fishing." +
                 if (s.boat) " Wave comfort remains the main factor when comparing sessions that fit." else ""
         else if (s.boat) "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
         else "Compare wind, rain and feels-like temperature.",

@@ -437,7 +437,7 @@ private struct PlanningSheet: View {
                             Text("Late incoming tide").tag(WindowPriority.lateIncoming)
                         }.pickerStyle(.segmented)
                         Text(vm.preference == .lateIncoming
-                             ? "Focus on the last part of the incoming tide, around high water. This needs verified local tide times; it does not guarantee better fishing for every species or spot." + (vm.isBoatFishing ? " Wave comfort remains the main factor when comparing sessions that fit." : "")
+                             ? "Focus on the last part of the incoming tide, around high water, using the shown LINZ reference station. Tide timing at your spot can differ; this does not guarantee better fishing." + (vm.isBoatFishing ? " Wave comfort remains the main factor when comparing sessions that fit." : "")
                              : (vm.isBoatFishing
                                 ? "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
                                 : "Compare wind, rain and feels-like temperature."))

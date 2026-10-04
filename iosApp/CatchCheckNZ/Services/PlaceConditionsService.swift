@@ -1,11 +1,5 @@
 import Foundation
 
-func placeDistanceKm(_ a: GeoPoint, _ b: GeoPoint) -> Double {
-    let lat = (b.latitude - a.latitude) * .pi / 180, lon = (b.longitude - a.longitude) * .pi / 180
-    let h = pow(sin(lat / 2), 2) + cos(a.latitude * .pi / 180) * cos(b.latitude * .pi / 180) * pow(sin(lon / 2), 2)
-    return 6371 * 2 * asin(sqrt(min(1, max(0, h))))
-}
-
 struct ConditionPlace: Identifiable, Sendable {
     let name: String
     let point: GeoPoint
@@ -19,13 +13,7 @@ struct ConditionPlace: Identifiable, Sendable {
                 placeDistanceKm(point, GeoPoint(latitude: $1.latitude, longitude: $1.longitude))
         }
     }
-    var tideCandidates: [TideStation] {
-        let nearby = tideStations.sorted {
-            placeDistanceKm(point, GeoPoint(latitude: $0.latitude, longitude: $0.longitude)) <
-                placeDistanceKm(point, GeoPoint(latitude: $1.latitude, longitude: $1.longitude))
-        }
-        return Array(((station.map { [$0] } ?? []) + nearby.filter { $0.id != station?.id }).prefix(3))
-    }
+    var tideCandidates: [TideStation] { nearbyTideStations(point: point, linked: station) }
 }
 
 struct PlaceTide { let station: TideStation; let tide: TideState }
@@ -34,14 +22,8 @@ struct PlaceTide { let station: TideStation; let tide: TideState }
 func loadPlaceTide(place: ConditionPlace, selected: TideStation?, date: Date,
                    isolation: isolated (any Actor)? = #isolation,
                    load: (TideStation, Date) async throws -> TideState) async throws -> PlaceTide {
-    let candidates = selected.map { [$0] } ?? place.tideCandidates
-    var failure: Error = TideDataError.noPredictions
-    for station in candidates {
-        try Task.checkCancellation()
-        do { return PlaceTide(station: station, tide: try await load(station, date)) }
-        catch { if Task.isCancelled || error is CancellationError { throw CancellationError() }; failure = error }
-    }
-    throw failure
+    let reference = try await loadTideReference(point: place.point, linked: place.station, selected: selected) { try await load($0, date) }
+    return PlaceTide(station: reference.station, tide: reference.value)
 }
 struct PlaceWeatherHour: Sendable, Identifiable {
     let at: Date

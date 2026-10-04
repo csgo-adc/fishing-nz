@@ -1,6 +1,10 @@
 package nz.fishingnz.app.data
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import nz.fishingnz.app.model.FishingSpot
+import nz.fishingnz.app.model.GeoPoint
 import nz.fishingnz.app.model.TideStation
 import nz.fishingnz.app.model.tideStations
 import java.net.HttpURLConnection
@@ -18,6 +22,31 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Official high/low prediction, in metres above the station's chart datum. */
 data class LinzPrediction(val at: Instant, val height: Double, val high: Boolean)
+
+internal data class TideReference<T>(val station: TideStation, val value: T)
+
+internal fun nearbyTideStations(point: GeoPoint, linked: TideStation? = null): List<TideStation> =
+    (listOfNotNull(linked) + tideStations.sortedBy { placeDistanceKm(point, GeoPoint(it.latitude, it.longitude)) })
+        .distinctBy { it.id }.take(3)
+
+/** Shared by map conditions and fishing windows; manual references do not silently switch. */
+internal suspend fun <T> loadTideReference(point: GeoPoint, linked: TideStation? = null, selected: TideStation? = null,
+                                          load: suspend (TideStation) -> T): TideReference<T> {
+    val candidates = selected?.let(::listOf) ?: nearbyTideStations(point, linked)
+    var failure: Exception? = null
+    for (station in candidates) {
+        currentCoroutineContext().ensureActive()
+        try { return TideReference(station, load(station)) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { failure = error }
+    }
+    throw failure ?: IllegalStateException("No nearby LINZ tide stations.")
+}
+
+internal fun tideReferenceLabel(spot: FishingSpot, station: TideStation): String {
+    val distance = placeDistanceKm(GeoPoint(spot.latitude, spot.longitude), GeoPoint(station.latitude, station.longitude))
+    return "LINZ ${station.name}" + if (distance >= .1) " · ${String.format(Locale.US, "%.1f", distance)} km away" else ""
+}
 
 /** One source for the Tide screen and recommendation explanations. Call from an IO dispatcher. */
 object LinzTideSource {
@@ -178,7 +207,7 @@ private fun matchesTideHeader(header: String, filename: String): Boolean {
     return actual == expected || actual == aliases[expected]
 }
 
-/** Only selected or explicitly identified stations; geographic proximity cannot establish tidal compatibility. */
+/** Finds an exact station link; loadTideReference supplies automatic nearby references. */
 fun recommendationTideStation(spot: FishingSpot, selected: TideStation?): TideStation? {
     if (selected != null) return selected
     val name = tideIdentity(spot.name)
