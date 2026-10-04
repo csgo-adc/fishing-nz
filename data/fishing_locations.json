@@ -1,0 +1,1924 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-10-05",
+  "description": "Named coastal planning areas for both apps. Geographic sources identify places, not guaranteed fishing access, permission, catches or launch facilities.",
+  "coordinate_sources": {
+    "linz_gazetteer": "https://gazetteer.linz.govt.nz/gaz.csv",
+    "linz_tides": "https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view",
+    "doc": "https://www.doc.govt.nz/parks-and-recreation/"
+  },
+  "protection_review": {
+    "reviewed_on": "2026-10-05",
+    "method": "Point-in-polygon screening against DOC marine reserve, south-east reserve and Hauraki Gulf marine protection layers. Any overlap is excluded conservatively. This does not assess routes, adjacent coast, all fishing restrictions, temporary closures, rahui or physical access.",
+    "source_urls": [
+      "https://services1.arcgis.com/3JjYDyG3oajxU6HO/arcgis/rest/services/DOC_Marine_Reserves/FeatureServer/0",
+      "https://services1.arcgis.com/3JjYDyG3oajxU6HO/arcgis/rest/services/SE_marine_reserves_type1_CURRENT/FeatureServer/0",
+      "https://services1.arcgis.com/3JjYDyG3oajxU6HO/arcgis/rest/services/Hauraki_Gulf_Tikapa_Moana_Marine_Protection_Act/FeatureServer/0"
+    ],
+    "excluded_candidates": [
+      {
+        "name": "Smaills Beach",
+        "boat": false,
+        "overlapping_areas": [
+          "Ōrau Marine Reserve"
+        ]
+      }
+    ]
+  },
+  "locations": [
+    {
+      "name": "Bucklands Beach",
+      "area": "Auckland",
+      "latitude": -36.867861,
+      "longitude": 174.9025,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/17465"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 17465,
+      "source_feature_type": "Beach",
+      "id": "bucklands-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Cornwallis Wharf",
+      "area": "Auckland",
+      "latitude": -37.005,
+      "longitude": 174.608,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "cornwallis-wharf-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Greenhithe Wharf",
+      "area": "Auckland",
+      "latitude": -36.778,
+      "longitude": 174.676,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "greenhithe-wharf-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Kawakawa Bay",
+      "area": "Auckland",
+      "latitude": -36.948006,
+      "longitude": 175.15744,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/24832"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 24832,
+      "source_feature_type": "Bay",
+      "id": "kawakawa-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Manukau Harbour",
+      "area": "Auckland",
+      "latitude": -37.05,
+      "longitude": 174.65,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "manukau-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Maraetai Beach",
+      "area": "Auckland",
+      "latitude": -36.880164,
+      "longitude": 175.043466,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/28811"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 28811,
+      "source_feature_type": "Beach",
+      "id": "maraetai-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Mission Bay",
+      "area": "Auckland",
+      "latitude": -36.84697,
+      "longitude": 174.831425,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/29943"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 29943,
+      "source_feature_type": "Bay",
+      "id": "mission-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Muriwai Beach",
+      "area": "Auckland",
+      "latitude": -36.821,
+      "longitude": 174.427,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "muriwai-beach-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Murrays Bay Wharf",
+      "area": "Auckland",
+      "latitude": -36.731,
+      "longitude": 174.75,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "murrays-bay-wharf-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Orewa Beach",
+      "area": "Auckland",
+      "latitude": -36.587,
+      "longitude": 174.696,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "orewa-beach-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Rangitoto Channel",
+      "area": "Auckland",
+      "latitude": -36.78,
+      "longitude": 174.93,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "rangitoto-channel-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Takapuna Beach",
+      "area": "Auckland",
+      "latitude": -36.786,
+      "longitude": 174.773,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "takapuna-beach-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Waitawa Wharf",
+      "area": "Auckland",
+      "latitude": -36.914,
+      "longitude": 175.143,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "waitawa-wharf-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Leigh Harbour / Omaha Cove",
+      "area": "Auckland North",
+      "latitude": -36.288639,
+      "longitude": 174.810694,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/33486"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 33486,
+      "source_feature_type": "Bay",
+      "id": "leigh-harbour-omaha-cove-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Anawhata Coast",
+      "area": "Auckland West Coast",
+      "latitude": -36.933333,
+      "longitude": 174.45,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Anawhata 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "anawhata-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Little Akaloa Bay",
+      "area": "Banks Peninsula",
+      "latitude": -43.66425,
+      "longitude": 173.005806,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/26579"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 26579,
+      "source_feature_type": "Bay",
+      "id": "little-akaloa-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Opua Foreshore",
+      "area": "Bay of Islands",
+      "latitude": -35.316667,
+      "longitude": 174.116667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Opua 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "opua-foreshore-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Opua Waters",
+      "area": "Bay of Islands",
+      "latitude": -35.316667,
+      "longitude": 174.116667,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Opua 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "opua-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Paihia Wharf",
+      "area": "Bay of Islands",
+      "latitude": -35.283,
+      "longitude": 174.091,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "paihia-wharf-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Kaituna River Mouth",
+      "area": "Bay of Plenty",
+      "latitude": -37.75,
+      "longitude": 176.416667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaituna River Entrance 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "kaituna-river-mouth-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Matatā Beach",
+      "area": "Bay of Plenty",
+      "latitude": -37.88639276,
+      "longitude": 176.76059781,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/bay-of-plenty/places/matata-area/things-to-do/matata-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "matata-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Mount Maunganui",
+      "area": "Bay of Plenty",
+      "latitude": -37.632,
+      "longitude": 176.185,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "mount-maunganui-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Ōhope Beach",
+      "area": "Bay of Plenty",
+      "latitude": -37.966,
+      "longitude": 177.058,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "ohope-beach-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Ōmokoroa Foreshore",
+      "area": "Bay of Plenty",
+      "latitude": -37.666667,
+      "longitude": 176.05,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ōmokoroa 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "omokoroa-foreshore-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Ōpōtiki Wharf",
+      "area": "Bay of Plenty",
+      "latitude": -38.033333,
+      "longitude": 177.233333,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ōpōtiki Wharf 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "opotiki-wharf-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Port Ōhope Wharf",
+      "area": "Bay of Plenty",
+      "latitude": -37.983333,
+      "longitude": 177.1,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Ōhope Wharf 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "port-ohope-wharf-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tauranga",
+      "area": "Bay of Plenty",
+      "latitude": -37.64,
+      "longitude": 176.18,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "tauranga-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Tauranga",
+      "area": "Bay of Plenty",
+      "latitude": -37.59,
+      "longitude": 176.2,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "tauranga-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Waihī Beach",
+      "area": "Bay of Plenty",
+      "latitude": -37.4,
+      "longitude": 175.943,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "waihi-beach-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Waihī Beach",
+      "area": "Bay of Plenty",
+      "latitude": -37.39,
+      "longitude": 175.98,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "waihi-beach-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Whakatāne Coast",
+      "area": "Bay of Plenty",
+      "latitude": -37.95,
+      "longitude": 177.0,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whakatāne 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "whakatane-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Whakatāne River Mouth",
+      "area": "Bay of Plenty",
+      "latitude": -37.936,
+      "longitude": 177.001,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whakatane-river-mouth-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Akaroa Harbour",
+      "area": "Canterbury",
+      "latitude": -43.81,
+      "longitude": 172.965,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "akaroa-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Diamond Harbour",
+      "area": "Canterbury",
+      "latitude": -43.625367,
+      "longitude": 172.729786,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/6094"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 6094,
+      "source_feature_type": "Bay",
+      "id": "diamond-harbour-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Kaikōura Coast",
+      "area": "Canterbury",
+      "latitude": -42.404,
+      "longitude": 173.684,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "kaikoura-coast-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Kaikōura Waters",
+      "area": "Canterbury",
+      "latitude": -42.416667,
+      "longitude": 173.7,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaikōura 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "kaikoura-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Lyttelton Harbour",
+      "area": "Canterbury",
+      "latitude": -43.62,
+      "longitude": 172.75,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "lyttelton-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "New Brighton Pier",
+      "area": "Canterbury",
+      "latitude": -43.506,
+      "longitude": 172.729,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "new-brighton-pier-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Sumner Head Coast",
+      "area": "Canterbury",
+      "latitude": -43.566667,
+      "longitude": 172.766667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Sumner Head 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "sumner-head-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Timaru Foreshore",
+      "area": "Canterbury",
+      "latitude": -44.383333,
+      "longitude": 171.25,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Timaru 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "timaru-foreshore-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Timaru Harbour",
+      "area": "Canterbury",
+      "latitude": -44.393,
+      "longitude": 171.255,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "timaru-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Kaka Point",
+      "area": "Catlins",
+      "latitude": -46.384021,
+      "longitude": 169.785205,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/58434"
+      ],
+      "coordinate_note": "LINZ Gazetteer point reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 58434,
+      "source_feature_type": "Point",
+      "id": "kaka-point-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Coromandel Harbour",
+      "area": "Coromandel",
+      "latitude": -36.745,
+      "longitude": 175.5,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "coromandel-harbour-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Fantail Bay",
+      "area": "Coromandel",
+      "latitude": -36.523345,
+      "longitude": 175.3283698,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/fantailcampsite"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "fantail-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Fletcher Bay",
+      "area": "Coromandel",
+      "latitude": -36.4765219,
+      "longitude": 175.39017803,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/fletchercampsite"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "fletcher-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Hot Water Beach",
+      "area": "Coromandel",
+      "latitude": -36.879805,
+      "longitude": 175.818881,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/23145"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 23145,
+      "source_feature_type": "Beach",
+      "id": "hot-water-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Pauanui Beach",
+      "area": "Coromandel",
+      "latitude": -37.016056,
+      "longitude": 175.867583,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/35770"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 35770,
+      "source_feature_type": "Beach",
+      "id": "pauanui-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Port Jackson",
+      "area": "Coromandel",
+      "latitude": -36.48400698,
+      "longitude": 175.34180112,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/coromandel/places/northern-coromandel/things-to-do/port-jackson-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "port-jackson-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Stony Bay",
+      "area": "Coromandel",
+      "latitude": -36.51231214,
+      "longitude": 175.42188241,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/stonycampsite"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "stony-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tairua Harbour",
+      "area": "Coromandel",
+      "latitude": -37.016297,
+      "longitude": 175.851042,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/41248"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 41248,
+      "source_feature_type": "Bay",
+      "id": "tairua-harbour-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Thames",
+      "area": "Coromandel",
+      "latitude": -37.136,
+      "longitude": 175.526,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "thames-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Whangamatā",
+      "area": "Coromandel",
+      "latitude": -37.21,
+      "longitude": 175.875,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whangamata-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Whangamatā",
+      "area": "Coromandel",
+      "latitude": -37.19,
+      "longitude": 175.92,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whangamata-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Whitianga Harbour",
+      "area": "Coromandel",
+      "latitude": -36.83,
+      "longitude": 175.705,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whitianga-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Taipa Bay",
+      "area": "Doubtless Bay",
+      "latitude": -34.98896,
+      "longitude": 173.466449,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/5713"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 5713,
+      "source_feature_type": "Bay",
+      "id": "taipa-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "St Clair Beach",
+      "area": "Dunedin",
+      "latitude": -45.91,
+      "longitude": 170.49,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "st-clair-beach-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Waihau Bay",
+      "area": "East Cape",
+      "latitude": -37.615361,
+      "longitude": 177.911917,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/45625"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 45625,
+      "source_feature_type": "Bay",
+      "id": "waihau-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tokomaru Bay",
+      "area": "East Coast",
+      "latitude": -38.136194,
+      "longitude": 178.342083,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/44362"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 44362,
+      "source_feature_type": "Bay",
+      "id": "tokomaru-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tolaga Bay",
+      "area": "East Coast",
+      "latitude": -38.36877,
+      "longitude": 178.315933,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/6344"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 6344,
+      "source_feature_type": "Bay",
+      "id": "tolaga-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Ahipara Bay",
+      "area": "Far North",
+      "latitude": -35.167689,
+      "longitude": 173.13228,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/15179"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 15179,
+      "source_feature_type": "Bay",
+      "id": "ahipara-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Ahipara Foreshore",
+      "area": "Far North",
+      "latitude": -35.167674,
+      "longitude": 173.146947,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/7555"
+      ],
+      "coordinate_note": "LINZ Gazetteer recreation reserve reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 7555,
+      "source_feature_type": "Recreation Reserve",
+      "id": "ahipara-foreshore-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Houhora Harbour",
+      "area": "Far North",
+      "latitude": -34.797556,
+      "longitude": 173.125083,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/23160"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 23160,
+      "source_feature_type": "Bay",
+      "id": "houhora-harbour-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Mangōnui Harbour",
+      "area": "Far North",
+      "latitude": -34.99,
+      "longitude": 173.535,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "mangonui-harbour-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Rarawa Beach",
+      "area": "Far North",
+      "latitude": -34.72511375,
+      "longitude": 173.08233232,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/northland/places/wharekapu-paxton-point-conservation-area/things-to-do/rarawa-beach-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "rarawa-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tokerau Beach",
+      "area": "Far North",
+      "latitude": -34.915371,
+      "longitude": 173.372072,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/44340"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 44340,
+      "source_feature_type": "Beach",
+      "id": "tokerau-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Thames",
+      "area": "Firth of Thames",
+      "latitude": -37.1,
+      "longitude": 175.42,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "thames-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Gisborne Harbour",
+      "area": "Gisborne",
+      "latitude": -38.672,
+      "longitude": 178.02,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "gisborne-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Waikanae Beach — Gisborne",
+      "area": "Gisborne",
+      "latitude": -38.671263,
+      "longitude": 178.016771,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/55866"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 55866,
+      "source_feature_type": "Beach",
+      "id": "waikanae-beach-gisborne-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Golden Bay / Tarakohe",
+      "area": "Golden Bay",
+      "latitude": -40.816667,
+      "longitude": 172.9,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Tarakohe 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "golden-bay-tarakohe-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tarakohe Harbour",
+      "area": "Golden Bay",
+      "latitude": -40.816667,
+      "longitude": 172.9,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Tarakohe 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "tarakohe-harbour-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Tata Beach",
+      "area": "Golden Bay",
+      "latitude": -40.811179,
+      "longitude": 172.914632,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/41759"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 41759,
+      "source_feature_type": "Beach",
+      "id": "tata-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Huruhi Harbour",
+      "area": "Hauraki Gulf",
+      "latitude": -36.6,
+      "longitude": 175.766667,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "huruhi-harbour-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Napier Breakwater",
+      "area": "Hawke's Bay",
+      "latitude": -39.48,
+      "longitude": 176.92,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "napier-breakwater-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Opononi Foreshore",
+      "area": "Hokianga",
+      "latitude": -35.5,
+      "longitude": 173.4,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Opononi 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "opononi-foreshore-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Havelock Foreshore",
+      "area": "Marlborough",
+      "latitude": -41.283333,
+      "longitude": 173.766667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Havelock 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "havelock-foreshore-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Marfells Beach",
+      "area": "Marlborough",
+      "latitude": -41.72547831,
+      "longitude": 174.20446054,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/marlborough/places/marfells-beach-area/things-to-do/campsites/marfells-beach-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "marfells-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Marlborough Sounds",
+      "area": "Marlborough",
+      "latitude": -41.1,
+      "longitude": 174.2,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "marlborough-sounds-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Picton Foreshore",
+      "area": "Marlborough",
+      "latitude": -41.288,
+      "longitude": 174.008,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "picton-foreshore-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Picton Harbour",
+      "area": "Marlborough",
+      "latitude": -41.288,
+      "longitude": 174.008,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "picton-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Pukatea / Whites Bay",
+      "area": "Marlborough",
+      "latitude": -41.38290841,
+      "longitude": 174.05708957,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/marlborough/places/blenheim-area/things-to-do/campsites/whites-bay-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "pukatea-whites-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Rarangi Beach",
+      "area": "Marlborough",
+      "latitude": -41.39289983,
+      "longitude": 174.04700047,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/marlborough/places/blenheim-area/things-to-do/campsites/rarangi-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "rarangi-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Whatamango Bay",
+      "area": "Marlborough",
+      "latitude": -41.27033398,
+      "longitude": 174.07538874,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/parks-and-recreation/places-to-go/marlborough/places/queen-charlotte-sound-totaranui-area/things-to-do/campsites/whatamango-bay-campsite/"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "whatamango-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Elaine Bay",
+      "area": "Marlborough Sounds",
+      "latitude": -41.05,
+      "longitude": 173.766667,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Elaine Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "elaine-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Havelock Waters",
+      "area": "Marlborough Sounds",
+      "latitude": -41.283333,
+      "longitude": 173.766667,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Havelock 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "havelock-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Ōkukari Bay",
+      "area": "Marlborough Sounds",
+      "latitude": -41.2,
+      "longitude": 174.316667,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Ōkukari Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "okukari-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Richmond Bay",
+      "area": "Marlborough Sounds",
+      "latitude": -41.015,
+      "longitude": 173.988333,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Richmond Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "richmond-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Wilson Bay — Pelorus Sound",
+      "area": "Marlborough Sounds",
+      "latitude": -41.083333,
+      "longitude": 173.9,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Wilson Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "wilson-bay-pelorus-sound-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Nelson Harbour",
+      "area": "Nelson",
+      "latitude": -41.27,
+      "longitude": 173.28,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "nelson-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Bay of Islands",
+      "area": "Northland",
+      "latitude": -35.235,
+      "longitude": 174.18,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "bay-of-islands-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Bream Bay",
+      "area": "Northland",
+      "latitude": -35.910694,
+      "longitude": 174.501972,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/17247"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 17247,
+      "source_feature_type": "Bay",
+      "id": "bream-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Kaipara Harbour — Poutō",
+      "area": "Northland",
+      "latitude": -36.366667,
+      "longitude": 174.183333,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Pouto Point 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "kaipara-harbour-pouto-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Marsden Point",
+      "area": "Northland",
+      "latitude": -35.835,
+      "longitude": 174.493,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "marsden-point-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Tutukākā Coast",
+      "area": "Northland",
+      "latitude": -35.602,
+      "longitude": 174.537,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "tutukaka-coast-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Uretiti Beach",
+      "area": "Northland",
+      "latitude": -35.93379305,
+      "longitude": 174.45998112,
+      "boat": false,
+      "source_kind": "doc_coastal_access",
+      "source_urls": [
+        "https://www.doc.govt.nz/uretiti"
+      ],
+      "coordinate_note": "DOC-published coastal campsite/access-area coordinate; fishing is described nearby. This marker is not a specific casting point or a campsite booking.",
+      "id": "uretiti-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Waipū Cove Waters",
+      "area": "Northland",
+      "latitude": -36.029111,
+      "longitude": 174.50825,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/46695"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 46695,
+      "source_feature_type": "Bay",
+      "id": "waipu-cove-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Whangārei Harbour",
+      "area": "Northland",
+      "latitude": -35.72,
+      "longitude": 174.32,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whangarei-harbour-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Whangaroa Harbour",
+      "area": "Northland",
+      "latitude": -35.05,
+      "longitude": 173.75,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whangaroa 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "whangaroa-harbour-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Whangaroa Waters",
+      "area": "Northland",
+      "latitude": -35.05,
+      "longitude": 173.75,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Whangaroa 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "whangaroa-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Karitane Point",
+      "area": "Otago",
+      "latitude": -45.639939,
+      "longitude": 170.673742,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/59242"
+      ],
+      "coordinate_note": "LINZ Gazetteer point reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 59242,
+      "source_feature_type": "Point",
+      "id": "karitane-point-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Moeraki Coast",
+      "area": "Otago",
+      "latitude": -45.36,
+      "longitude": 170.86,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "moeraki-coast-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Oamaru Harbour",
+      "area": "Otago",
+      "latitude": -45.1,
+      "longitude": 170.983333,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Oamaru 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "oamaru-harbour-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Otago Harbour",
+      "area": "Otago",
+      "latitude": -45.84,
+      "longitude": 170.64,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "otago-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Port Chalmers Waters",
+      "area": "Otago",
+      "latitude": -45.816667,
+      "longitude": 170.65,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Chalmers 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "port-chalmers-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Waikouaiti Bay",
+      "area": "Otago",
+      "latitude": -45.623968,
+      "longitude": 170.674443,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/59239"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 59239,
+      "source_feature_type": "Bay",
+      "id": "waikouaiti-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Bluff Harbour",
+      "area": "Southland",
+      "latitude": -46.6,
+      "longitude": 168.34,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "bluff-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Colac Bay / Ōraka",
+      "area": "Southland",
+      "latitude": -46.366634,
+      "longitude": 167.907332,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/7310"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 7310,
+      "source_feature_type": "Bay",
+      "id": "colac-bay-oraka-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "New River Estuary",
+      "area": "Southland",
+      "latitude": -46.416667,
+      "longitude": 168.333333,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Waihopai River Entrance 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "new-river-estuary-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Riverton / Aparima Waters",
+      "area": "Southland",
+      "latitude": -46.366667,
+      "longitude": 168.016667,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Riverton - Aparima 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "riverton-aparima-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Riverton Coast",
+      "area": "Southland",
+      "latitude": -46.366667,
+      "longitude": 168.016667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Riverton - Aparima 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "riverton-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Stewart Island / Rakiura",
+      "area": "Southland",
+      "latitude": -46.895,
+      "longitude": 168.13,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "stewart-island-rakiura-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Halfmoon Bay",
+      "area": "Stewart Island / Rakiura",
+      "latitude": -46.897,
+      "longitude": 168.131,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "halfmoon-bay-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "New Plymouth Coast",
+      "area": "Taranaki",
+      "latitude": -39.05,
+      "longitude": 174.033333,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Taranaki 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "new-plymouth-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Port Taranaki Waters",
+      "area": "Taranaki",
+      "latitude": -39.05,
+      "longitude": 174.033333,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Port Taranaki 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "port-taranaki-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Kaiteriteri Beach",
+      "area": "Tasman",
+      "latitude": -41.05,
+      "longitude": 173.016667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Kaiteriteri 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "kaiteriteri-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Māpua Coast",
+      "area": "Tasman",
+      "latitude": -41.25,
+      "longitude": 173.1,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Māpua 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "mapua-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Te Mamaku / Ruby Bay",
+      "area": "Tasman",
+      "latitude": -41.228944,
+      "longitude": 173.089667,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/54622"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 54622,
+      "source_feature_type": "Bay",
+      "id": "te-mamaku-ruby-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Man o’ War Bay",
+      "area": "Waiheke Island",
+      "latitude": -36.783333,
+      "longitude": 175.15,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Man o‘War Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal water area at the published LINZ tide-reference coordinate; not a verified launch point.",
+      "id": "man-o-war-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Mātiatia Bay",
+      "area": "Waiheke Island",
+      "latitude": -36.783333,
+      "longitude": 174.983333,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Mātiatia Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "matiatia-bay-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Kāwhia",
+      "area": "Waikato",
+      "latitude": -38.063,
+      "longitude": 174.82,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "kawhia-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Kāwhia",
+      "area": "Waikato",
+      "latitude": -38.03,
+      "longitude": 174.79,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "kawhia-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Manu Bay Coast",
+      "area": "Waikato",
+      "latitude": -37.816667,
+      "longitude": 174.816667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Manu Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "manu-bay-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Raglan",
+      "area": "Waikato",
+      "latitude": -37.799,
+      "longitude": 174.87,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "raglan-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Raglan",
+      "area": "Waikato",
+      "latitude": -37.78,
+      "longitude": 174.82,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "raglan-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Castlepoint Coast",
+      "area": "Wairarapa",
+      "latitude": -40.916667,
+      "longitude": 176.216667,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Castlepoint 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "castlepoint-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Castlepoint Waters",
+      "area": "Wairarapa",
+      "latitude": -40.916667,
+      "longitude": 176.216667,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Castlepoint 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "castlepoint-waters-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Days Bay",
+      "area": "Wellington",
+      "latitude": -41.280546,
+      "longitude": 174.903657,
+      "boat": true,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/19380"
+      ],
+      "coordinate_note": "LINZ Gazetteer bay reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 19380,
+      "source_feature_type": "Bay",
+      "id": "days-bay-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Eastbourne",
+      "area": "Wellington",
+      "latitude": -41.29,
+      "longitude": 174.9,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "eastbourne-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Kāpiti Coast",
+      "area": "Wellington",
+      "latitude": -40.92,
+      "longitude": 174.98,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "kapiti-coast-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Plimmerton Beach",
+      "area": "Wellington",
+      "latitude": -41.084889,
+      "longitude": 174.866528,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/36297"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 36297,
+      "source_feature_type": "Beach",
+      "id": "plimmerton-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Wellington Harbour",
+      "area": "Wellington",
+      "latitude": -41.28,
+      "longitude": 174.78,
+      "boat": true,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "wellington-harbour-boat",
+      "reviewed_on": null
+    },
+    {
+      "name": "Carters Beach",
+      "area": "West Coast",
+      "latitude": -41.744012,
+      "longitude": 171.561553,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/59197"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 59197,
+      "source_feature_type": "Beach",
+      "id": "carters-beach-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Greymouth Coast",
+      "area": "West Coast",
+      "latitude": -42.45,
+      "longitude": 171.2,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "greymouth-coast-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Hokitika Coast",
+      "area": "West Coast",
+      "latitude": -42.715,
+      "longitude": 170.96,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "hokitika-coast-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Jackson Bay Coast",
+      "area": "West Coast",
+      "latitude": -43.983333,
+      "longitude": 168.633333,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Jackson Bay 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "jackson-bay-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Westport Coast",
+      "area": "West Coast",
+      "latitude": -41.75,
+      "longitude": 171.6,
+      "boat": false,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Westport 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "westport-coast-land",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Westport Harbour",
+      "area": "West Coast",
+      "latitude": -41.75,
+      "longitude": 171.6,
+      "boat": true,
+      "source_kind": "linz_tide_reference",
+      "source_urls": [
+        "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Westport 2026.csv"
+      ],
+      "coordinate_note": "Named coastal area at the published LINZ tide-reference coordinate; not a verified access or launch point.",
+      "id": "westport-harbour-boat",
+      "reviewed_on": "2026-10-05"
+    },
+    {
+      "name": "Whanganui River Entrance",
+      "area": "Whanganui",
+      "latitude": -39.953,
+      "longitude": 174.986,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whanganui-river-entrance-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Whanganui River Mouth",
+      "area": "Whanganui",
+      "latitude": -39.946,
+      "longitude": 174.98,
+      "boat": false,
+      "source_kind": "legacy_approximate",
+      "source_urls": [],
+      "coordinate_note": "Retained approximate marker from the original app catalogue; individual coordinate source was not recorded.",
+      "id": "whanganui-river-mouth-land",
+      "reviewed_on": null
+    },
+    {
+      "name": "Ocean Beach — Whangārei Heads",
+      "area": "Whangārei Heads",
+      "latitude": -35.813694,
+      "longitude": 174.558028,
+      "boat": false,
+      "source_kind": "linz_gazetteer",
+      "source_urls": [
+        "https://gazetteer.linz.govt.nz/place/32966"
+      ],
+      "coordinate_note": "LINZ Gazetteer beach reference point (NZGD2000); identifies the named coastal area, not a precise fishing access point.",
+      "gazetteer_name_id": 32966,
+      "source_feature_type": "Beach",
+      "id": "ocean-beach-whangarei-heads-land",
+      "reviewed_on": "2026-10-05"
+    }
+  ]
+}

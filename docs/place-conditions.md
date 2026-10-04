@@ -29,7 +29,9 @@ The view displays the offshore model grid's distance from the pin. Offshore wave
 
 ## Tide references and missing data
 
-Named published tide stations and previously mapped exact-name station relationships can supply an initial LINZ reference. Generic search results and dropped pins require the user to choose a reference station. The picker orders stations by straight-line distance but never automatically treats the nearest station as representative: land barriers and different harbours matter.
+Named published tide stations and previously mapped exact-name station relationships supply an initial LINZ reference. For other fishing areas, generic search results and dropped pins, the conditions page automatically selects the nearest supported LINZ station by straight-line distance. The tide card shows the reference station and its distance from the selected place. Users can change or clear it in the station picker; their choice stays in place while changing dates or refreshing the open conditions page. Opening conditions for another place selects its own initial reference.
+
+A nearby station is a reference, not verified local tide timing: land barriers and different harbours matter. Tide details retain the reminder to check that the station represents the selected place. The fishing-window assessment still requires an explicitly identified station and does not use this nearest-station fallback.
 
 Tide events are loaded independently for the chosen station and date using the existing annual LINZ source. They show high/low times and heights above **Chart Datum**, with a reference-suitability reminder. The view does not substitute marine mean-sea-level data for tidal heights or infer current speed from tides. Date/station changes clear prior tide events before loading; a tide failure has its own retry.
 
@@ -45,8 +47,10 @@ The daily list requests 16 days, shows the returned day count, and includes cale
 
 ## Verification
 
-- Android: 63 unit tests pass; debug APK builds.
-- iOS: simulator app builds; 76 existing fishing-window checks and 25 new offline place/weather checks pass. The new harness has 29 checks when including live Thames conditions and the Weather page service.
+- Android: 65 unit tests pass; debug APK builds.
+- iOS: simulator app builds; 76 existing fishing-window checks and 29 offline place/weather checks pass. The place/weather harness has 33 checks when including live Thames conditions and the Weather page service.
+- Nearest tide selection checks cover dropped pins, generic place results, changed locations and keeping an existing station link on both platforms.
+- Android emulator inspection verified that a dropped pin loads nearby LINZ events without opening the picker, displays the reference distance, and keeps a manually changed station after refreshing.
 - Shared synthetic fixtures exercise New Zealand's 23-hour spring daylight-saving day, nullable rain probabilities and missing temperature, wind and weather codes at the end of an extended forecast. New checks cover provider limits, partial sources, wrong units/array alignment, paired wave height/period, and known high waves with incomplete data.
 - Live Thames requests returned 16 upcoming weather days, 8 upcoming marine days, and both 3-day and 92-day weather history. Availability depends on the provider and location.
 - Android emulator inspection verified map search, dropped pins and published-station selection, recent dates, actual Thames tide events and hourly wave height/period with day/night icons. The full-screen page stays open when dragging down at the top, retains its fixed back control while scrolling, and returns to the selected Thames pin. Wave and rain drawers expand; the rain legend shows clouds with 1, 2 and 3 drops. The Weather page displays live Thames forecasts with light and moderate drizzle icons, and retains available values when other fields are missing. iOS interactive inspection remains unverified; its simulator build and production data services pass.

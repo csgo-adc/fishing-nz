@@ -41,7 +41,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var more by remember { mutableStateOf(false) }
     var sources by remember { mutableStateOf(false) }
-    var station by remember { mutableStateOf(place.station) }
+    var station by remember(place.id) { mutableStateOf<TideStation?>(place.initialTideStation) }
     var tide by remember { mutableStateOf<TideState?>(null) }
     var tideLoading by remember { mutableStateOf(false) }
     var tideIssue by remember { mutableStateOf(false) }
@@ -140,6 +140,8 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                     }
                                     if (station == null) Text("Choose a LINZ reference station.", style = MaterialTheme.typography.bodySmall)
                                     else {
+                                        val distance = placeDistanceKm(place.point, GeoPoint(station!!.latitude, station!!.longitude))
+                                        Text("Reference station · ${PlaceConditionRows.number(distance, 1)} km away", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text("Heights above Chart Datum", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         if (tideLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
                                         else if (tideIssue) { Text("Tide unavailable for this day."); TextButton(onClick = { tideRefresh++ }) { Text("Retry tide") } }

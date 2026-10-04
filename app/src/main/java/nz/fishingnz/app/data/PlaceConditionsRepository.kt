@@ -12,6 +12,7 @@ import kotlin.math.roundToInt
 data class ConditionPlace(val name: String, val point: GeoPoint, val region: String = "Selected place",
                           val boat: Boolean = false, val station: TideStation? = null) {
     val id get() = "$name:${point.latitude}:${point.longitude}"
+    val initialTideStation get() = station ?: nearestTideStation(point)
 }
 data class PlaceWeatherHour(val at: Instant, val temperature: Double?, val feelsLike: Double?,
     val wind: Double?, val gust: Double?, val direction: Double?, val rain: Double?, val chance: Double?,

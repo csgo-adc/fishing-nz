@@ -1,5 +1,11 @@
 import Foundation
 
+func placeDistanceKm(_ a: GeoPoint, _ b: GeoPoint) -> Double {
+    let lat = (b.latitude - a.latitude) * .pi / 180, lon = (b.longitude - a.longitude) * .pi / 180
+    let h = pow(sin(lat / 2), 2) + cos(a.latitude * .pi / 180) * cos(b.latitude * .pi / 180) * pow(sin(lon / 2), 2)
+    return 6371 * 2 * asin(sqrt(min(1, max(0, h))))
+}
+
 struct ConditionPlace: Identifiable, Sendable {
     let name: String
     let point: GeoPoint
@@ -7,6 +13,12 @@ struct ConditionPlace: Identifiable, Sendable {
     var boat = false
     var station: TideStation? = nil
     var id: String { "\(name):\(point.latitude):\(point.longitude)" }
+    var initialTideStation: TideStation? {
+        station ?? tideStations.min {
+            placeDistanceKm(point, GeoPoint(latitude: $0.latitude, longitude: $0.longitude)) <
+                placeDistanceKm(point, GeoPoint(latitude: $1.latitude, longitude: $1.longitude))
+        }
+    }
 }
 struct PlaceWeatherHour: Sendable, Identifiable {
     let at: Date

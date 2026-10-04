@@ -14,6 +14,19 @@ class PlaceConditionsRepositoryTest {
     private fun data() = PlaceConditions(repository.decodeWeather(fixture("weather"), now), repository.decodeMarine(fixture("marine"), now), null, null)
     private fun rejects(work: () -> Unit) { try { work() } catch (_: Exception) { return }; fail("Invalid provider data accepted") }
 
+    @Test fun mapPlacesAutomaticallyUseNearbyTidesWhenNoStationIsLinked() {
+        val pin = ConditionPlace("Dropped pin", GeoPoint(-37.799, 174.87))
+        assertEquals("raglan", pin.initialTideStation.id)
+        val searchResult = ConditionPlace("Thames waterfront", GeoPoint(-37.133, 175.533))
+        assertEquals("thames", searchResult.initialTideStation.id)
+        assertEquals("thames", pin.copy(point = searchResult.point).initialTideStation.id)
+    }
+    @Test fun mapPlacesKeepTheirLinkedTideStation() {
+        val linked = tideStations.first { it.id == "thames" }
+        val place = ConditionPlace("Named fishing area", GeoPoint(-37.799, 174.87), station = linked)
+        assertEquals(linked, place.initialTideStation)
+    }
+
     @Test fun usesSeparateProviderHorizonsAndHistoryCap() {
         val point = GeoPoint(-37.1, 175.5)
         assertTrue(repository.weatherURL(point, 92).contains("forecast_days=16&past_days=92"))

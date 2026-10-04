@@ -18,7 +18,7 @@ struct PlaceConditionsView: View {
     @State private var showStations = false
     init(place: ConditionPlace) {
         self.place = place
-        _station = State(initialValue: place.station)
+        _station = State(initialValue: place.initialTideStation)
     }
     private var zone: TimeZone { data?.zone ?? TimeZone(identifier: "Pacific/Auckland")! }
     private var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = zone; return c }
@@ -150,6 +150,8 @@ struct PlaceConditionsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Tide").font(.headline); Spacer(); Button(station?.name ?? "Choose station") { showStations = true }.font(.subheadline) }
             if let station {
+                let distance = placeDistanceKm(place.point, GeoPoint(latitude: station.latitude, longitude: station.longitude))
+                Text("Reference station · \(String(format: "%.1f", distance)) km away").font(.subheadline).foregroundStyle(.secondary)
                 Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                 if tideLoading { ProgressView() }
                 else if tideIssue { Text("Tide unavailable for this day."); Button("Retry tide") { tideRefresh += 1 } }
@@ -276,10 +278,4 @@ struct MapPlaceSearchView: View {
 
 extension ConditionPlace {
     init(_ spot: FishingSpot) { self.init(name: spot.name, point: spot.coordinate, region: spot.area + " · " + (spot.boat ? "Boat fishing" : "Land fishing"), boat: spot.boat, station: FishingScoringService.matchingStation(for: spot)) }
-}
-
-private func placeDistanceKm(_ a: GeoPoint, _ b: GeoPoint) -> Double {
-    let lat = (b.latitude - a.latitude) * .pi / 180, lon = (b.longitude - a.longitude) * .pi / 180
-    let h = pow(sin(lat / 2), 2) + cos(a.latitude * .pi / 180) * cos(b.latitude * .pi / 180) * pow(sin(lon / 2), 2)
-    return 6371 * 2 * asin(sqrt(min(1, max(0, h))))
 }

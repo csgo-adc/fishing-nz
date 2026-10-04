@@ -17,6 +17,13 @@ import Foundation
         let date = calendar.date(from: .init(year: 2026, month: 9, day: 27))!
         let later = calendar.date(byAdding: .day, value: 10, to: date)!
         let point = GeoPoint(latitude: -37.133, longitude: 175.533)
+        let pin = ConditionPlace(name: "Dropped pin", point: GeoPoint(latitude: -37.799, longitude: 174.87))
+        let searchResult = ConditionPlace(name: "Thames waterfront", point: point)
+        try expect(pin.initialTideStation?.id == "raglan", "Dropped pin did not select nearby tides")
+        try expect(searchResult.initialTideStation?.id == "thames", "Search result did not select nearby tides")
+        try expect(ConditionPlace(name: pin.name, point: point).initialTideStation?.id == "thames", "Changed place kept the previous nearby station")
+        let linked = tideStations.first { $0.id == "thames" }!
+        try expect(ConditionPlace(name: "Named fishing area", point: pin.point, station: linked).initialTideStation == linked, "Linked tide station was replaced by nearest station")
         func query(_ url: URL, _ name: String) -> String? { URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value }
         try expect(query(PlaceConditionsService.weatherURL(point, pastDays: 92), "forecast_days") == "16", "Weather horizon")
         try expect(query(PlaceConditionsService.marineURL(point, pastDays: 92), "forecast_days") == "8", "Marine horizon")
