@@ -16,20 +16,21 @@ struct WeatherSnapshot: Sendable {
 
     struct Hour: Sendable, Identifiable {
         let at: Date
-        let temperature: Double
-        let rainChance: Int
-        let wind: Double
-        let code: Int
+        let temperature: Double?
+        let rainChance: Int?
+        let wind: Double?
+        let code: Int?
+        let isDay: Bool?
         var id: Date { at }
     }
 
     struct Day: Sendable, Identifiable {
         let at: Date
-        let high: Double
-        let low: Double
-        let rainChance: Int
-        let windMax: Double
-        let code: Int
+        let high: Double?
+        let low: Double?
+        let rainChance: Int?
+        let windMax: Double?
+        let code: Int?
         var id: Date { at }
     }
 
@@ -47,10 +48,13 @@ struct WeatherForecastService {
             URLQueryItem(name: "latitude", value: String(point.latitude)),
             URLQueryItem(name: "longitude", value: String(point.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,is_day"),
-            URLQueryItem(name: "hourly", value: "temperature_2m,precipitation_probability,wind_speed_10m,weather_code"),
+            URLQueryItem(name: "hourly", value: "temperature_2m,precipitation_probability,wind_speed_10m,weather_code,is_day"),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max"),
-            URLQueryItem(name: "forecast_days", value: "7"),
-            URLQueryItem(name: "timezone", value: "auto")
+            URLQueryItem(name: "forecast_days", value: "16"),
+            URLQueryItem(name: "timezone", value: "auto"),
+            URLQueryItem(name: "wind_speed_unit", value: "kmh"),
+            URLQueryItem(name: "temperature_unit", value: "celsius"),
+            URLQueryItem(name: "precipitation_unit", value: "mm")
         ]
         guard let url = components.url else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
@@ -86,7 +90,7 @@ struct WeatherForecastService {
         let hours = (0..<hourCount).compactMap { index -> WeatherSnapshot.Hour? in
             guard let time = localTime.date(from: hourly.time[index]), time >= currentHour else { return nil }
             return .init(at: time, temperature: hourly.temperature[index], rainChance: hourly.rainChance[index],
-                         wind: hourly.wind[index], code: hourly.code[index])
+                         wind: hourly.wind[index], code: hourly.code[index], isDay: hourly.isDay.flatMap { index < $0.count ? $0[index].map { $0 == 1 } : nil })
         }.prefix(24)
 
         let daily = response.daily
@@ -135,26 +139,28 @@ private struct ForecastResponse: Decodable {
 
     struct Hourly: Decodable {
         let time: [String]
-        let temperature: [Double]
-        let rainChance: [Int]
-        let wind: [Double]
-        let code: [Int]
+        let temperature: [Double?]
+        let rainChance: [Int?]
+        let wind: [Double?]
+        let code: [Int?]
+        let isDay: [Int?]?
         enum CodingKeys: String, CodingKey {
             case time
             case temperature = "temperature_2m"
             case rainChance = "precipitation_probability"
             case wind = "wind_speed_10m"
             case code = "weather_code"
+            case isDay = "is_day"
         }
     }
 
     struct Daily: Decodable {
         let time: [String]
-        let high: [Double]
-        let low: [Double]
-        let rainChance: [Int]
-        let windMax: [Double]
-        let code: [Int]
+        let high: [Double?]
+        let low: [Double?]
+        let rainChance: [Int?]
+        let windMax: [Double?]
+        let code: [Int?]
         enum CodingKeys: String, CodingKey {
             case time
             case high = "temperature_2m_max"

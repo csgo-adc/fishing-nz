@@ -1,7 +1,7 @@
 package nz.fishingnz.app.data
 
 import org.json.JSONObject
-import org.junit.Assert.assertEquals
+import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
@@ -45,5 +45,20 @@ class WeatherRepositoryTest {
         assertEquals(LocalDate.parse("2026-09-29"), forecast.daily.last().date)
         assertEquals(20, forecast.daily.last().rainChancePercent)
         assertEquals("Pacific/Auckland", forecast.timeZone.id)
+    }
+    @Test fun extendedForecastPreservesMissingRainAndActualDaylight() {
+        val response = JSONObject(javaClass.classLoader!!.getResource("conditions/weather-page.json")!!.readText())
+        val forecast = decodeWeatherForecast(response, Instant.parse("2026-09-27T03:00:00Z"))
+        assertEquals(17, forecast.daily.size)
+        assertNull(forecast.daily.last().rainChancePercent)
+        assertNull(forecast.daily.last().highC)
+        assertNull(forecast.daily.last().windMaxKmh)
+        assertNull(forecast.daily.last().code)
+        assertNull(forecast.hourly.last().rainChancePercent)
+        assertNull(forecast.hourly.last().temperatureC)
+        assertNull(forecast.hourly.last().windKmh)
+        assertNull(forecast.hourly.last().code)
+        assertEquals(true, forecast.hourly.first().isDay)
+        assertEquals(false, forecast.hourly.last().isDay)
     }
 }

@@ -17,6 +17,8 @@
 		AA000008 /* LinzTideSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100010 /* LinzTideSource.swift */; };
 		AA000009 /* WeatherForecastService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100011 /* WeatherForecastService.swift */; };
 		AA000010 /* WeatherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100012 /* WeatherView.swift */; };
+		AA000011 /* PlaceConditionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100013 /* PlaceConditionsService.swift */; };
+		AA000012 /* PlaceConditionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100014 /* PlaceConditionsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +34,8 @@
 		AA100010 /* LinzTideSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinzTideSource.swift; sourceTree = "<group>"; };
 		AA100011 /* WeatherForecastService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherForecastService.swift; sourceTree = "<group>"; };
 		AA100012 /* WeatherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherView.swift; sourceTree = "<group>"; };
+		AA100013 /* PlaceConditionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceConditionsService.swift; sourceTree = "<group>"; };
+		AA100014 /* PlaceConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceConditionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +101,7 @@
 				AA100009 /* FishingScoringService.swift */,
 				AA100010 /* LinzTideSource.swift */,
 				AA100011 /* WeatherForecastService.swift */,
+				AA100013 /* PlaceConditionsService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -115,6 +120,7 @@
 				AA100005 /* CatchCheckRootView.swift */,
 				AA100006 /* FeatureViews.swift */,
 				AA100012 /* WeatherView.swift */,
+				AA100014 /* PlaceConditionsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -205,6 +211,8 @@
 				AA000008 /* LinzTideSource.swift in Sources */,
 				AA000009 /* WeatherForecastService.swift in Sources */,
 				AA000010 /* WeatherView.swift in Sources */,
+				AA000011 /* PlaceConditionsService.swift in Sources */,
+				AA000012 /* PlaceConditionsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

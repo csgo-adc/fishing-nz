@@ -24,18 +24,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AcUnit
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Thunderstorm
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -77,7 +70,6 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private val hourFormatter = DateTimeFormatter.ofPattern("ha", Locale.ENGLISH)
-private val dayFormatter = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)
 private val refreshedFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
 private data class WeatherPlace(val id: String, val name: String, val point: GeoPoint?)
@@ -391,7 +383,7 @@ private fun WeatherNowCard(forecast: LocalWeatherForecast, updating: Boolean) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 WeatherMetric("Feels like", "${now.feelsLikeC.roundToInt()}°C", Modifier.weight(1f))
                 WeatherMetric("Wind", "${now.windKmh.roundToInt()} km/h", Modifier.weight(1f))
-                WeatherMetric("Rain", "${"%.1f".format(Locale.US, now.precipitationMm)} mm", Modifier.weight(1f))
+                WeatherMetric("Rain · 15 min", "${"%.1f".format(Locale.US, now.precipitationMm)} mm", Modifier.weight(1f))
             }
             Text("Wind from ${windDirection(now.windDirectionDegrees)} · gusts ${now.windGustKmh.roundToInt()} km/h · humidity ${now.humidityPercent}%",
                 color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.bodySmall)
@@ -414,17 +406,18 @@ private fun WeatherHourlyCard(hours: List<HourlyWeather>) {
             Text("Next 24 hours", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp))
             if (hours.isEmpty()) Text("Hourly forecast is unavailable.", modifier = Modifier.padding(horizontal = 18.dp))
             else Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                hours.forEachIndexed { index, hour ->
+                hours.forEach { hour ->
                     Column(
-                        Modifier.width(76.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp)).padding(vertical = 12.dp, horizontal = 5.dp),
+                        Modifier.width(102.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp)).padding(vertical = 12.dp, horizontal = 5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        Text(if (index == 0) "Now" else hour.at.format(hourFormatter), style = MaterialTheme.typography.labelMedium)
-                        Icon(weatherIcon(hour.code, hour.at.hour in 7..18), contentDescription = weatherDescription(hour.code), tint = MaterialTheme.colorScheme.primary)
-                        Text("${hour.temperatureC.roundToInt()}°", fontWeight = FontWeight.Bold)
-                        Text("Rain ${hour.rainChancePercent}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${hour.windKmh.roundToInt()} km/h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(hour.at.format(hourFormatter), style = MaterialTheme.typography.labelMedium)
+                        Icon(weatherIcon(hour.code, hour.isDay ?: true), contentDescription = weatherDescription(hour.code), tint = MaterialTheme.colorScheme.primary)
+                        Text(weatherDescription(hour.code), style = MaterialTheme.typography.labelSmall)
+                        Text("${weatherNumber(hour.temperatureC)}°", fontWeight = FontWeight.Bold)
+                        Text("Rain ${hour.rainChancePercent ?: "—"}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${weatherNumber(hour.windKmh)} km/h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -436,49 +429,31 @@ private fun WeatherHourlyCard(hours: List<HourlyWeather>) {
 private fun WeatherWeekCard(days: List<DailyWeather>) {
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("7-day forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("${days.size}-day forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Rain chance: highest hourly value · later days are an early outlook", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             days.forEachIndexed { index, day ->
                 if (index > 0) HorizontalDivider()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (index == 0) "Today" else day.date.format(dayFormatter), modifier = Modifier.width(50.dp), fontWeight = FontWeight.SemiBold)
+                    Text(if (index == 0) "Today" else day.date.format(DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH)), modifier = Modifier.width(62.dp), fontWeight = FontWeight.SemiBold)
                     Icon(weatherIcon(day.code, true), contentDescription = weatherDescription(day.code), tint = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
-                        Text(weatherDescription(day.code), style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                        Text("Rain ${day.rainChancePercent}% · wind to ${day.windMaxKmh.roundToInt()} km/h",
+                        Text(weatherDescription(day.code), style = MaterialTheme.typography.bodySmall)
+                        Text("Rain ${day.rainChancePercent ?: "—"}% · wind to ${weatherNumber(day.windMaxKmh)} km/h",
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text("${day.highC.roundToInt()}°", fontWeight = FontWeight.Bold)
-                    Text("${day.lowC.roundToInt()}°", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${weatherNumber(day.highC)}°", fontWeight = FontWeight.Bold)
+                    Text("${weatherNumber(day.lowC)}°", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
-internal fun weatherDescription(code: Int): String = when (code) {
-    0 -> "Clear"
-    1 -> "Mainly clear"
-    2 -> "Partly cloudy"
-    3 -> "Overcast"
-    45, 48 -> "Fog"
-    in 51..57 -> "Drizzle"
-    in 61..67 -> "Rain"
-    in 71..77 -> "Snow"
-    in 80..82 -> "Showers"
-    85, 86 -> "Snow showers"
-    95, 96, 99 -> "Thunderstorms"
-    else -> "Variable conditions"
-}
+private fun weatherNumber(value: Double?) = value?.roundToInt()?.toString() ?: "—"
 
-private fun weatherIcon(code: Int, day: Boolean): ImageVector = when (code) {
-    0, 1 -> if (day) Icons.Default.WbSunny else Icons.Default.NightsStay
-    2, 3, 45, 48 -> Icons.Default.Cloud
-    in 51..57 -> Icons.Default.Grain
-    in 61..67, in 80..82 -> Icons.Default.WaterDrop
-    in 71..77, 85, 86 -> Icons.Default.AcUnit
-    95, 96, 99 -> Icons.Default.Thunderstorm
-    else -> Icons.Default.Cloud
-}
+internal fun weatherDescription(code: Int?): String = nz.fishingnz.app.model.WeatherLabels.describe(code)
+
+private fun weatherIcon(code: Int?, day: Boolean): ImageVector = knownWeatherIcon(code, day)
 
 internal fun windDirection(degrees: Int): String {
     val directions = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")

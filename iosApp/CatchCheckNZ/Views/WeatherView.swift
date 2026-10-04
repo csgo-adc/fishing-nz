@@ -336,7 +336,7 @@ private struct WeatherForecastPage: View {
             HStack(alignment: .top, spacing: 8) {
                 currentMetric("Feels like", "\(Int(now.feelsLike.rounded()))°C")
                 currentMetric("Wind", "\(Int(now.wind.rounded())) km/h")
-                currentMetric("Rain", String(format: "%.1f mm", now.rain))
+                currentMetric("Rain · 15 min", String(format: "%.1f mm", now.rain))
             }
             Text("Wind from \(windDirection(now.windDirection)) · gusts \(Int(now.gusts.rounded())) km/h · humidity \(now.humidity)%")
                 .font(.caption).foregroundStyle(.white.opacity(0.9))
@@ -365,16 +365,17 @@ private struct WeatherForecastPage: View {
                     HStack(spacing: 8) {
                         ForEach(forecast.hours) { hour in
                             VStack(spacing: 8) {
-                                Text(hour.id == forecast.hours.first?.id ? "Now" : format(hour.at, "ha", zone: forecast.timeZone))
+                                Text(format(hour.at, "ha", zone: forecast.timeZone))
                                     .font(.caption.weight(.semibold))
-                                Image(systemName: symbol(hour.code, isDay: isDaytime(hour.at, zone: forecast.timeZone)))
+                                Image(systemName: symbol(hour.code, isDay: hour.isDay ?? true))
                                     .font(.title2).foregroundStyle(CatchCheckColor.accent)
                                     .accessibilityLabel(condition(hour.code))
-                                Text("\(Int(hour.temperature.rounded()))°").font(.headline)
-                                Text("Rain \(hour.rainChance)%").font(.caption2).foregroundStyle(.secondary)
-                                Text("\(Int(hour.wind.rounded())) km/h").font(.caption2).foregroundStyle(.secondary)
+                                Text(condition(hour.code)).font(.caption2)
+                                Text("\(weatherNumber(hour.temperature))°").font(.headline)
+                                Text("Rain \(hour.rainChance.map(String.init) ?? "—")%").font(.caption2).foregroundStyle(.secondary)
+                                Text("\(weatherNumber(hour.wind)) km/h").font(.caption2).foregroundStyle(.secondary)
                             }
-                            .frame(width: 74)
+                            .frame(width: 102)
                             .padding(.vertical, 12)
                             .background(CatchCheckColor.cream, in: RoundedRectangle(cornerRadius: 14))
                         }
@@ -388,23 +389,24 @@ private struct WeatherForecastPage: View {
 
     private func dailyCard(_ forecast: WeatherSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("7-day forecast").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+            Text("\(forecast.days.count)-day forecast").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+            Text("Rain chance: highest hourly value · later days are an early outlook").font(.caption).foregroundStyle(.secondary)
             ForEach(Array(forecast.days.enumerated()), id: \.element.id) { index, day in
                 if index > 0 { Divider() }
                 HStack(spacing: 8) {
-                    Text(index == 0 ? "Today" : format(day.at, "EEE", zone: forecast.timeZone))
-                        .font(.subheadline.weight(.semibold)).frame(width: 47, alignment: .leading)
+                    Text(index == 0 ? "Today" : format(day.at, "EEE d", zone: forecast.timeZone))
+                        .font(.subheadline.weight(.semibold)).frame(width: 62, alignment: .leading)
                     Image(systemName: symbol(day.code, isDay: true))
                         .foregroundStyle(CatchCheckColor.accent).frame(width: 24)
                         .accessibilityLabel(condition(day.code))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(condition(day.code)).font(.subheadline).lineLimit(1)
-                        Text("Rain \(day.rainChance)% · wind to \(Int(day.windMax.rounded())) km/h")
+                        Text(condition(day.code)).font(.subheadline)
+                        Text("Rain \(day.rainChance.map(String.init) ?? "—")% · wind to \(weatherNumber(day.windMax)) km/h")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
-                    Text("\(Int(day.high.rounded()))°").font(.subheadline.bold())
-                    Text("\(Int(day.low.rounded()))°").font(.subheadline).foregroundStyle(.secondary)
+                    Text("\(weatherNumber(day.high))°").font(.subheadline.bold())
+                    Text("\(weatherNumber(day.low))°").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
         }
@@ -420,44 +422,12 @@ private struct WeatherForecastPage: View {
         return formatter.string(from: date)
     }
 
-    private func isDaytime(_ date: Date, zone: TimeZone) -> Bool {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = zone
-        return (7...18).contains(calendar.component(.hour, from: date))
-    }
-
     private func windDirection(_ degrees: Int) -> String {
         let directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
         return directions[((degrees % 360 + 360) % 360 + 22) / 45 % 8]
     }
 
-    private func condition(_ code: Int) -> String {
-        switch code {
-        case 0: "Clear"
-        case 1: "Mainly clear"
-        case 2: "Partly cloudy"
-        case 3: "Overcast"
-        case 45, 48: "Fog"
-        case 51...57: "Drizzle"
-        case 61...67: "Rain"
-        case 71...77: "Snow"
-        case 80...82: "Showers"
-        case 85, 86: "Snow showers"
-        case 95, 96, 99: "Thunderstorms"
-        default: "Variable conditions"
-        }
-    }
-
-    private func symbol(_ code: Int, isDay: Bool) -> String {
-        switch code {
-        case 0, 1: isDay ? "sun.max.fill" : "moon.stars.fill"
-        case 2, 3: "cloud.fill"
-        case 45, 48: "cloud.fog.fill"
-        case 51...57: "cloud.drizzle.fill"
-        case 61...67, 80...82: "cloud.rain.fill"
-        case 71...77, 85, 86: "cloud.snow.fill"
-        case 95, 96, 99: "cloud.bolt.rain.fill"
-        default: "cloud.fill"
-        }
-    }
+    private func weatherNumber(_ value: Double?) -> String { value.map { String(Int($0.rounded())) } ?? "—" }
+    private func condition(_ code: Int?) -> String { WeatherPresentation.label(code) }
+    private func symbol(_ code: Int?, isDay: Bool) -> String { WeatherPresentation.symbol(code, isDay: isDay) }
 }

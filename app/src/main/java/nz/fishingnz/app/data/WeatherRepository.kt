@@ -26,19 +26,20 @@ data class CurrentWeather(
 
 data class HourlyWeather(
     val at: LocalDateTime,
-    val temperatureC: Double,
-    val rainChancePercent: Int,
-    val windKmh: Double,
-    val code: Int
+    val temperatureC: Double?,
+    val rainChancePercent: Int?,
+    val windKmh: Double?,
+    val code: Int?,
+    val isDay: Boolean? = null
 )
 
 data class DailyWeather(
     val date: LocalDate,
-    val highC: Double,
-    val lowC: Double,
-    val rainChancePercent: Int,
-    val windMaxKmh: Double,
-    val code: Int
+    val highC: Double?,
+    val lowC: Double?,
+    val rainChancePercent: Int?,
+    val windMaxKmh: Double?,
+    val code: Int?
 )
 
 data class LocalWeatherForecast(
@@ -55,9 +56,9 @@ class WeatherRepository {
         val url = "https://api.open-meteo.com/v1/forecast" +
             "?latitude=${point.latitude}&longitude=${point.longitude}" +
             "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,is_day" +
-            "&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code" +
+            "&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code,is_day" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max" +
-            "&forecast_days=7&timezone=auto"
+            "&forecast_days=16&timezone=auto&wind_speed_unit=kmh&temperature_unit=celsius&precipitation_unit=mm"
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 10_000
         connection.readTimeout = 15_000
@@ -96,10 +97,11 @@ internal fun decodeWeatherForecast(json: JSONObject, fetchedAt: Instant): LocalW
     val hourly = (0 until hourlyTimes.length()).map { index ->
         HourlyWeather(
             at = LocalDateTime.parse(hourlyTimes.getString(index)),
-            temperatureC = temperatures.getDouble(index),
-            rainChancePercent = rainChances.optInt(index, 0),
-            windKmh = windSpeeds.getDouble(index),
-            code = hourlyCodes.getInt(index)
+            temperatureC = temperatures.optDouble(index, Double.NaN).takeIf { it.isFinite() },
+            rainChancePercent = if (rainChances.isNull(index)) null else rainChances.getInt(index).takeIf { it in 0..100 },
+            windKmh = windSpeeds.optDouble(index, Double.NaN).takeIf { it.isFinite() && it >= 0 },
+            code = if (hourlyCodes.isNull(index)) null else hourlyCodes.getInt(index),
+            isDay = hourlyJson.optJSONArray("is_day")?.let { if (it.isNull(index)) null else it.getInt(index).takeIf { value -> value in 0..1 }?.let { value -> value == 1 } }
         )
     }.filter { !it.at.isBefore(current.observedAt.withMinute(0).withSecond(0)) }.take(24)
 
@@ -113,11 +115,11 @@ internal fun decodeWeatherForecast(json: JSONObject, fetchedAt: Instant): LocalW
     val daily = (0 until dailyTimes.length()).map { index ->
         DailyWeather(
             date = LocalDate.parse(dailyTimes.getString(index)),
-            highC = highs.getDouble(index),
-            lowC = lows.getDouble(index),
-            rainChancePercent = dailyRain.optInt(index, 0),
-            windMaxKmh = dailyWind.getDouble(index),
-            code = dailyCodes.getInt(index)
+            highC = highs.optDouble(index, Double.NaN).takeIf { it.isFinite() },
+            lowC = lows.optDouble(index, Double.NaN).takeIf { it.isFinite() },
+            rainChancePercent = if (dailyRain.isNull(index)) null else dailyRain.getInt(index).takeIf { it in 0..100 },
+            windMaxKmh = dailyWind.optDouble(index, Double.NaN).takeIf { it.isFinite() && it >= 0 },
+            code = if (dailyCodes.isNull(index)) null else dailyCodes.getInt(index)
         )
     }
     return LocalWeatherForecast(current, hourly, daily, zone, fetchedAt)

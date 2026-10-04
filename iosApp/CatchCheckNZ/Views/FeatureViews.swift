@@ -49,15 +49,24 @@ struct FishingMapView: View {
     @State private var cameraCommand = MapCameraCommand(sequence: 0, target: .region(initialRegion))
     @State private var needsFirstLocationCenter = true
     @State private var recenterOnLocationUpdate = false
-    @State private var selectedMapSpot: FishingSpot?
+    @State private var selectedPlace: ConditionPlace?
+    @State private var conditionsPlace: ConditionPlace?
+    @State private var showPlaceSearch = false
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) { Text("Fishing map").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy); Text("Explore named coastal areas · check access and local rules").foregroundStyle(.secondary); Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented) }.padding(20)
-            FishingMapCanvas(layer: layer, spots: visibleSpots, cameraCommand: cameraCommand,
-                             currentCamera: $currentCamera) { spot in
-                selectedMapSpot = spot
-            }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Explore conditions").font(.title.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Spacer()
+                    Button { showPlaceSearch = true } label: { Image(systemName: "magnifyingglass").font(.title3) }.accessibilityLabel("Search places")
+                }
+                Text("Search a place or tap anywhere on the map").font(.subheadline).foregroundStyle(.secondary)
+                Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented)
+            }.padding(20)
+            FishingMapCanvas(layer: layer, spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
+                             currentCamera: $currentCamera, onSpotSelected: { selectedPlace = ConditionPlace($0) },
+                             onPointSelected: { selectedPlace = ConditionPlace(name: "Dropped pin", point: $0, region: "Selected on map", boat: filter == "Boat") })
             .overlay(alignment: .topTrailing) {
                 VStack(spacing: 12) {
                     Menu {
@@ -119,44 +128,7 @@ struct FishingMapView: View {
                     .padding(.bottom, 36)
                 }
             }
-            if let spot = selectedMapSpot {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(spot.name).font(.headline).foregroundStyle(CatchCheckColor.navy)
-                            Text("\(spot.area) · \(spot.boat ? "Boat" : "Land") fishing")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button { selectedMapSpot = nil } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title3).foregroundStyle(.secondary)
-                        }
-                        .accessibilityLabel("Close selected spot")
-                    }
-                    Text("Approximate fishing area. Check access and local rules before leaving.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack(spacing: 10) {
-                        Button {
-                            openSpotInMaps(spot)
-                        } label: {
-                            Label(spot.boat ? "View in Maps" : "Directions", systemImage: "map")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        Button("Spot details") {
-                            vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
-                                ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
-                        }
-                        .buttonStyle(.bordered)
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(16)
-                .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
-            }
+            selectedPlaceCard
         }.background(CatchCheckColor.cream)
             .onAppear {
                 if vm.hasDeviceLocation { centerOnCurrentLocation(); needsFirstLocationCenter = false }
@@ -177,8 +149,59 @@ struct FishingMapView: View {
                     recenterOnLocationUpdate = false
                 }
             }
-            .onChange(of: filter) { _, _ in selectedMapSpot = nil }
+            .onChange(of: filter) { _, _ in selectedPlace = nil }
+            .sheet(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
+            .sheet(isPresented: $showPlaceSearch) {
+                MapPlaceSearchView { place in
+                    selectedPlace = place
+                    sendCamera(.region(MKCoordinateRegion(center: .init(latitude: place.point.latitude, longitude: place.point.longitude), span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
+                }
+            }
     }
+
+    @ViewBuilder private var selectedPlaceCard: some View {
+        if let place = selectedPlace {
+            let spot = FishingSpot(name: place.name, area: place.region, coordinate: place.point, boat: place.boat)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(spot.name).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                        Text(place.region)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { selectedPlace = nil } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3).foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Close selected spot")
+                }
+                Button { conditionsPlace = place } label: {
+                    Label("Check conditions", systemImage: "cloud.sun.fill").frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent)
+                HStack(spacing: 10) {
+                    Button {
+                        openSpotInMaps(spot)
+                    } label: {
+                        Label(spot.boat ? "View in Maps" : "Directions", systemImage: "map")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    Button("Spot details") {
+                        vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
+                            ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(16)
+            .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+        }
+    }
+
 
     private func centerOnCurrentLocation() {
         sendCamera(.region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude),
@@ -224,9 +247,11 @@ private final class FishingSpotMapAnnotation: NSObject, MKAnnotation {
 private struct FishingMapCanvas: UIViewRepresentable {
     let layer: FishingMapLayer
     let spots: [FishingSpot]
+    let selectedPlace: ConditionPlace?
     let cameraCommand: MapCameraCommand
     @Binding var currentCamera: MKMapCamera?
     let onSpotSelected: (FishingSpot) -> Void
+    let onPointSelected: (GeoPoint) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -235,6 +260,9 @@ private struct FishingMapCanvas: UIViewRepresentable {
         map.delegate = context.coordinator
         map.showsUserLocation = true
         map.showsCompass = false
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapMap(_:)))
+        tap.cancelsTouchesInView = false; tap.delegate = context.coordinator
+        map.addGestureRecognizer(tap)
         return map
     }
 
@@ -268,6 +296,15 @@ private struct FishingMapCanvas: UIViewRepresentable {
             map.addAnnotations(spots.map(FishingSpotMapAnnotation.init))
         }
 
+        if coordinator.selectedID != selectedPlace?.id {
+            if let pin = coordinator.selectedPin { map.removeAnnotation(pin) }
+            coordinator.selectedID = selectedPlace?.id; coordinator.selectedPin = nil
+            if let place = selectedPlace {
+                let pin = MKPointAnnotation(); pin.title = place.name
+                pin.coordinate = .init(latitude: place.point.latitude, longitude: place.point.longitude)
+                coordinator.selectedPin = pin; map.addAnnotation(pin)
+            }
+        }
         if coordinator.lastCameraCommand != cameraCommand.sequence {
             coordinator.lastCameraCommand = cameraCommand.sequence
             switch cameraCommand.target {
@@ -277,10 +314,26 @@ private struct FishingMapCanvas: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, MKMapViewDelegate {
+    final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var parent: FishingMapCanvas
         var layer: FishingMapLayer?
         var lastCameraCommand = -1
+        var selectedID: String?
+        var selectedPin: MKPointAnnotation?
+        @objc func tapMap(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended, let map = gesture.view as? MKMapView else { return }
+            let position = map.convert(gesture.location(in: map), toCoordinateFrom: map)
+            parent.onPointSelected(.init(latitude: position.latitude, longitude: position.longitude))
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view = touch.view
+            while let current = view {
+                if current is MKAnnotationView || current is UIControl { return false }
+                view = current.superview
+            }
+            return true
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
 
         init(parent: FishingMapCanvas) { self.parent = parent }
 
@@ -290,6 +343,11 @@ private struct FishingMapCanvas: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: any MKAnnotation) -> MKAnnotationView? {
+            if let pin = annotation as? MKPointAnnotation, pin === selectedPin {
+                let marker = mapView.dequeueReusableAnnotationView(withIdentifier: "SelectedPlace") as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: pin, reuseIdentifier: "SelectedPlace")
+                marker.annotation = pin; marker.markerTintColor = UIColor(CatchCheckColor.accent); marker.glyphImage = UIImage(systemName: "mappin"); marker.canShowCallout = false
+                return marker
+            }
             guard let spotAnnotation = annotation as? FishingSpotMapAnnotation else { return nil }
             let reuseID = "FishingSpot"
             let marker = mapView.dequeueReusableAnnotationView(withIdentifier: reuseID) as? MKMarkerAnnotationView

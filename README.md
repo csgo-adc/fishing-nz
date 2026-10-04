@@ -18,10 +18,10 @@ The Tide page selects the nearest supported tide station from your location. You
 
 ## Explore and prepare
 
-- **Map:** Open near your current location, browse named coastal places, switch between land and boat spots, and choose from standard, LINZ aerial imagery, and LINZ topographic basemaps.
+- **Map:** Search a place or tap the map, then check upcoming and recent conditions. Compare daily and hourly weather, wind, offshore waves, tide events, rain and daylight, with separate shore and boat views. History supports 3, 7, 30 or 92 recent days. Existing fishing spots and LINZ map layers remain available. [How place conditions work](docs/place-conditions.md).
 - **Trips:** Keep a shortlist of spots and an active plan while you are planning.
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location for a short rule summary, then open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
-- **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and a seven-day forecast. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
+- **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and up to 16 forecast days with familiar weather icons and plain labels. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
 - **Account:** Confirm your email to manage your profile and send feedback.
 - **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information.
 
