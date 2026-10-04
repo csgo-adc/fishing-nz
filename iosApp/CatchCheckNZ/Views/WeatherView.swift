@@ -321,9 +321,7 @@ private struct WeatherForecastPage: View {
             }
             .foregroundStyle(.white.opacity(0.9))
             HStack(spacing: 18) {
-                Image(systemName: symbol(now.code, isDay: now.isDay))
-                    .font(.system(size: 48))
-                    .symbolRenderingMode(.hierarchical)
+                WeatherSymbol(code: now.code, isDay: now.isDay, size: 48)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("\(Int(now.temperature.rounded()))°")
                         .font(.system(size: 64, weight: .bold, design: .rounded))
@@ -367,8 +365,7 @@ private struct WeatherForecastPage: View {
                             VStack(spacing: 8) {
                                 Text(format(hour.at, "ha", zone: forecast.timeZone))
                                     .font(.caption.weight(.semibold))
-                                Image(systemName: symbol(hour.code, isDay: hour.isDay ?? true))
-                                    .font(.title2).foregroundStyle(CatchCheckColor.accent)
+                                WeatherSymbol(code: hour.code, isDay: hour.isDay ?? true).foregroundStyle(CatchCheckColor.accent)
                                     .accessibilityLabel(condition(hour.code))
                                 Text(condition(hour.code)).font(.caption2)
                                 Text("\(weatherNumber(hour.temperature))°").font(.headline)
@@ -396,7 +393,7 @@ private struct WeatherForecastPage: View {
                 HStack(spacing: 8) {
                     Text(index == 0 ? "Today" : format(day.at, "EEE d", zone: forecast.timeZone))
                         .font(.subheadline.weight(.semibold)).frame(width: 62, alignment: .leading)
-                    Image(systemName: symbol(day.code, isDay: true))
+                    WeatherSymbol(code: day.code)
                         .foregroundStyle(CatchCheckColor.accent).frame(width: 24)
                         .accessibilityLabel(condition(day.code))
                     VStack(alignment: .leading, spacing: 2) {
@@ -429,5 +426,42 @@ private struct WeatherForecastPage: View {
 
     private func weatherNumber(_ value: Double?) -> String { value.map { String(Int($0.rounded())) } ?? "—" }
     private func condition(_ code: Int?) -> String { WeatherPresentation.label(code) }
-    private func symbol(_ code: Int?, isDay: Bool) -> String { WeatherPresentation.symbol(code, isDay: isDay) }
+}
+
+
+/// A familiar cloud remains visible at every rain intensity.
+struct WeatherSymbol: View {
+    let code: Int?
+    var isDay = true
+    var size: CGFloat = 24
+    var body: some View {
+        Group {
+            if WeatherPresentation.rainDrops(code) > 0 {
+                VStack(spacing: 0) {
+                    Image(systemName: "cloud.fill").resizable().scaledToFit().frame(width: size, height: size * 0.7)
+                    HStack(spacing: size * 0.13) {
+                        ForEach(0..<WeatherPresentation.rainDrops(code), id: \.self) { _ in
+                            RainDroplet().fill()
+                                .frame(width: size * (WeatherPresentation.isDrizzle(code) ? 0.075 : 0.105),
+                                       height: size * (WeatherPresentation.isDrizzle(code) ? 0.14 : 0.2))
+                        }
+                    }.frame(height: size * 0.25)
+                }
+            } else {
+                Image(systemName: WeatherPresentation.symbol(code, isDay: isDay)).font(.system(size: size))
+            }
+        }.frame(width: size, height: size)
+            .accessibilityElement(children: .ignore).accessibilityLabel(WeatherPresentation.label(code))
+    }
+}
+
+private struct RainDroplet: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { p in
+            p.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            p.addCurve(to: CGPoint(x: rect.midX, y: rect.maxY), control1: CGPoint(x: rect.minX, y: rect.height * 0.45), control2: CGPoint(x: rect.minX, y: rect.height * 0.85))
+            p.addCurve(to: CGPoint(x: rect.midX, y: rect.minY), control1: CGPoint(x: rect.maxX, y: rect.height * 0.85), control2: CGPoint(x: rect.maxX, y: rect.height * 0.45))
+            p.closeSubpath()
+        }
+    }
 }

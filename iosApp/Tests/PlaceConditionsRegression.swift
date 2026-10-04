@@ -24,10 +24,10 @@ import Foundation
         try expect(query(PlaceConditionsService.marineURL(point, pastDays: 3), "cell_selection") == "sea", "Offshore grid selection")
         try expect(data.dates.count == 17, "Actual returned dates")
         try expect(data.weatherHours(date).count == 23 && data.marineHours(date).count == 23, "NZ DST day must be 23 hours")
-        try expect(data.rows(date, boat: true).first?.mood.label == "More motion", "Complete DST day was treated as incomplete")
-        try expect(data.rows(date, boat: true).first { $0.title == "Daylight" }?.value == "6:30 AM–7:30 PM", "Sunrise timezone applied twice")
+        try expect(data.rows(date).first?.mood.label == "More motion", "Complete DST day was treated as incomplete")
+        try expect(data.rows(date).first { $0.title == "Daylight" }?.value == "6:30 AM–7:30 PM", "Sunrise timezone applied twice")
         try expect(weather.hours.last?.chance == nil && weather.days.last?.chance == nil, "Missing rain chance became zero")
-        try expect(data.marineHours(later).isEmpty && data.rows(later, boat: true).first?.mood == needsDataMood, "Waves extended past returned data")
+        try expect(data.marineHours(later).isEmpty && data.rows(later).first?.mood == needsDataMood, "Waves extended past returned data")
         func changed(_ source: Data, section: String, field: String, value: Any) throws -> Data {
             var root = try JSONSerialization.jsonObject(with: source) as! [String: Any]
             var values = root[section] as! [String: Any]; values[field] = value; root[section] = values
@@ -38,18 +38,18 @@ import Foundation
         try rejects { _ = try PlaceConditionsService.decodeWeather(changed(weatherJSON, section: "hourly", field: "temperature_2m", value: [17]), fetchedAt: .now) }
         let weatherOnly = PlaceConditions(weather: weather, marine: nil, weatherIssue: nil, marineIssue: "Unavailable")
         let seaOnly = PlaceConditions(weather: nil, marine: marine, weatherIssue: "Unavailable", marineIssue: nil)
-        try expect(weatherOnly.dates.count == 17 && weatherOnly.rows(date, boat: true).first?.mood == needsDataMood, "Weather fallback")
-        try expect(seaOnly.dates.count == 2 && seaOnly.hourDates(date).count == 23 && seaOnly.rows(date, boat: true).first?.mood.label == "More motion", "Marine fallback")
+        try expect(weatherOnly.dates.count == 17 && weatherOnly.rows(date).first?.mood == needsDataMood, "Weather fallback")
+        try expect(seaOnly.dates.count == 2 && seaOnly.hourDates(date).count == 23 && seaOnly.rows(date).first?.mood.label == "More motion", "Marine fallback")
         let last = marine.hours.keys.max()!
         let partial = PlaceMarine(hours: [last: .init(height: 2.5, period: nil, direction: nil, swell: nil, swellPeriod: nil, waterTemperature: nil)], zone: marine.zone, fetchedAt: marine.fetchedAt, grid: marine.grid)
-        try expect(PlaceConditions(weather: weather, marine: partial, weatherIssue: nil, marineIssue: nil).rows(date, boat: true).first?.mood.label == "High waves", "Known high waves hidden by missing period")
+        try expect(PlaceConditions(weather: weather, marine: partial, weatherIssue: nil, marineIssue: nil).rows(date).first?.mood.label == "High waves", "Known high waves hidden by missing period")
         func paired(_ height: Double) -> PlaceConditions {
             var hours = marine.hours.mapValues { _ in PlaceMarineHour(height: 0.7, period: 9, direction: nil, swell: nil, swellPeriod: nil, waterTemperature: nil) }
             hours[last] = .init(height: height, period: 4, direction: nil, swell: nil, swellPeriod: nil, waterTemperature: nil)
             return .init(weather: weather, marine: .init(hours: hours, zone: marine.zone, fetchedAt: marine.fetchedAt, grid: marine.grid), weatherIssue: nil, marineIssue: nil)
         }
-        try expect(paired(0.1).rows(date, boat: true).first?.mood.label == "More motion", "Unpaired short period wrongly marked choppy")
-        try expect(paired(0.7).rows(date, boat: true).first?.mood.label == "Choppy", "Paired chop missing")
+        try expect(paired(0.1).rows(date).first?.mood.label == "More motion", "Unpaired short period wrongly marked choppy")
+        try expect(paired(0.7).rows(date).first?.mood.label == "Choppy", "Paired chop missing")
         try expect(WeatherPresentation.label(61) == "Light rain" && WeatherPresentation.label(65) == "Heavy rain", "Rain intensity labels")
         try expect(WeatherPresentation.label(55) == "Heavy drizzle" && WeatherPresentation.label(99) == "Thunderstorms with hail", "Specific weather labels")
         try expect(WeatherPresentation.label(nil) == "Weather unavailable" && WeatherPresentation.label(64) == "Weather unavailable" && WeatherPresentation.symbol(64) == "questionmark.circle", "Unknown weather labels")
@@ -73,7 +73,7 @@ import Foundation
             try expect(futureMarine.count == 8, "Live marine dates differ from provider horizon")
             print("Live Thames: \(futureWeather.count) upcoming weather days, \(previousWeather.count) recent days, \(futureMarine.count) upcoming marine days.")
             print("Weather grid \(live.weather!.grid); marine grid \(live.marine!.grid).")
-            print(live.rows(today, boat: true).map { "\($0.title): \($0.value) · \($0.mood.emoji) \($0.mood.label)" }.joined(separator: "\n"))
+            print(live.rows(today).map { "\($0.title): \($0.value) · \($0.mood.emoji) \($0.mood.label)" }.joined(separator: "\n"))
         }
         print("\(checks) place-condition checks passed.")
     }

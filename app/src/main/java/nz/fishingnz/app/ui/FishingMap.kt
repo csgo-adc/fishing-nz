@@ -399,7 +399,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         nativeMap.value?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.point.latitude, place.point.longitude), 11.0))
     }, dismiss = { showSearch = false })
     if (showConditions && selectedPlace != null) key(selectedPlace!!.id) {
-        PlaceConditionsSheet(selectedPlace!!, dismiss = { showConditions = false })
+        PlaceConditionsScreen(selectedPlace!!, dismiss = { showConditions = false })
     }
     if (showList) ModalBottomSheet(onDismissRequest = { showList = false }) {
         Text("Fishing areas", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold)

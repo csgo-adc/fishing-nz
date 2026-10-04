@@ -30,7 +30,8 @@ data class PlaceConditions(val weather: PlaceWeather?, val marine: PlaceMarine?,
     fun marineHours(date: LocalDate) = marine?.hours?.filterKeys { it.atZone(zone).toLocalDate() == date }?.values.orEmpty().toList()
     fun weatherHours(date: LocalDate) = weather?.hours?.filter { it.at.atZone(zone).toLocalDate() == date }.orEmpty()
     fun hourDates(date: LocalDate) = (weatherHours(date).map { it.at } + marine?.hours?.keys?.filter { it.atZone(zone).toLocalDate() == date }.orEmpty()).distinct().sorted()
-    fun rows(date: LocalDate, boat: Boolean): List<ConditionItem> = PlaceConditionRows.make(this, date, boat)
+    fun rows(date: LocalDate): List<ConditionItem> = PlaceConditionRows.make(this, date)
+    fun details(date: LocalDate, title: String): List<String> = PlaceConditionRows.details(this, date, title)
 }
 
 class PlaceConditionsRepository {
@@ -120,6 +121,24 @@ class PlaceConditionsRepository {
 }
 
 internal object PlaceConditionRows {
+    fun details(data: PlaceConditions, date: LocalDate, title: String): List<String> {
+        val hours = data.weatherHours(date)
+        val clock = java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+        val wettest = hours.filter { it.rain != null && it.rain > 0 }.maxByOrNull { it.rain!! }
+        val rainPeak = wettest?.let { "Wettest hour ends ${it.at.atZone(data.zone).format(clock)} · ${number(it.rain, 1)} mm." }
+        return when (title) {
+            "Offshore waves" -> listOf("Height is the largest significant wave height; individual waves can be higher. Period is the time between waves.", "🚤 Boat: short periods can make the ride choppy; longer swells can cause rolling.", "🎣 Shore: check breaking waves, shelter and swell direction. Offshore height does not describe waves at your feet.")
+            "Wind" -> listOf("Max is the strongest sustained wind for the day. Gust is a brief stronger burst. Direction shows where wind comes from.", "🎣 Shore: headwinds make casting harder. 🚤 Boat: wind can roughen the water and push the boat.")
+            "Rain" -> listOfNotNull(rainPeak, "mm is the day's precipitation total. % is the highest hourly chance, not a whole-day chance.", "Rain drops on weather icons: 1 light · 2 moderate · 3 heavy. Smaller drops mean drizzle.", "Wet clothes, slippery ground and a wet deck can make fishing uncomfortable.")
+            "Feels like" -> listOf("The range includes overnight hours and accounts for wind, humidity and sunshine.", "Check the hourly values for your visit. Wet clothes can make you feel colder.")
+            "Daylight" -> listOf("Sunrise–sunset in local time.", "Allow time to walk back or return to the ramp before dark.")
+            "UV" -> listOf("The day's peak UV index. Protection is useful from UV 3, even when it feels cool.", "Shade, sunscreen, a hat and sunglasses help on shore and on the water.")
+            "Visibility" -> listOf("The lowest model visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours.")
+            "Water temperature" -> listOf("Model temperature at the sea surface, not a measurement at this pin.", "It can help compare days; it does not measure water clarity or fish activity.")
+            "Offshore swell" -> listOf("Swell travels from weather farther away. The period is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water.")
+            else -> emptyList()
+        }
+    }
     fun number(value: Double?, decimals: Int = 0) = value?.let { String.format(Locale.US, "%.$decimals" + "f", it) } ?: "—"
     fun range(values: List<Double?>, decimals: Int = 0): String {
         val known = values.filterNotNull(); if (known.isEmpty()) return "—"
@@ -127,7 +146,7 @@ internal object PlaceConditionRows {
         return if (a == b) a else "$a–$b"
     }
     fun direction(value: Double?) = value?.let { listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")[(it / 45).roundToInt().mod(8)] } ?: "—"
-    fun make(data: PlaceConditions, date: LocalDate, boat: Boolean): List<ConditionItem> {
+    fun make(data: PlaceConditions, date: LocalDate): List<ConditionItem> {
         val day = data.weather?.days?.firstOrNull { it.date == date }
         val hours = data.weatherHours(date); val sea = data.marineHours(date)
         val heights = sea.map { it.height }; val periods = sea.map { it.period }
@@ -135,17 +154,16 @@ internal object PlaceConditionRows {
         val expectedHours = Duration.between(date.atStartOfDay(data.zone), date.plusDays(1).atStartOfDay(data.zone)).toHours().toInt()
         val completeSea = sea.size == expectedHours && heights.all { it != null } && periods.all { it != null }
         val seaFeeling = when {
-            maxWave != null && maxWave >= (if (boat) 2.0 else 3.0) -> WindowMood("🌊", "High waves")
+            maxWave != null && maxWave >= 2.0 -> WindowMood("🌊", "High waves")
             !completeSea -> needsDataMood
-            boat && sea.any { (it.height ?: 0.0) >= .5 && (it.period ?: 99.0) <= 5 } -> WindowMood("🌊", "Choppy")
-            boat -> WindowMood("🌊", if ((maxWave ?: 0.0) <= .5) "Lower waves" else "More motion")
-            else -> WindowMood("🌊", "Check exposure")
+            sea.any { (it.height ?: 0.0) >= .5 && (it.period ?: 99.0) <= 5 } -> WindowMood("🌊", "Choppy")
+            else -> WindowMood("🌊", if ((maxWave ?: 0.0) <= .5) "Lower waves" else "More motion")
         }
         val wind = ConditionItem("Wind", "max ${number(day?.wind)} km/h · gust ${number(day?.gust)} · ${direction(day?.direction)}",
             if (day?.wind == null || day.gust == null) needsDataMood else comfortMood(LandAssessment.windBand(day.wind, day.gust)))
         val waves = ConditionItem("Offshore waves", if (maxWave == null) "—" else "max ${number(maxWave, 1)} m · ${range(periods, 1)} s", seaFeeling)
         val rain = ConditionItem("Rain", "${number(day?.rain, 1)} mm · ${number(day?.chance)}% hourly max", if (day?.rain == null) needsDataMood else
-            WindowMood(if (day.rain > 0) "🌧️" else "🌤️", if (day.rain > 3) "Wet day" else if (day.rain > 0) "Some rain" else if ((day.chance ?: 0.0) >= 60) "Rain possible" else "Mostly dry"))
+            WindowMood(if (day.rain > 0) "☔" else "🌤️", if (day.rain > 3) "Wet day" else if (day.rain > 0) "Some rain" else if ((day.chance ?: 0.0) >= 60) "Rain possible" else "Mostly dry"))
         val feels = ConditionItem("Feels like", "${range(listOf(day?.feelsLow, day?.feelsHigh))}°C", if (day?.feelsLow == null || day.feelsHigh == null) needsDataMood else
             WindowMood(if (day.feelsLow < 12) "🥶" else if (day.feelsHigh > 26) "🥵" else "😌", if (day.feelsLow < 12) "Cold at times" else if (day.feelsHigh > 26) "Hot at times" else "Mild"))
         val solarFormat = java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US)
@@ -158,7 +176,7 @@ internal object PlaceConditionRows {
         val swells = sea.map { it.swell }
         val swell = ConditionItem("Offshore swell", swells.filterNotNull().maxOrNull()?.let { "max ${number(it, 1)} m · ${range(sea.map { hour -> hour.swellPeriod }, 1)} s" } ?: "—",
             if (swells.isEmpty() || swells.any { it == null } || sea.any { it.swellPeriod == null }) needsDataMood else WindowMood("🌊", "Offshore model"))
-        return (if (boat) listOf(waves, wind) else listOf(wind, waves)) + listOf(rain, feels, light, uv, view, waterRow, swell)
+        return listOf(waves, wind) + listOf(rain, feels, light, uv, view, waterRow, swell)
     }
 }
 

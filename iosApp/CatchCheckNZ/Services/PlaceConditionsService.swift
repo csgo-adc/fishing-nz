@@ -39,10 +39,20 @@ struct PlaceConditions: Sendable {
     func weatherHours(_ day: Date) -> [PlaceWeatherHour] { weather?.hours.filter { calendar.isDate($0.at, inSameDayAs: day) } ?? [] }
     func marineHours(_ day: Date) -> [PlaceMarineHour] { marine?.hours.filter { calendar.isDate($0.key, inSameDayAs: day) }.map(\.value) ?? [] }
     func hourDates(_ day: Date) -> [Date] { Array(Set(weatherHours(day).map(\.at) + (marine?.hours.keys.filter { calendar.isDate($0, inSameDayAs: day) } ?? []))).sorted() }
-    func rows(_ day: Date, boat: Bool) -> [ConditionItem] { PlaceConditionRows.make(self, date: day, boat: boat) }
+    func rows(_ day: Date) -> [ConditionItem] { PlaceConditionRows.make(self, date: day) }
+    func details(_ day: Date, title: String) -> [String] { PlaceConditionRows.details(self, date: day, title: title) }
 }
 
 enum WeatherPresentation {
+    static func rainDrops(_ code: Int?) -> Int {
+        switch code {
+        case 51, 56, 61, 66, 80: 1
+        case 53, 63, 81: 2
+        case 55, 57, 65, 67, 82: 3
+        default: 0
+        }
+    }
+    static func isDrizzle(_ code: Int?) -> Bool { [51, 53, 55, 56, 57].contains(code ?? -1) }
     static func label(_ code: Int?) -> String {
         guard let code else { return "Weather unavailable" }
         return switch code {
@@ -52,21 +62,24 @@ enum WeatherPresentation {
         case 3: "Cloudy"
         case 45, 48: "Fog"
         case 51: "Light drizzle"
-        case 53: "Drizzle"
+        case 53: "Moderate drizzle"
         case 55: "Heavy drizzle"
-        case 56, 57: "Freezing drizzle"
+        case 56: "Light freezing drizzle"
+        case 57: "Heavy freezing drizzle"
         case 61: "Light rain"
-        case 63: "Rain"
+        case 63: "Moderate rain"
         case 65: "Heavy rain"
-        case 66, 67: "Freezing rain"
+        case 66: "Light freezing rain"
+        case 67: "Heavy freezing rain"
         case 71: "Light snow"
         case 73, 77: "Snow"
         case 75: "Heavy snow"
         case 80: "Light showers"
-        case 81: "Showers"
+        case 81: "Moderate showers"
         case 82: "Heavy showers"
         case 85, 86: "Snow showers"
         case 95: "Thunderstorms"
+        case 97: "Heavy thunderstorms"
         case 96, 99: "Thunderstorms with hail"
         default: "Weather unavailable"
         }
@@ -80,7 +93,7 @@ enum WeatherPresentation {
         case 45, 48: "cloud.fog.fill"
         case 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82: "cloud.rain.fill"
         case 71, 73, 75, 77, 85, 86: "cloud.snow.fill"
-        case 95, 96, 99: "cloud.bolt.rain.fill"
+        case 95, 96, 97, 99: "cloud.bolt.rain.fill"
         default: "questionmark.circle"
         }
     }
@@ -184,27 +197,43 @@ struct PlaceConditionsService: Sendable {
 private enum ConditionsError: Error { case invalidData }
 
 enum PlaceConditionRows {
+    static func details(_ data: PlaceConditions, date: Date, title: String) -> [String] {
+        let wettest = data.weatherHours(date).filter { ($0.rain ?? 0) > 0 }.max { ($0.rain ?? 0) < ($1.rain ?? 0) }
+        let clock = DateFormatter(); clock.locale = Locale(identifier: "en_NZ"); clock.timeZone = data.zone; clock.dateFormat = "h:mm a"
+        let rainPeak = wettest.map { "Wettest hour ends \(clock.string(from: $0.at)) · \(number($0.rain, 1)) mm." }
+        return switch title {
+        case "Offshore waves": ["Height is the largest significant wave height; individual waves can be higher. Period is the time between waves.", "🚤 Boat: short periods can make the ride choppy; longer swells can cause rolling.", "🎣 Shore: check breaking waves, shelter and swell direction. Offshore height does not describe waves at your feet."]
+        case "Wind": ["Max is the strongest sustained wind for the day. Gust is a brief stronger burst. Direction shows where wind comes from.", "🎣 Shore: headwinds make casting harder. 🚤 Boat: wind can roughen the water and push the boat."]
+        case "Rain": [rainPeak, "mm is the day's precipitation total. % is the highest hourly chance, not a whole-day chance.", "Rain drops on weather icons: 1 light · 2 moderate · 3 heavy. Smaller drops mean drizzle.", "Wet clothes, slippery ground and a wet deck can make fishing uncomfortable."].compactMap { $0 }
+        case "Feels like": ["The range includes overnight hours and accounts for wind, humidity and sunshine.", "Check the hourly values for your visit. Wet clothes can make you feel colder."]
+        case "Daylight": ["Sunrise–sunset in local time.", "Allow time to walk back or return to the ramp before dark."]
+        case "UV": ["The day's peak UV index. Protection is useful from UV 3, even when it feels cool.", "Shade, sunscreen, a hat and sunglasses help on shore and on the water."]
+        case "Visibility": ["The lowest model visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours."]
+        case "Water temperature": ["Model temperature at the sea surface, not a measurement at this pin.", "It can help compare days; it does not measure water clarity or fish activity."]
+        case "Offshore swell": ["Swell travels from weather farther away. The period is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water."]
+        default: []
+        }
+    }
     static func number(_ value: Double?, _ decimals: Int = 0) -> String { value.map { String(format: "%.*f", decimals, $0) } ?? "—" }
     static func range(_ values: [Double?], _ decimals: Int = 0) -> String {
         let known = values.compactMap { $0 }; guard let lo = known.min(), let hi = known.max() else { return "—" }
         let a = number(lo, decimals), b = number(hi, decimals); return a == b ? a : a + "–" + b
     }
     static func direction(_ value: Double?) -> String { value.map { ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Int(($0/45).rounded()) % 8] } ?? "—" }
-    static func make(_ data: PlaceConditions, date: Date, boat: Bool) -> [ConditionItem] {
+    static func make(_ data: PlaceConditions, date: Date) -> [ConditionItem] {
         let day = data.weather?.days.first { data.calendar.isDate($0.at, inSameDayAs: date) }
         let hours = data.weatherHours(date), sea = data.marineHours(date)
         let heights = sea.map(\.height), periods = sea.map(\.period), maxWave = heights.compactMap { $0 }.max()
         let start = data.calendar.startOfDay(for: date), end = data.calendar.date(byAdding: .day, value: 1, to: start)!
         let completeSea = sea.count == Int(end.timeIntervalSince(start)/3600) && heights.allSatisfy { $0 != nil } && periods.allSatisfy { $0 != nil }
         let seaFeeling: WindowMood
-        if let maxWave, maxWave >= (boat ? 2 : 3) { seaFeeling = .init(emoji: "🌊", label: "High waves") }
+        if let maxWave, maxWave >= 2 { seaFeeling = .init(emoji: "🌊", label: "High waves") }
         else if !completeSea { seaFeeling = needsDataMood }
-        else if boat && sea.contains(where: { ($0.height ?? 0) >= 0.5 && ($0.period ?? 99) <= 5 }) { seaFeeling = .init(emoji: "🌊", label: "Choppy") }
-        else if boat { seaFeeling = .init(emoji: "🌊", label: (maxWave ?? 0) <= 0.5 ? "Lower waves" : "More motion") }
-        else { seaFeeling = .init(emoji: "🌊", label: "Check exposure") }
+        else if sea.contains(where: { ($0.height ?? 0) >= 0.5 && ($0.period ?? 99) <= 5 }) { seaFeeling = .init(emoji: "🌊", label: "Choppy") }
+        else { seaFeeling = .init(emoji: "🌊", label: (maxWave ?? 0) <= 0.5 ? "Lower waves" : "More motion") }
         let wind = ConditionItem(title: "Wind", value: "max \(number(day?.wind)) km/h · gust \(number(day?.gust)) · \(direction(day?.direction))", mood: day?.wind == nil || day?.gust == nil ? needsDataMood : comfortMood(LandAssessment.windBand(day!.wind!, day!.gust!)))
         let waves = ConditionItem(title: "Offshore waves", value: maxWave.map { "max \(number($0, 1)) m · \(range(periods, 1)) s" } ?? "—", mood: seaFeeling)
-        let rain = ConditionItem(title: "Rain", value: "\(number(day?.rain, 1)) mm · \(number(day?.chance))% hourly max", mood: day?.rain == nil ? needsDataMood : .init(emoji: day!.rain! > 0 ? "🌧️" : "🌤️", label: day!.rain! > 3 ? "Wet day" : day!.rain! > 0 ? "Some rain" : (day?.chance ?? 0) >= 60 ? "Rain possible" : "Mostly dry"))
+        let rain = ConditionItem(title: "Rain", value: "\(number(day?.rain, 1)) mm · \(number(day?.chance))% hourly max", mood: day?.rain == nil ? needsDataMood : .init(emoji: day!.rain! > 0 ? "☔" : "🌤️", label: day!.rain! > 3 ? "Wet day" : day!.rain! > 0 ? "Some rain" : (day?.chance ?? 0) >= 60 ? "Rain possible" : "Mostly dry"))
         let feels = ConditionItem(title: "Feels like", value: "\(range([day?.feelsLow, day?.feelsHigh]))°C", mood: day?.feelsLow == nil || day?.feelsHigh == nil ? needsDataMood : .init(emoji: day!.feelsLow! < 12 ? "🥶" : day!.feelsHigh! > 26 ? "🥵" : "😌", label: day!.feelsLow! < 12 ? "Cold at times" : day!.feelsHigh! > 26 ? "Hot at times" : "Mild"))
         let f = DateFormatter(); f.locale = Locale(identifier: "en_NZ"); f.timeZone = data.zone; f.dateFormat = "h:mm a"
         let light = ConditionItem(title: "Daylight", value: day?.sunrise == nil || day?.sunset == nil ? "—" : "\(f.string(from: day!.sunrise!))–\(f.string(from: day!.sunset!))", mood: day?.sunrise == nil || day?.sunset == nil ? needsDataMood : .init(emoji: "🌞", label: "Plan your return"))
@@ -216,6 +245,6 @@ enum PlaceConditionRows {
         let swells = sea.map(\.swell)
         let swell = ConditionItem(title: "Offshore swell", value: swells.compactMap { $0 }.max().map { "max \(number($0, 1)) m · \(range(sea.map(\.swellPeriod), 1)) s" } ?? "—",
             mood: swells.isEmpty || swells.contains(where: { $0 == nil }) || sea.contains(where: { $0.swellPeriod == nil }) ? needsDataMood : .init(emoji: "🌊", label: "Offshore model"))
-        return (boat ? [waves, wind] : [wind, waves]) + [rain, feels, light, uv, view, waterRow, swell]
+        return [waves, wind] + [rain, feels, light, uv, view, waterRow, swell]
     }
 }

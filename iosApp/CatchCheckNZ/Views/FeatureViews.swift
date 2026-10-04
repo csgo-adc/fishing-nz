@@ -150,7 +150,7 @@ struct FishingMapView: View {
                 }
             }
             .onChange(of: filter) { _, _ in selectedPlace = nil }
-            .sheet(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
+            .fullScreenCover(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
             .sheet(isPresented: $showPlaceSearch) {
                 MapPlaceSearchView { place in
                     selectedPlace = place

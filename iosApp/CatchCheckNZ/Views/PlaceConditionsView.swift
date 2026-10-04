@@ -10,7 +10,6 @@ struct PlaceConditionsView: View {
     @State private var pastDays = 3
     @State private var recent = false
     @State private var selectedDate: Date?
-    @State private var boat: Bool
     @State private var station: TideStation?
     @State private var tide: TideState?
     @State private var tideLoading = false
@@ -19,7 +18,6 @@ struct PlaceConditionsView: View {
     @State private var showStations = false
     init(place: ConditionPlace) {
         self.place = place
-        _boat = State(initialValue: place.boat)
         _station = State(initialValue: place.station)
     }
     private var zone: TimeZone { data?.zone ?? TimeZone(identifier: "Pacific/Auckland")! }
@@ -47,14 +45,14 @@ struct PlaceConditionsView: View {
                     if let data, let day {
                         overview(data, day)
                         VStack(alignment: .leading, spacing: 12) {
-                            ForEach(Array(data.rows(day, boat: boat).prefix(5).enumerated()), id: \.offset) { index, row in
+                            ForEach(Array(data.rows(day).prefix(5).enumerated()), id: \.offset) { index, row in
                                 if index > 0 { Divider() }
-                                conditionRow(row)
+                                conditionRow(row, details: data.details(day, title: row.title))
                             }
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
                         tideCard
                         DisclosureGroup("UV, visibility & sea details") {
-                            VStack(alignment: .leading, spacing: 12) { ForEach(Array(data.rows(day, boat: boat).dropFirst(5).enumerated()), id: \.offset) { _, row in conditionRow(row) } }.padding(.top, 12)
+                            VStack(alignment: .leading, spacing: 12) { ForEach(Array(data.rows(day).dropFirst(5).enumerated()), id: \.offset) { _, row in conditionRow(row, details: data.details(day, title: row.title)) } }.padding(.top, 12)
                         }
                         hourly(data, day)
                         availability(data)
@@ -67,8 +65,8 @@ struct PlaceConditionsView: View {
             .background(CatchCheckColor.cream)
             .navigationTitle(place.name).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { refresh += 1 } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Refresh conditions") }
-                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("Map", systemImage: "chevron.left") }.accessibilityLabel("Back to map") }
+                ToolbarItem(placement: .topBarTrailing) { Button { refresh += 1 } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Refresh conditions") }
             }
             .sheet(isPresented: $showStations) { TideReferencePickerView(point: place.point, selected: station) { station = $0; showStations = false } }
         }
@@ -100,7 +98,7 @@ struct PlaceConditionsView: View {
                     Button { selectedDate = date } label: {
                         VStack(spacing: 6) {
                             Text(date == today ? "Today" : calendar.dateComponents([.day], from: date, to: today).day == 1 ? "Yesterday" : format(date, "EEE d")).font(.caption.bold())
-                            Image(systemName: WeatherPresentation.symbol(code)).font(.title2).accessibilityLabel(WeatherPresentation.label(code))
+                            WeatherSymbol(code: code, size: 25).accessibilityLabel(WeatherPresentation.label(code))
                             Text(format(date, "d MMM")).font(.caption2)
                         }.frame(minWidth: 64).padding(10)
                             .foregroundStyle(day == date ? Color.white : CatchCheckColor.navy)
@@ -115,7 +113,7 @@ struct PlaceConditionsView: View {
         let ahead = calendar.dateComponents([.day], from: today, to: day).day ?? 0
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: WeatherPresentation.symbol(daily?.code)).font(.system(size: 36)).foregroundStyle(CatchCheckColor.accent)
+                WeatherSymbol(code: daily?.code, size: 36).foregroundStyle(CatchCheckColor.accent)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(format(day, "EEEE d MMM")).font(.headline)
                     Text("\(WeatherPresentation.label(daily?.code)) · \(PlaceConditionRows.range([daily?.low, daily?.high]))°C").font(.subheadline)
@@ -123,21 +121,36 @@ struct PlaceConditionsView: View {
                 }
             }
             if let grid = snapshot.marine?.gridPoint { Text("Offshore wave model · \(Int(placeDistanceKm(place.point, grid))) km from pin").font(.caption).foregroundStyle(.secondary) }
-            Picker("Fishing from", selection: $boat) { Text("From shore").tag(false); Text("On a boat").tag(true) }.pickerStyle(.segmented)
         }
     }
-    private func conditionRow(_ row: ConditionItem) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(row.title).font(.subheadline.weight(.semibold))
-            Text(row.value).font(.subheadline)
-            Text("\(row.mood.emoji) \(row.mood.label)").font(.caption).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity, alignment: .leading)
+    private func conditionRow(_ row: ConditionItem, details: [String]) -> some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                if row.title == "Rain" {
+                    HStack {
+                        ForEach([61, 63, 65], id: \.self) { code in
+                            VStack {
+                                WeatherSymbol(code: code, size: 32).foregroundStyle(CatchCheckColor.accent)
+                                Text(code == 61 ? "Light" : code == 63 ? "Moderate" : "Heavy").font(.caption2)
+                            }.frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                ForEach(details, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+            }.padding(.top, 8).padding(.bottom, 4)
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.title).font(.subheadline.weight(.semibold))
+                Text(row.value).font(.subheadline)
+                Text("\(row.mood.emoji) \(row.mood.label)").font(.caption).foregroundStyle(.secondary)
+            }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+        }.tint(CatchCheckColor.accent)
     }
     private var tideCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Tide").font(.headline); Spacer(); Button(station?.name ?? "Choose station") { showStations = true }.font(.subheadline) }
             if let station {
-                Text("LINZ \(station.name) · heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
+                Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                 if tideLoading { ProgressView() }
                 else if tideIssue { Text("Tide unavailable for this day."); Button("Retry tide") { tideRefresh += 1 } }
                 else if let tide {
@@ -145,7 +158,12 @@ struct PlaceConditionsView: View {
                         HStack { Text("\(event.type == "High" ? "↗️" : "↘️") \(event.type)").frame(width: 76, alignment: .leading); Text(event.time); Spacer(); Text(event.height).fontWeight(.semibold) }.font(.subheadline)
                     }
                 }
-                Text("Reference timing · check suitability for this place.").font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("Tide details") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("LINZ \(station.name) · heights above Chart Datum")
+                        Text("High and low times are for this reference station. Check it represents this place. Tide height does not tell you current speed.")
+                    }.font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+                }.font(.caption)
             } else { Text("Choose a LINZ reference station.").font(.subheadline).foregroundStyle(.secondary) }
         }.padding(16).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
     }
@@ -161,7 +179,7 @@ struct PlaceConditionsView: View {
                     let sea = snapshot.marine?.hours[at]
                     VStack(spacing: 7) {
                         Text(format(at, "h:mm a")).font(.caption.bold())
-                        Image(systemName: WeatherPresentation.symbol(hour?.code, isDay: hour?.isDay ?? true)).font(.title2).foregroundStyle(CatchCheckColor.accent)
+                        WeatherSymbol(code: hour?.code, isDay: hour?.isDay ?? true, size: 28).foregroundStyle(CatchCheckColor.accent)
                         Text(WeatherPresentation.label(hour?.code)).font(.caption2)
                         Text("\(PlaceConditionRows.number(hour?.temperature))°C").font(.headline)
                         Text("Feels \(PlaceConditionRows.number(hour?.feelsLike))°C")

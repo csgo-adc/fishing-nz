@@ -8,9 +8,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import nz.fishingnz.app.model.WeatherLabels
 
 /** Familiar cloud + rain/fog/snow symbols, rather than a grain or a lone water drop. */
-private fun cloudSymbol(name: String, detail: Int): ImageVector = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
+private fun cloudSymbol(name: String, detail: Int, drops: Int = 3, drizzle: Boolean = false): ImageVector = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
     path(fill = SolidColor(Color.Black)) {
         moveTo(19.3f, 9.8f)
         curveTo(18.6f, 6.5f, 15.8f, 4f, 12.4f, 4f)
@@ -24,13 +25,24 @@ private fun cloudSymbol(name: String, detail: Int): ImageVector = ImageVector.Bu
     }
     path(stroke = SolidColor(Color.Black), strokeLineWidth = 1.6f, strokeLineCap = StrokeCap.Round) {
         when (detail) {
-            0 -> { moveTo(7f, 19f); lineTo(5.5f, 22f); moveTo(13f, 19f); lineTo(11.5f, 22f); moveTo(19f, 19f); lineTo(17.5f, 22f) }
             1 -> { moveTo(4f, 19f); lineTo(20f, 19f); moveTo(6f, 22f); lineTo(18f, 22f) }
             2 -> for (x in listOf(6f, 12f, 18f)) { moveTo(x, 19f); lineTo(x, 23f); moveTo(x - 1.6f, 20f); lineTo(x + 1.6f, 22f); moveTo(x - 1.6f, 22f); lineTo(x + 1.6f, 20f) }
         }
     }
+    if (detail == 0) {
+        val positions = when (drops) { 1 -> listOf(12f); 2 -> listOf(8f, 16f); else -> listOf(6f, 12f, 18f) }
+        val width = if (drizzle) 1f else 1.6f
+        val bottom = if (drizzle) 22f else 23f
+        positions.forEach { x -> path(fill = SolidColor(Color.Black)) {
+            moveTo(x, 18.5f)
+            curveTo(x - width, 20f, x - width, bottom - .6f, x, bottom)
+            curveTo(x + width, bottom - .6f, x + width, 20f, x, 18.5f)
+            close()
+        } }
+    }
 }.build()
-private val rainCloud = cloudSymbol("Rain cloud", 0)
+private val rainClouds = (1..3).map { cloudSymbol("Rain $it drops", 0, it) }
+private val drizzleClouds = (1..3).map { cloudSymbol("Drizzle $it drops", 0, it, true) }
 private val fogCloud = cloudSymbol("Fog", 1)
 private val snowCloud = cloudSymbol("Snow cloud", 2)
 private val partlyCloudy = ImageVector.Builder("Partly cloudy", 24.dp, 24.dp, 24f, 24f).apply {
@@ -55,13 +67,16 @@ private val partlyCloudyNight = ImageVector.Builder("Partly cloudy night", 24.dp
     }
 }.build()
 
-internal fun knownWeatherIcon(code: Int?, day: Boolean = true): ImageVector = when (code) {
-    0, 1 -> if (day) Icons.Default.WbSunny else Icons.Default.NightsStay
-    2 -> if (day) partlyCloudy else partlyCloudyNight
-    3 -> Icons.Default.Cloud
-    45, 48 -> fogCloud
-    51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82 -> rainCloud
-    71, 73, 75, 77, 85, 86 -> snowCloud
-    95, 96, 99 -> Icons.Default.Thunderstorm
-    else -> Icons.Default.HelpOutline
+internal fun knownWeatherIcon(code: Int?, day: Boolean = true): ImageVector {
+    val drops = WeatherLabels.rainDrops(code)
+    if (drops > 0) return (if (WeatherLabels.isDrizzle(code)) drizzleClouds else rainClouds)[drops - 1]
+    return when (code) {
+        0, 1 -> if (day) Icons.Default.WbSunny else Icons.Default.NightsStay
+        2 -> if (day) partlyCloudy else partlyCloudyNight
+        3 -> Icons.Default.Cloud
+        45, 48 -> fogCloud
+        71, 73, 75, 77, 85, 86 -> snowCloud
+        95, 96, 97, 99 -> Icons.Default.Thunderstorm
+        else -> Icons.Default.HelpOutline
+    }
 }

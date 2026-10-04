@@ -27,16 +27,16 @@ class PlaceConditionsRepositoryTest {
         assertEquals(LocalDate.parse("2026-09-26"), data.dates.first())
         assertEquals(23, data.weatherHours(date).size)
         assertEquals(23, data.marineHours(date).size)
-        assertEquals("More motion", data.rows(date, true).first().mood.label)
-        assertEquals("6:30 AM–7:30 PM", data.rows(date, true).first { it.title == "Daylight" }.value)
+        assertEquals("More motion", data.rows(date).first().mood.label)
+        assertEquals("6:30 AM–7:30 PM", data.rows(date).first { it.title == "Daylight" }.value)
     }
     @Test fun neverTurnsMissingChanceIntoZeroOrExtendsWaves() {
         val data = data()
         assertNull(data.weather!!.hours.last().chance)
         assertNull(data.weather.days.last().chance)
         assertTrue(data.marineHours(date.plusDays(10)).isEmpty())
-        assertEquals("Needs more data", data.rows(date.plusDays(10), true).first().mood.label)
-        assertEquals("—", data.rows(date.plusDays(10), true).first().value)
+        assertEquals("Needs more data", data.rows(date.plusDays(10)).first().mood.label)
+        assertEquals("—", data.rows(date.plusDays(10)).first().value)
     }
     @Test fun rejectsWrongUnitsAndUnalignedArrays() {
         val marine = fixture("marine"); marine.getJSONObject("hourly_units").put("wave_height", "ft")
@@ -50,32 +50,32 @@ class PlaceConditionsRepositoryTest {
         val full = data()
         val weatherOnly = full.copy(marine = null, marineIssue = "Unavailable")
         assertEquals(17, weatherOnly.dates.size)
-        assertEquals("Needs more data", weatherOnly.rows(date, true).first().mood.label)
+        assertEquals("Needs more data", weatherOnly.rows(date).first().mood.label)
         val seaOnly = full.copy(weather = null, weatherIssue = "Unavailable")
         assertEquals(2, seaOnly.dates.size)
         assertEquals(23, seaOnly.hourDates(date).size)
-        assertEquals("More motion", seaOnly.rows(date, true).first().mood.label)
-        assertEquals("Needs more data", seaOnly.rows(date, false).first().mood.label)
+        assertEquals("More motion", seaOnly.rows(date).first().mood.label)
+        assertEquals("Needs more data", seaOnly.rows(date).first { it.title == "Wind" }.mood.label)
     }
     @Test fun knownHighWaveSurvivesIncompletePeriodData() {
         val full = data(); val at = full.marine!!.hours.keys.last()
         val partial = full.copy(marine = full.marine.copy(hours = mapOf(at to full.marine.hours.getValue(at).copy(height = 2.5, period = null))))
-        assertEquals("High waves", partial.rows(date, true).first().mood.label)
-        assertTrue(partial.rows(date, true).first().value.contains("2.5 m"))
+        assertEquals("High waves", partial.rows(date).first().mood.label)
+        assertTrue(partial.rows(date).first().value.contains("2.5 m"))
     }
     @Test fun choppyFeelingRequiresHeightAndPeriodTogether() {
         val full = data(); val at = full.marine!!.hours.keys.last()
         val lowShort = full.marine.hours.mapValues { (_, hour) -> hour.copy(height = .7, period = 9.0) }.toMutableMap()
         lowShort[at] = lowShort.getValue(at).copy(height = .1, period = 4.0)
-        assertEquals("More motion", full.copy(marine = full.marine.copy(hours = lowShort)).rows(date, true).first().mood.label)
+        assertEquals("More motion", full.copy(marine = full.marine.copy(hours = lowShort)).rows(date).first().mood.label)
         lowShort[at] = lowShort.getValue(at).copy(height = .7, period = 4.0)
-        assertEquals("Choppy", full.copy(marine = full.marine.copy(hours = lowShort)).rows(date, true).first().mood.label)
+        assertEquals("Choppy", full.copy(marine = full.marine.copy(hours = lowShort)).rows(date).first().mood.label)
     }
     @Test fun labelsDistinguishRainIntensityAndUnknownData() {
         assertEquals("Light rain", WeatherLabels.describe(61))
         assertEquals("Heavy rain", WeatherLabels.describe(65))
         assertEquals("Heavy drizzle", WeatherLabels.describe(55))
-        assertEquals("Freezing rain", WeatherLabels.describe(67))
+        assertEquals("Heavy freezing rain", WeatherLabels.describe(67))
         assertEquals("Thunderstorms with hail", WeatherLabels.describe(99))
         assertEquals("Weather unavailable", WeatherLabels.describe(null))
         assertEquals("Weather unavailable", WeatherLabels.describe(64))
