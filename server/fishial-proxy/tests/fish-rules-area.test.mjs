@@ -36,6 +36,7 @@ test("fish identification attaches limits only for a selected MPI area", async (
     tables_json: JSON.stringify([[["Finfish species", "Maximum daily limit per active fisher", "Min fish length (cm)"], ["Snapper", "10", "27"]]]),
   };
   const database = {
+    async batch(statements) { return Promise.all(statements.map((statement) => statement.run())); },
     prepare(sql) {
       queries.push(sql);
       return {

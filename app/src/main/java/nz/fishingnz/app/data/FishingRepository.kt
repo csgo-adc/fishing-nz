@@ -89,7 +89,7 @@ class FishingRepository {
         return before.height + (after.height - before.height) * (1.0 - cos(PI * fraction)) / 2.0
     }
 
-    suspend fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean, rulesAreaId: String?): FishCheck = withContext(Dispatchers.IO) {
+    suspend fun identifyFish(image: ByteArray, rulesAreaId: String?): FishCheck = withContext(Dispatchers.IO) {
         val token = AccountSessionStore.token()
         require(token != null) { "Sign in to use fish identification." }
         val connection = (URL("$accountBaseUrl/v1/fish/identify").openConnection() as HttpURLConnection).apply {
@@ -97,8 +97,6 @@ class FishingRepository {
             doOutput = true
             setRequestProperty("Content-Type", "image/jpeg")
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("X-Location-Lat-Lon", "${point.latitude},${point.longitude}")
-            setRequestProperty("X-Location-Source", if (hasDeviceLocation) "device" else "fallback")
             rulesAreaId?.let { setRequestProperty("X-Fishing-Rules-Area", it) }
             setRequestProperty("X-Client-Platform", "android")
             setRequestProperty("Authorization", "Bearer $token")
@@ -218,6 +216,7 @@ class FishingRepository {
     }
 
     suspend fun trackEvent(eventName: String, feature: String?, platform: String) = withContext(Dispatchers.IO) {
+        if (!PrivacyPreferences.analyticsEnabled()) return@withContext
         val payload = JSONObject().put("event_name", eventName).put("platform", platform)
         if (feature != null) payload.put("feature", feature)
         accountRequest("/v1/analytics/events", "POST", payload, AccountSessionStore.token())
@@ -240,6 +239,16 @@ class FishingRepository {
         AccountSessionStore.clearOAuthSecret()
         AccountSessionStore.token()?.let { token -> runCatching { accountRequest("/v1/auth/logout", "POST", JSONObject(), token) } }
         AccountSessionStore.clear()
+    }
+
+    suspend fun deleteAccount() = withContext(Dispatchers.IO) {
+        val token = AccountSessionStore.token() ?: error("Sign in again to delete your account.")
+        val response = accountRequest("/v1/me", "DELETE", JSONObject().put("confirm", true), token)
+        check(response.optBoolean("deleted")) { "Account deletion could not be confirmed. Please try again." }
+        AccountSessionStore.clearOAuthSecret()
+        AccountSessionStore.clear()
+        PrivacyPreferences.setAnalyticsEnabled(false)
+        PrivacyPreferences.clearFishPhotos()
     }
 
     suspend fun saveProfile(displayName: String, countryCode: String): AccountSnapshot = withContext(Dispatchers.IO) {

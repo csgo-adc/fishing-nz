@@ -15,6 +15,7 @@ test("fish identification always returns a useful result for model responses", a
   globalThis.fetch = async (url, options) => {
     assert.equal(url, "https://api.openai.com/v1/responses");
     const request = JSON.parse(options.body);
+    assert.equal(request.store, false, "Fish photos must not create stored Responses state");
     prompt = request.input[0].content[0].text;
     assert.ok(request.text.format.schema.required.includes("subject_name"));
     return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(modelResult) }] }] });

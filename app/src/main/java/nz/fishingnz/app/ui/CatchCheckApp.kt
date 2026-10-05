@@ -42,12 +42,15 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import nz.fishingnz.app.model.recommendationKey
 import nz.fishingnz.app.viewmodel.FishingViewModel
+import nz.fishingnz.app.data.PrivacyLinks
+import nz.fishingnz.app.data.PrivacyPreferences
 
 private enum class Appearance(val label: String) { SYSTEM("Use device setting"), LIGHT("Light"), DARK("Dark") }
 
@@ -216,6 +219,8 @@ private fun AppearanceScreen(modifier: Modifier, selectedAppearance: Appearance,
 
 @Composable
 private fun TermsPrivacyScreen(modifier: Modifier) {
+    val uriHandler = LocalUriHandler.current
+    var analyticsEnabled by remember { mutableStateOf(PrivacyPreferences.analyticsEnabled()) }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Terms & privacy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("A short guide to using Fishing Days NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -230,8 +235,23 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Privacy", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
-                Text("If you choose a fish photo, it is sent through the Fishing Days service to an image analysis provider for identification.")
+                Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
                 Text("If you sign in or send feedback, your account details and feedback are sent to the Fishing Days service. Signing out removes the saved session from this device.")
+                Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
+                Text("Publisher: Tristan · tc199558@gmail.com")
+                TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read full privacy policy") }
+                TextButton(onClick = { uriHandler.openUri(PrivacyLinks.deletion) }) { Text("Request account deletion on the web") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Optional usage analytics", fontWeight = FontWeight.SemiBold)
+                        Text("Share app interactions, device information, app-instance identifiers and approximate location from your IP address with Firebase, and signed-in feature usage with Fishing Days. Off by default. Turning this off resets the analytics identifier.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = analyticsEnabled, onCheckedChange = {
+                        analyticsEnabled = it
+                        PrivacyPreferences.setAnalyticsEnabled(it)
+                    })
+                }
+                Text("Fishing Days NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ.")
             }
         }
     }

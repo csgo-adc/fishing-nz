@@ -31,4 +31,6 @@ Fishing Days NZ searches a curated set of named areas, so a small search radius 
 
 Fishing Days NZ is an evolving project. Android preview builds are available from [Releases](https://github.com/csgo-adc/fishing-nz/releases).
 
+Google Play release preparation, signing, privacy/deletion deployment, Data safety guidance and remaining account steps are in [the release checklist](docs/google-play-release.md). Store listing copy and graphics are in [assets/google-play](assets/google-play/listing.md).
+
 The fish and silver-fern app icon uses the black, royal-blue, white and red palette from the supplied New Zealand reference. [Brand artwork and platform exports](assets/branding/README.md).

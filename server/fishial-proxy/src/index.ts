@@ -1,4 +1,5 @@
 import { handleSocialAuth, type SocialAuthEnv } from "./social-auth";
+import { handlePrivacyRoute, deleteAccountData, cleanupAccountData } from "./privacy";
 
 export interface Env extends SocialAuthEnv {
   OPENAI_API_KEY: string;
@@ -7,6 +8,8 @@ export interface Env extends SocialAuthEnv {
   ACCOUNT_ADMIN_TOKEN: string;
   RESEND_API_KEY?: string;
   ACCOUNT_EMAIL_FROM?: string;
+  PUBLIC_DEVELOPER_NAME?: string;
+  PUBLIC_SUPPORT_EMAIL?: string;
 }
 
 export type Account = {
@@ -197,6 +200,11 @@ async function me(request: Request, env: Env): Promise<Response> {
   if (request.method === "GET") return json({ user: publicAccount(auth.account) });
   const payload = await readJson(request);
   if (!payload) return json({ error: "Send a JSON object." }, 400);
+  if (request.method === "DELETE") {
+    if (payload.confirm !== true) return json({ error: "Confirm permanent account deletion." }, 400);
+    await deleteAccountData(env, auth.account.id);
+    return json({ deleted: true });
+  }
   const displayName = payload.display_name === undefined ? auth.account.display_name : payload.display_name;
   const countryCode = payload.country_code === undefined ? auth.account.country_code : payload.country_code;
   if (typeof displayName !== "string" || displayName.trim().length > 80) return json({ error: "Display name must be 80 characters or fewer." }, 400);
@@ -465,7 +473,7 @@ function isAdmin(request: Request, env: Env): boolean {
 function corsHeaders(): HeadersInit {
   return {
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
+    "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "access-control-allow-headers": "authorization, content-type, x-account-admin-token, x-rules-ingest-token, x-location-lat-lon, x-location-source, x-fishing-rules-area, x-client-platform",
     "access-control-max-age": "86400",
   };
@@ -504,6 +512,8 @@ export default {
     const pathname = new URL(request.url).pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (pathname === "/__health") return json({ ok: true });
+    const privacyResponse = await handlePrivacyRoute(request, env);
+    if (privacyResponse) return privacyResponse;
     if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/")) {
       return await handleSocialAuth(request, env, { authenticate, createSessionResponse });
     }
@@ -518,7 +528,7 @@ export default {
     if (pathname === "/v1/auth/verify-email" && request.method === "GET") return await verificationPage(request);
     if (pathname === "/v1/auth/verify-email" && request.method === "POST") return await verifyEmail(request, env);
     if (pathname === "/v1/auth/logout" && request.method === "POST") return await logout(request, env);
-    if (pathname === "/v1/me" && (request.method === "GET" || request.method === "PATCH")) return await me(request, env);
+    if (pathname === "/v1/me" && ["GET", "PATCH", "DELETE"].includes(request.method)) return await me(request, env);
     if (pathname === "/v1/me/permissions" && request.method === "GET") return await permissions(request, env);
     if (pathname === "/v1/feedback" && request.method === "POST") return await submitFeedback(request, env);
     if (pathname === "/v1/analytics/events" && request.method === "POST") return await submitAnalyticsEvent(request, env);
@@ -584,6 +594,7 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    await cleanupAccountData(env);
     const areaIds = [...rulesAreas.keys()];
     const day = Math.floor(controller.scheduledTime / 86_400_000);
     const areaId = areaIds[day % areaIds.length];
@@ -599,6 +610,7 @@ async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, a
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({
       model: "gpt-5.6-luna",
+      store: false,
       reasoning: { effort: "none" },
       max_output_tokens: 800,
       input: [{

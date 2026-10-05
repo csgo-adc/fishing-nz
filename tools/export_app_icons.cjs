@@ -63,7 +63,8 @@ async function main() {
 
   const master = await tile(1024);
   await save(master, path.join(brand, 'fishing-days-icon-1024.png'));
-  await save(await tile(512), path.join(brand, 'fishing-days-google-play-512.png'));
+  // Play requires a 32-bit PNG; keep an opaque alpha channel on the store icon.
+  await save(await sharp(await tile(512)).ensureAlpha().png().toBuffer(), path.join(brand, 'fishing-days-google-play-512.png'));
 
   for (const [density, factor] of [['mdpi', 1], ['hdpi', 1.5], ['xhdpi', 2], ['xxhdpi', 3], ['xxxhdpi', 4]]) {
     const size = 108 * factor;

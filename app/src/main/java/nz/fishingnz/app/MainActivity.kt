@@ -9,6 +9,7 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import nz.fishingnz.app.ui.CatchCheckApp
 import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.SearchPreferencesStore
+import nz.fishingnz.app.data.PrivacyPreferences
 import nz.fishingnz.app.viewmodel.FishingViewModel
 
 class MainActivity : ComponentActivity() {
@@ -17,7 +18,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AccountSessionStore.initialize(applicationContext)
         SearchPreferencesStore.initialize(applicationContext)
-        FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", "0.1") })
+        PrivacyPreferences.initialize(applicationContext)
+        if (PrivacyPreferences.analyticsEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
         fishingViewModel.completeSocialSignIn(intent.data)
         setContent { CatchCheckApp(fishingViewModel) }
     }

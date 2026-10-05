@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="catchcheck_account.xml" />
+    <exclude domain="sharedpref" path="privacy.xml" />
+    <exclude domain="file" path="fish-photos/" />
+</full-backup-content>

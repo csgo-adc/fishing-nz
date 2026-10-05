@@ -1,0 +1,6 @@
+# Copy to signing.properties (ignored). Keep the real keystore and passwords private.
+# Use an existing upload key for an app already registered in Play Console.
+PLAY_UPLOAD_STORE_FILE=/absolute/path/to/upload-keystore.jks
+PLAY_UPLOAD_STORE_PASSWORD=replace-locally
+PLAY_UPLOAD_KEY_ALIAS=upload
+PLAY_UPLOAD_KEY_PASSWORD=replace-locally

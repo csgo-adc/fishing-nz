@@ -5,6 +5,8 @@ compatibility_date = "2024-09-23"
 [vars]
 ACCOUNT_EMAIL_FROM = "Fishing Days NZ <accounts@fishnz.space>"
 AUTH_BASE_URL = "https://fishing.fishnz.space"
+PUBLIC_DEVELOPER_NAME = "Tristan"
+PUBLIC_SUPPORT_EMAIL = "tc199558@gmail.com"
 
 [[routes]]
 pattern = "fishing.fishnz.space"

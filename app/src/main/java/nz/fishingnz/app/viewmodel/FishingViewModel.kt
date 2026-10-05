@@ -373,7 +373,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val requestedPhoto = _state.value.fishPhoto
         val selectedArea = _state.value.fishRulesAreaId
         viewModelScope.launch {
-            runCatching { repository.identifyFish(image, point, hasDeviceLocation, selectedArea) }
+            runCatching { repository.identifyFish(image, selectedArea) }
                 .onSuccess { result ->
                     val current = _state.value
                     if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto) {
@@ -558,6 +558,29 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         viewModelScope.launch { runCatching { repository.saveProfile(displayName, countryCode) }
             .onSuccess { _state.value = _state.value.copy(account = it, accountBusy = false, accountNotice = "Profile saved.") }
             .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not save profile.") } }
+    }
+    fun deleteAccount() {
+        if (_state.value.accountBusy) return
+        val version = ++accountVersion
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                repository.deleteAccount()
+                if (version != accountVersion) return@launch
+                fishIdentifyGeneration += 1
+                fishRulesJob?.cancel()
+                _state.value = _state.value.copy(account = null, accountBusy = false, hasStoredSession = false,
+                    signInProviders = SignInProviders(), verificationPending = false,
+                    fishPhoto = null, fishCheck = null, fishChecking = false, fishError = null,
+                    fishRulesLoading = false, fishRulesError = null, savedSpots = emptySet(),
+                    savedRecommendations = emptyList(), activeTrip = null,
+                    accountNotice = "Your account and associated data have been deleted.")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    accountError = error.message ?: "Could not delete your account. Please try again.")
+            }
+        }
     }
     fun sendFeedback(category: String, message: String, rating: Int) {
         _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)

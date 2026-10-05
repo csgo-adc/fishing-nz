@@ -1,11 +1,9 @@
 package nz.fishingnz.app.ui
 
 import android.Manifest
-import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.location.Geocoder
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -403,6 +401,17 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     val needsAccountRefresh = s.account == null && s.hasStoredSession && !s.accountLoading
     var showCamera by remember { mutableStateOf(false) }
     var showRuleAreas by remember { mutableStateOf(false) }
+    var photoAwaitingConsent by remember { mutableStateOf<android.net.Uri?>(null) }
+    var showAiReport by remember { mutableStateOf(false) }
+    var aiReportText by remember { mutableStateOf("") }
+    var aiReportSubmitted by remember { mutableStateOf(false) }
+    LaunchedEffect(s.accountBusy, s.accountNotice) {
+        if (aiReportSubmitted && !s.accountBusy && s.accountNotice == "Thanks for your feedback.") {
+            showAiReport = false
+            aiReportSubmitted = false
+            aiReportText = ""
+        }
+    }
     var pendingPhotoForLocationPermission by remember { mutableStateOf<android.net.Uri?>(null) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) showCamera = true }
     val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -432,6 +441,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
         s.fishPhoto?.let { uri -> val bitmap = remember(uri) { try { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } } catch (_: Exception) { null } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
         s.fishCheck?.let { FishResultCard(it, s, vm::retryFishRules) }
+        if (s.fishCheck != null && s.account != null) TextButton(onClick = { showAiReport = true }) { Text("Report this AI result") }
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (s.fishCheck?.isFish != false) {
@@ -454,9 +464,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             if (needsAccountRefresh) vm.refreshAccount()
             else if (s.account == null) vm.selectTab(5)
             else if (hasFishAccess) s.fishPhoto?.let { uri ->
-                val image = encodedFishPhoto(context, uri)
-                if (image == null) vm.reportUnreadableFishPhoto()
-                else identifyAtCurrentLocation(image, uri)
+                photoAwaitingConsent = uri
             }
         }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text(when {
             hasFishAccess -> "Identify fish"
@@ -471,6 +479,36 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     } }
+    photoAwaitingConsent?.let { photo ->
+        AlertDialog(onDismissRequest = { photoAwaitingConsent = null },
+            title = { Text("Send this photo for AI identification?") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Your selected photo will be sent through Fishing Days’ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
+                Text("Avoid photos containing people or private information. You can cancel and keep using the other tools.")
+                TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
+            } },
+            confirmButton = { TextButton(onClick = {
+                photoAwaitingConsent = null
+                if (vm.state.value.fishPhoto == photo && vm.state.value.account != null) {
+                    val image = encodedFishPhoto(context, photo)
+                    if (image == null) vm.reportUnreadableFishPhoto()
+                    else identifyAtCurrentLocation(image, photo)
+                }
+            }) { Text("Agree and upload") } },
+            dismissButton = { TextButton(onClick = { photoAwaitingConsent = null }) { Text("Cancel") } })
+    }
+    if (showAiReport) AlertDialog(onDismissRequest = { if (!s.accountBusy) showAiReport = false },
+        title = { Text("Report an AI result") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Tell us if this result is incorrect, offensive or unsafe. The report includes the suggested species and your message, and is linked to your account. Your photo is not included.")
+            OutlinedTextField(aiReportText, { aiReportText = it.take(3000) }, label = { Text("What went wrong?") }, minLines = 3)
+            if (aiReportSubmitted) s.accountError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        } },
+        confirmButton = { TextButton(enabled = !s.accountBusy && aiReportText.trim().length >= 3, onClick = {
+            aiReportSubmitted = true
+            vm.sendFeedback("bug", "AI result report: ${s.fishCheck?.commonName.orEmpty()}\n${aiReportText.trim()}", 1)
+        }) { Text(if (s.accountBusy) "Sending…" else "Send report") } },
+        dismissButton = { TextButton(enabled = !s.accountBusy, onClick = { showAiReport = false }) { Text("Cancel") } })
     if (showRuleAreas) ModalBottomSheet(onDismissRequest = { showRuleAreas = false }) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.85f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Where was the fish caught?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -496,6 +534,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
 
 @Composable fun AccountScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -557,6 +597,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Secure access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
                 Text("Create an account or sign in to manage your profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
                 socialButtons()
                 Text("Or use your email", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -586,8 +627,15 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Text("Sign-in options", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
             socialButtons()
             OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
+            OutlinedButton(enabled = !s.accountBusy, onClick = { showDeleteConfirmation = true }, modifier = Modifier.fillMaxWidth()) { Text("Delete account", color = MaterialTheme.colorScheme.error) }
         }
+        TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.deletion) }) { Text("Request account deletion on the web") }
     }
+    if (showDeleteConfirmation) AlertDialog(onDismissRequest = { showDeleteConfirmation = false },
+        title = { Text("Permanently delete your account?") },
+        text = { Text("This removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. It also clears this device’s selected fish photo and trip shortlist and resets optional analytics. It cannot be undone. Recovery copies can remain for up to 30 days. Your Google or Apple account and gallery photos remain available.") },
+        confirmButton = { TextButton(enabled = !s.accountBusy, onClick = { showDeleteConfirmation = false; vm.deleteAccount() }) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") } })
 }
 
 @Composable fun FeedbackScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
@@ -649,11 +697,13 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         FloatingActionButton(onClick = {
             val capture = imageCapture ?: return@FloatingActionButton
             captureError = null
-            val values = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, "fishing-days-fish-${System.currentTimeMillis()}.jpg"); put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg"); put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Fishing Days") }
-            val output = ImageCapture.OutputFileOptions.Builder(context.contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values).build()
+            val photoDirectory = java.io.File(context.cacheDir, "fish-photos").apply { mkdirs() }
+            photoDirectory.listFiles()?.filter { it.lastModified() < System.currentTimeMillis() - 86_400_000L }?.forEach { it.delete() }
+            val photoFile = java.io.File(photoDirectory, "fish-${System.currentTimeMillis()}.jpg")
+            val output = ImageCapture.OutputFileOptions.Builder(photoFile).build()
             capture.takePicture(output, ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(result: ImageCapture.OutputFileResults) {
-                    result.savedUri?.let(onPhotoCaptured) ?: run { captureError = "Could not save this photo. Try again." }
+                    onPhotoCaptured(android.net.Uri.fromFile(photoFile))
                 }
                 override fun onError(exception: ImageCaptureException) { captureError = "Could not take this photo. Try again." }
             })
@@ -664,14 +714,22 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         if (view == null) return@DisposableEffect onDispose { }
         val providerFuture = ProcessCameraProvider.getInstance(context)
         providerFuture.addListener({
-            val provider = providerFuture.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-            val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-            imageCapture = capture
-            provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+            try {
+                val provider = providerFuture.get()
+                if (!provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) {
+                    captureError = "A back camera is unavailable. Close this screen and choose a photo from Gallery."
+                    return@addListener
+                }
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+                val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                provider.unbindAll()
+                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+                imageCapture = capture
+            } catch (_: Exception) {
+                captureError = "Could not open the camera. Close this screen and choose a photo from Gallery."
+            }
         }, ContextCompat.getMainExecutor(context))
-        onDispose { providerFuture.addListener({ providerFuture.get().unbindAll() }, ContextCompat.getMainExecutor(context)) }
+        onDispose { providerFuture.addListener({ runCatching { providerFuture.get().unbindAll() } }, ContextCompat.getMainExecutor(context)) }
     }
 }
 
@@ -1240,6 +1298,7 @@ internal val fishingRulesAreas = listOf(
             Spacer(Modifier.height(8.dp))
             Text("Fishing rules", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Choose an MPI area, then search a species for its key limits.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Independent app; not affiliated with or endorsed by the New Zealand Government or MPI.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {

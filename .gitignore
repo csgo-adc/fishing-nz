@@ -6,6 +6,9 @@ app/build/
 local.properties
 app/google-services.json
 secrets.properties
+signing.properties
+*.jks
+*.keystore
 server/fishial-proxy/.dev.vars
 server/fishial-proxy/.rules-ingest-token
 node_modules/
