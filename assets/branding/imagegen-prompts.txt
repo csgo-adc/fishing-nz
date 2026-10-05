@@ -1,0 +1,30 @@
+Initial fish concept:
+Use case: logo-brand.
+Asset type: production mobile-app launcher icon FOREGROUND MARK for FishAhead NZ, a New Zealand fishing companion for planning fishing trips, finding spots, tides, weather, identifying fish and reviewing rules.
+Primary request: Design one exceptional, instantly recognizable fishing app symbol: a bold streamlined fish swimming toward the upper right, subtly suggesting forward movement and planning ahead. A compact, confident, distinctive silhouette, not a cartoon or a generic emoji. A simple forked tail, a broad warm-ivory body, a tiny dark navy circular eye, one warm amber dorsal fin, and a clean electric-blue curved lower body/fin that subtly suggests flowing water. The fish is the whole mark; no separate decorative scene.
+Style/medium: precision flat vector-like brand graphic with smooth crisp contours and large solid shapes; polished premium outdoor app; completely flat colors, no gradients, no 3D, no texture.
+Color palette: warm ivory #FFF5DE as the main body, vivid cobalt blue #427BFF lower-body accent, amber orange #FFAE45 dorsal fin, very dark midnight navy #0B1730 eye. Absolutely no green, teal, mint, lime, turquoise or cyan.
+Composition/framing: one centered isolated mark on a genuinely transparent square canvas. Fish points 20 to 25 degrees upwards toward the right, head right and tail left. Compact proportions, approximately 1.25 width to 1 height so it works in circular, squircle, rounded-square and teardrop masks. Entire mark approximately 75% of canvas width, with generous transparent outer margin. Keep the head, tail and fin substantial and legible at 32 pixels. All three colored regions join into ONE connected fish silhouette. Allow clean negative space between the tail lobes. No enclosing badge or background shape.
+Constraints: actual transparent background; no text, no letters, no checkmark, no hook, no fishing rod, no compass, no sun, no boat, no extra arrows, no watermark, no shadow, no white square, no icon presentation sheet. Output only the final standalone foreground mark ready for platform icon exports.
+
+---
+
+NZ fern refinement:
+Use case: logo-brand.
+Refine the supplied fish logo into the final FOREGROUND MARK for the FishAhead NZ Android and iOS app.
+Primary change: incorporate a recognizable New Zealand silver-fern cue by replacing the ordinary forked tail with a compact stylized ivory silver-fern frond. The fern grows leftwards from the tail stem and fans slightly upwards: a smooth curved central stem with only THREE broad substantial leaflets on each side, plus a rounded terminal leaflet. Large simple leaf shapes and clear negative gaps. The fern is integrated into the fish's tail as one connected symbol, not a separate decorative leaf or a second icon.
+Also make the fish noticeably more compact: the entire combined fish/fern mark should be approximately 1.2 times wider than tall. Head still faces up and right, but shorten the body so the fern-tail and head balance around the canvas center. Keep the fish immediately recognizable, with a simple closed streamlined nose and a generous navy circular eye. Keep one amber dorsal fin and a bold cobalt-blue curved lower body suggesting water. Remove the mouth notch and avoid small gill details.
+Keep the palette: warm ivory #FFF5DE main fish and fern, vivid cobalt #427BFF lower body, amber #FFAE45 dorsal fin, midnight navy #0B1730 eye. Absolutely no green, teal, mint, turquoise or cyan.
+Make colors perfectly flat and uniform, all contours impeccably clean and smooth: no gradients, texture, grain, watercolor edges, halos, pinholes or stray pixels. Precision vector-like logo rendering. It must read clearly at 32 pixels.
+Composition: isolated centered logo on a genuinely transparent square canvas, spacious transparent margins. No pre-rounded tile, no background, no border, no shadows, no mockup, no text, no flag, no letters, no checkmark. Output only the refined standalone mark.
+
+---
+
+User reference palette refinement:
+Use case: logo-brand.
+Input image 1 is the current FishAhead fish/fern logo, the design to refine. Input image 2 is the user's New Zealand flag/fern reference: use it for EXACT COLORS and the fern's tapered leaflet shapes, not as the entire logo.
+Keep the existing fish swimming up and right, its integrated fern tail, the broad sweeping lower-body water shape and the bold circular eye. The user likes this overall design.
+Replace the palette completely using the supplied reference: pure white #FFFFFF fish and fern, royal blue #071FB3 lower-body/water accent, red #D10000 dorsal fin, pure black #000000 eye. Remove every trace of cream, ivory, orange, amber, cobalt, navy, green or teal.
+Improve the fern tail so it clearly resembles a New Zealand silver fern rather than an olive branch: a graceful curved stem, FOUR broad tapering pointed leaflets on each side and one tip, with very clear gaps, integrated into the fish as its tail. The leaflets should be simplified from the reference so they remain substantial at app-icon size. No separate fern emblem, no flag rectangle and no stars.
+Keep the whole symbol balanced and compact, with a simple closed streamlined fish head. Large flat-color shapes, immaculate smooth edges and uniform fills. A clean vector-style finished brand mark with no texture, grain, gradients, shadows, halos, flecks or stray pixels. Don't add strokes.
+Output the final standalone FOREGROUND LOGO on a genuinely transparent square canvas. Generous transparent margin around the whole mark. No tile, no background, no outer mask, no text, no watermark. The transparent foreground will be placed on a black mobile-icon background in the project.

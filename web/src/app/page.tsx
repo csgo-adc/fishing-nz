@@ -1,3 +1,4 @@
+import NextImage from "next/image";
 import Link from "next/link";
 
 const features = [
@@ -25,9 +26,9 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <Link className="brand" href="/" aria-label="CatchCheck NZ home">
-          <span className="brand-mark" aria-hidden="true">✓</span>
-          <span>CatchCheck <span className="brand-country">NZ</span></span>
+        <Link className="brand" href="/" aria-label="Fishing Days NZ home">
+          <NextImage className="brand-mark" src="/fishing-days-icon.png" width={36} height={36} alt="" unoptimized />
+          <span>Fishing Days <span className="brand-country">NZ</span></span>
         </Link>
         <nav className="site-nav" aria-label="Main navigation">
           <a href="#features">Features</a>
@@ -49,7 +50,7 @@ export default function Home() {
         <div className="trip-preview" aria-label="Trip planning steps">
           <div className="trip-preview-top">
             <span className="preview-sun" aria-hidden="true">✳</span>
-            <span>THE CATCHCHECK WAY</span>
+            <span>THE FISHING DAYS WAY</span>
           </div>
           <h2>A clearer plan for your day out.</h2>
           <ol className="preview-steps">
@@ -82,7 +83,7 @@ export default function Home() {
         <div>
           <p className="kicker">Start with a good question</p>
           <h2 id="workflow-title">Where and when should I fish?</h2>
-          <p>Pick land or boat fishing, choose how far to travel, and set your date and hours. CatchCheck compares named areas and shows the reasons behind each suggestion, so you can make your own call.</p>
+          <p>Pick land or boat fishing, choose how far to travel, and set your date and hours. Fishing Days compares named areas and shows the reasons behind each suggestion, so you can make your own call.</p>
           <a className="button button-dark" href="https://github.com/csgo-adc/fishing-nz/releases">Get the Android preview <span aria-hidden="true">↗</span></a>
         </div>
         <div className="workflow-note">
@@ -92,7 +93,7 @@ export default function Home() {
       </section>
 
       <footer className="site-footer">
-        <p><strong>CatchCheck NZ</strong><span>Made for better days on the water.</span></p>
+        <p><strong>Fishing Days NZ</strong><span>Made for better days on the water.</span></p>
         <div><Link href="/account">Account</Link><Link href="/admin">Admin</Link><a href="https://github.com/csgo-adc/fishing-nz/releases">Android releases</a></div>
       </footer>
     </main>

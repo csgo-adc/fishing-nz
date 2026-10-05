@@ -1,5 +1,6 @@
 "use client";
 
+import NextImage from "next/image";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
@@ -222,9 +223,9 @@ export default function AccountPage() {
 
   return (
     <main className="account-shell">
-      <header className="site-header account-header"><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true">✓</span>CatchCheck NZ</Link><Link className="back-link" href="/">Back to home</Link></header>
+      <header className="site-header account-header"><Link className="brand" href="/"><NextImage className="brand-mark" src="/fishing-days-icon.png" width={36} height={36} alt="" unoptimized />Fishing Days NZ</Link><Link className="back-link" href="/">Back to home</Link></header>
       <section className="account-panel">
-        <p className="kicker">Your CatchCheck account</p>
+        <p className="kicker">Your Fishing Days account</p>
         <h1>{user ? `Kia ora${user.display_name ? `, ${user.display_name}` : ""}` : "Sign in or create an account"}</h1>
         <p className="account-lead">Save your details, send feedback, and identify fish from a photo.</p>
         {notice && <p className="form-notice" role="status">{notice}</p>}

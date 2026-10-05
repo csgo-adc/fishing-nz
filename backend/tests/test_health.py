@@ -11,6 +11,6 @@ def test_health_check() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "service": "CatchCheck API",
+        "service": "Fishing Days API",
         "version": "0.1.0",
     }

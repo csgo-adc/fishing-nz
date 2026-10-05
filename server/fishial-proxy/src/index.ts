@@ -135,7 +135,7 @@ async function verifyEmail(request: Request, env: Env): Promise<Response> {
   ]);
   await recordAccountEvent(env, row.id, "email_verified", null, "web");
   if (contentType.includes("application/json")) return json({ verified: true, message: "Your email is confirmed. Sign in to continue." });
-  return new Response(verificationHtml("Your email is confirmed. Return to CatchCheck and sign in to continue.", true), { headers: htmlHeaders() });
+  return new Response(verificationHtml("Your email is confirmed. Return to Fishing Days and sign in to continue.", true), { headers: htmlHeaders() });
 }
 
 async function issueVerificationEmail(request: Request, env: Env, userId: string, email: string): Promise<boolean> {
@@ -157,9 +157,9 @@ async function issueVerificationEmail(request: Request, env: Env, userId: string
     body: JSON.stringify({
       from: env.ACCOUNT_EMAIL_FROM,
       to: [email],
-      subject: "Confirm your CatchCheck NZ account",
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#15323d"><h1 style="color:#082c3c">Confirm your email</h1><p>Tap the button below to activate your CatchCheck NZ account. This link expires in 24 hours.</p><p><a href="${verifyUrl}" style="background:#087f8c;color:white;padding:13px 18px;border-radius:8px;text-decoration:none;display:inline-block">Confirm email</a></p><p>If you didn’t create a CatchCheck account, you can ignore this email.</p></div>`,
-      text: `Confirm your CatchCheck NZ account: ${verifyUrl}\nThis link expires in 24 hours.`,
+      subject: "Confirm your Fishing Days NZ account",
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#15323d"><h1 style="color:#082c3c">Confirm your email</h1><p>Tap the button below to activate your Fishing Days NZ account. This link expires in 24 hours.</p><p><a href="${verifyUrl}" style="background:#087f8c;color:white;padding:13px 18px;border-radius:8px;text-decoration:none;display:inline-block">Confirm email</a></p><p>If you didn’t create a Fishing Days account, you can ignore this email.</p></div>`,
+      text: `Confirm your Fishing Days NZ account: ${verifyUrl}\nThis link expires in 24 hours.`,
     }),
   }).catch(() => null);
   if (!response?.ok) {
@@ -172,12 +172,12 @@ async function issueVerificationEmail(request: Request, env: Env, userId: string
 }
 
 function verificationFormHtml(token: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm CatchCheck account</title></head><body style="font-family:Arial,sans-serif;background:#f4f7f5;color:#15323d;margin:0;padding:48px 18px"><main style="background:white;border-radius:14px;margin:auto;max-width:520px;padding:32px"><h1 style="color:#082c3c">Confirm your CatchCheck email</h1><p>Press the button to activate your account. The link expires after 24 hours.</p><form method="post" action="/v1/auth/verify-email"><input type="hidden" name="token" value="${token}"><button style="background:#087f8c;border:0;border-radius:8px;color:white;font-size:16px;padding:13px 18px">Confirm email</button></form></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm Fishing Days account</title></head><body style="font-family:Arial,sans-serif;background:#f4f7f5;color:#15323d;margin:0;padding:48px 18px"><main style="background:white;border-radius:14px;margin:auto;max-width:520px;padding:32px"><h1 style="color:#082c3c">Confirm your Fishing Days email</h1><p>Press the button to activate your account. The link expires after 24 hours.</p><form method="post" action="/v1/auth/verify-email"><input type="hidden" name="token" value="${token}"><button style="background:#087f8c;border:0;border-radius:8px;color:white;font-size:16px;padding:13px 18px">Confirm email</button></form></main></body></html>`;
 }
 
 function verificationHtml(message: string, success: boolean): string {
   const color = success ? "#087f8c" : "#a43d25";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CatchCheck email confirmation</title></head><body style="font-family:Arial,sans-serif;background:#f4f7f5;color:#15323d;margin:0;padding:48px 18px"><main style="background:white;border-radius:14px;margin:auto;max-width:520px;padding:32px"><h1 style="color:${color}">${success ? "Email confirmed" : "Confirmation needed"}</h1><p>${message}</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fishing Days email confirmation</title></head><body style="font-family:Arial,sans-serif;background:#f4f7f5;color:#15323d;margin:0;padding:48px 18px"><main style="background:white;border-radius:14px;margin:auto;max-width:520px;padding:32px"><h1 style="color:${color}">${success ? "Email confirmed" : "Confirmation needed"}</h1><p>${message}</p></main></body></html>`;
 }
 
 function htmlHeaders(): HeadersInit { return { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" }; }

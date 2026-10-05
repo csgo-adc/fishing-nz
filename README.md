@@ -1,8 +1,8 @@
-# CatchCheck NZ
+# Fishing Days NZ
 
 **Plan your next fishing trip around New Zealand.**
 
-CatchCheck NZ helps you find a place and time to fish, check nearby tides, and review fishing rules before you head out. The iOS and Android apps bring these tools together for both land and boat fishing.
+Fishing Days NZ helps you find a place and time to fish, check nearby tides, and review fishing rules before you head out. The iOS and Android apps bring these tools together for both land and boat fishing.
 
 ## Find a fishing window
 
@@ -27,6 +27,8 @@ The Tide page selects the nearest supported tide station from your location. You
 
 ## Good to know
 
-CatchCheck NZ searches a curated set of named areas, so a small search radius may have no results. A named wharf or beach on the map does not guarantee public access or that fishing is allowed. Window outlook labels summarise forecast conditions; they do not predict how many fish you will catch or guarantee a safe trip. Heights between published high and low tides on the curve are estimates, and weather can change actual water levels. Fish identification is a suggestion, so check the latest official rules for your exact location and species before keeping a catch. [Read about the location and rules sources](docs/data-sources.md).
+Fishing Days NZ searches a curated set of named areas, so a small search radius may have no results. A named wharf or beach on the map does not guarantee public access or that fishing is allowed. Window outlook labels summarise forecast conditions; they do not predict how many fish you will catch or guarantee a safe trip. Heights between published high and low tides on the curve are estimates, and weather can change actual water levels. Fish identification is a suggestion, so check the latest official rules for your exact location and species before keeping a catch. [Read about the location and rules sources](docs/data-sources.md).
 
-CatchCheck NZ is an evolving project. Android preview builds are available from [Releases](https://github.com/csgo-adc/fishing-nz/releases).
+Fishing Days NZ is an evolving project. Android preview builds are available from [Releases](https://github.com/csgo-adc/fishing-nz/releases).
+
+The fish and silver-fern app icon uses the black, royal-blue, white and red palette from the supplied New Zealand reference. [Brand artwork and platform exports](assets/branding/README.md).

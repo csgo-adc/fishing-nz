@@ -1,6 +1,6 @@
-# CatchCheck API
+# Fishing Days API
 
-FastAPI service shared by the CatchCheck web, iOS, and Android clients.
+FastAPI service shared by the Fishing Days web, iOS, and Android clients.
 
 ## Local development
 

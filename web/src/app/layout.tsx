@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CatchCheck NZ | Plan, identify, check",
+  title: "Fishing Days NZ | Your fishing companion",
   description: "Plan a New Zealand fishing trip, explore conditions, identify your catch, and check the rules.",
 };
 

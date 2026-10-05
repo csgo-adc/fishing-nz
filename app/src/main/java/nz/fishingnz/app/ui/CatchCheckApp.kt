@@ -218,7 +218,7 @@ private fun AppearanceScreen(modifier: Modifier, selectedAppearance: Appearance,
 private fun TermsPrivacyScreen(modifier: Modifier) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Terms & privacy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("A short guide to using CatchCheck NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("A short guide to using Fishing Days NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Terms of use", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -230,8 +230,8 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Privacy", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
-                Text("If you choose a fish photo, it is sent through CatchCheck’s service to an image analysis provider for identification.")
-                Text("If you sign in or send feedback, your account details and feedback are sent to CatchCheck’s service. Signing out removes the saved session from this device.")
+                Text("If you choose a fish photo, it is sent through the Fishing Days service to an image analysis provider for identification.")
+                Text("If you sign in or send feedback, your account details and feedback are sent to the Fishing Days service. Signing out removes the saved session from this device.")
             }
         }
     }

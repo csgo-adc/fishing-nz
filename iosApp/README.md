@@ -1,4 +1,4 @@
-# CatchCheck NZ for iOS
+# Fishing Days NZ for iOS
 
 Open `CatchCheckNZ.xcodeproj` in Xcode and run the **CatchCheckNZ** scheme on an iOS 17+ simulator or device.
 

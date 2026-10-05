@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "catchcheck-backend"
 version = "0.1.0"
-description = "FastAPI backend for CatchCheck NZ clients"
+description = "FastAPI backend for Fishing Days NZ clients"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1",

@@ -19,6 +19,7 @@
 		AA000010 /* WeatherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100012 /* WeatherView.swift */; };
 		AA000011 /* PlaceConditionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100013 /* PlaceConditionsService.swift */; };
 		AA000012 /* PlaceConditionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100014 /* PlaceConditionsView.swift */; };
+		AA000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100015 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		AA100012 /* WeatherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherView.swift; sourceTree = "<group>"; };
 		AA100013 /* PlaceConditionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceConditionsService.swift; sourceTree = "<group>"; };
 		AA100014 /* PlaceConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceConditionsView.swift; sourceTree = "<group>"; };
+		AA100015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				AA100007 /* Info.plist */,
+				AA100015 /* Assets.xcassets */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -191,6 +194,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000013 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,7 +249,7 @@
 		AA700003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 93N35X579F;
@@ -265,7 +269,7 @@
 		AA700004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 93N35X579F;

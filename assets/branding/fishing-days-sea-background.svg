@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Fishing Days NZ pale sea and gentle ripples</title>
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#E1F5FC"/>
+      <stop offset="1" stop-color="#BFE7F5"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#sea)" d="M0 0H1024V1024H0Z"/>
+  <!-- Broad, quiet ripples keep the fish legible in small launcher masks. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M-100 275C95 190 245 330 440 267S790 205 1120 300" stroke="#A6D6E9" stroke-width="22" opacity=".42"/>
+    <path d="M-100 315C95 230 245 370 440 307S790 245 1120 340" stroke="#FFFFFF" stroke-width="12" opacity=".65"/>
+    <path d="M-100 565C90 487 255 655 460 578S817 510 1120 605" stroke="#A6D6E9" stroke-width="26" opacity=".4"/>
+    <path d="M-100 610C90 532 255 700 460 623S817 555 1120 650" stroke="#FFFFFF" stroke-width="14" opacity=".6"/>
+    <path d="M-100 855C110 778 272 940 495 860S845 800 1120 880" stroke="#A6D6E9" stroke-width="30" opacity=".46"/>
+    <path d="M-100 900C110 823 272 985 495 905S845 845 1120 925" stroke="#FFFFFF" stroke-width="14" opacity=".5"/>
+  </g>
+</svg>

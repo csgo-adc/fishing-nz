@@ -513,7 +513,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     }
     Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Text("Save your details and manage your CatchCheck profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        Text("Save your details and manage your Fishing Days profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
         s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -584,7 +584,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Sign in to send feedback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Feedback is linked to your CatchCheck account so we can review it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Feedback is linked to your Fishing Days account so we can review it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = { vm.selectTab(5) }) { Text("Go to account") }
                 }
             }
@@ -624,7 +624,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         FloatingActionButton(onClick = {
             val capture = imageCapture ?: return@FloatingActionButton
             captureError = null
-            val values = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, "catchcheck-fish-${System.currentTimeMillis()}.jpg"); put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg"); put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CatchCheck") }
+            val values = ContentValues().apply { put(MediaStore.Images.Media.DISPLAY_NAME, "fishing-days-fish-${System.currentTimeMillis()}.jpg"); put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg"); put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Fishing Days") }
             val output = ImageCapture.OutputFileOptions.Builder(context.contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values).build()
             capture.takePicture(output, ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(result: ImageCapture.OutputFileResults) {

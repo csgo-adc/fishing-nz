@@ -190,7 +190,7 @@ private struct TermsPrivacyView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Terms & privacy").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                Text("A short guide to using CatchCheck NZ and understanding the information it uses.")
+                Text("A short guide to using Fishing Days NZ and understanding the information it uses.")
                     .foregroundStyle(.secondary)
                 Card {
                     Text("Terms of use").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
@@ -200,8 +200,8 @@ private struct TermsPrivacyView: View {
                 Card {
                     Text("Privacy").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
-                    Text("If you choose a fish photo, it is sent through CatchCheck’s service to an image analysis provider for identification.")
-                    Text("If you sign in or send feedback, your account details and feedback are sent to CatchCheck’s service. Signing out removes the saved session from this device.")
+                    Text("If you choose a fish photo, it is sent through the Fishing Days service to an image analysis provider for identification.")
+                    Text("If you sign in or send feedback, your account details and feedback are sent to the Fishing Days service. Signing out removes the saved session from this device.")
                 }
             }.padding(20)
         }
@@ -228,7 +228,7 @@ private struct FeedbackView: View {
                 if vm.account == nil {
                     Card {
                         Text("Sign in to send feedback").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
-                        Text("Feedback is linked to your CatchCheck account so we can review it.")
+                        Text("Feedback is linked to your Fishing Days account so we can review it.")
                             .foregroundStyle(.secondary)
                         if vm.accountLoading {
                             ProgressView("Checking your account…")
@@ -607,14 +607,14 @@ struct AccountView: View {
                             .frame(width: 62, height: 62)
                             .background(CatchCheckColor.hero, in: RoundedRectangle(cornerRadius: 20))
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("CATCHCHECK NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(CatchCheckColor.orange)
+                            Text("FISHING DAYS NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(CatchCheckColor.orange)
                             Text(vm.account == nil ? "Your fishing account" : "Welcome back")
                                 .font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                         }
                         Spacer(minLength: 0)
                     }
                     if vm.account == nil {
-                        Text("Save your profile and manage your CatchCheck account in one place.")
+                        Text("Save your profile and manage your Fishing Days account in one place.")
                             .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     if let notice = vm.accountNotice {
@@ -673,7 +673,7 @@ struct AccountView: View {
                                 Image(systemName: "lock.shield.fill").foregroundStyle(CatchCheckColor.orange)
                                 Text("Secure access").font(.headline).foregroundStyle(CatchCheckColor.navy)
                             }
-                            Text("Create an account or sign in to manage your CatchCheck profile.")
+                            Text("Create an account or sign in to manage your Fishing Days profile.")
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Picker("Account", selection: $createAccount) {
                                 Text("Create account").tag(true)

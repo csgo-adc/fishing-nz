@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <title>Fishing Days NZ fish with a silver-fern tail</title>
+  <desc>A white fish moving up and right, with a silver-fern tail, royal-blue belly, red dorsal fin and a subtle sea-blue edge for clarity on a pale ocean background.</desc>
+  <defs>
+    <filter id="sea-edge" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="6" result="expanded"/>
+      <feFlood flood-color="#4B91AF"/>
+      <feComposite in2="expanded" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- The broad tapering leaflets keep the fern readable at launcher sizes. -->
+  <g fill="#FFFFFF" filter="url(#sea-edge)">
+    <path d="M353 652C281 600 217 550 121 502L133 488C223 534 293 574 369 606Z"/>
+    <path d="M139 512C97 500 68 474 57 446C91 445 124 477 139 512Z"/>
+    <path d="M180 536C143 505 123 474 128 440C164 451 192 494 188 529Z"/>
+    <path d="M228 559C189 529 177 493 180 460C217 476 243 520 238 554Z"/>
+    <path d="M276 587C239 553 231 521 234 489C266 505 294 549 286 580Z"/>
+    <path d="M325 618C291 585 281 553 284 518C323 537 342 578 336 610Z"/>
+    <path d="M180 536C156 535 123 548 111 576C147 583 176 564 192 543Z"/>
+    <path d="M230 565C198 559 162 581 149 616C187 628 221 605 241 578Z"/>
+    <path d="M280 595C247 584 207 615 194 651C233 662 271 637 293 608Z"/>
+    <path d="M330 626C298 614 260 645 252 681C292 691 328 663 345 639Z"/>
+  </g>
+  <path fill="#D10000" d="M445 522C508 438 531 386 501 349C489 329 461 313 437 301C512 263 601 285 662 320C703 340 734 352 754 356C644 393 528 459 445 522Z"/>
+  <path fill="#FFFFFF" filter="url(#sea-edge)" d="M331 601C438 632 506 555 585 468C676 373 800 332 912 348C948 352 971 365 974 389C976 421 951 472 910 523C857 592 802 639 733 664C655 691 575 677 505 650C442 627 380 636 331 651Z"/>
+  <path fill="#071FB3" d="M331 651C393 624 440 649 516 665C609 700 694 680 735 645C751 635 758 641 754 656C747 678 731 713 724 738C715 759 734 764 753 753C796 731 819 688 832 656C900 603 954 502 974 389C913 518 813 541 726 567C616 596 557 651 480 648C417 646 371 620 331 651Z"/>
+  <circle cx="887" cy="398" r="24" fill="#000000"/>
+</svg>

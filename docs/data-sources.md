@@ -1,6 +1,6 @@
 # Location and rules data
 
-CatchCheck uses named coastal places to help plan a trip. A map pin marks a place to explore, not a verified public fishing access point or a statement that fishing is allowed there. Check access, signs, marine reserves, and local restrictions before fishing.
+Fishing Days uses named coastal places to help plan a trip. A map pin marks a place to explore, not a verified public fishing access point or a statement that fishing is allowed there. Check access, signs, marine reserves, and local restrictions before fishing.
 
 ## Recreational fishing rules
 
@@ -10,7 +10,7 @@ The app lets people select the MPI area that applies to their fishing location, 
 
 ## Tide predictions
 
-The [LINZ tide predictions list](https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view) separates sites with daily prediction CSV files from **offset** sites that require a reference port calculation. CatchCheck uses the direct daily predictions for its tide graph and event times. The [daily station catalogue](../data/linz_daily_tide_stations.json) records the LINZ display name, CSV name, published coordinates, and source CSV URL. The catalogue has 87 stations with verified 2026 CSV files. The LINZ list labels Te Weka Bay as a daily site but links only an offset PDF, so it is excluded.
+The [LINZ tide predictions list](https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view) separates sites with daily prediction CSV files from **offset** sites that require a reference port calculation. Fishing Days uses the direct daily predictions for its tide graph and event times. The [daily station catalogue](../data/linz_daily_tide_stations.json) records the LINZ display name, CSV name, published coordinates, and source CSV URL. The catalogue has 87 stations with verified 2026 CSV files. The LINZ list labels Te Weka Bay as a daily site but links only an offset PDF, so it is excluded.
 
 LINZ publishes event times and heights. Values between high and low tide events in the app are interpolated estimates. The apps omit sites whose local time zone is not handled by the current tide parser.
 

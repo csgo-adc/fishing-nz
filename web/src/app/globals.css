@@ -7,8 +7,8 @@ body { margin:0; background:var(--white); color:var(--ink); font-family:Inter,ui
 a { color:inherit; text-decoration:none; }
 .site-header { align-items:center; display:flex; justify-content:space-between; gap:24px; margin:0 auto; max-width:1240px; padding:22px 36px; }
 .brand { align-items:center; display:flex; color:var(--navy); font-size:19px; font-weight:800; gap:10px; letter-spacing:-.04em; white-space:nowrap; }
-.brand-mark { align-items:center; background:var(--ocean); border-radius:50%; color:white; display:inline-flex; font-size:19px; height:36px; justify-content:center; width:36px; }
-.brand-country { color:var(--ocean); }
+.brand-mark { background:#d0eef9; border-radius:9px; display:block; flex:0 0 auto; height:36px; width:36px; }
+.brand-country { color:#071fb3; }
 .site-nav { align-items:center; display:flex; gap:32px; }
 .site-nav a { color:var(--muted); font-size:14px; font-weight:750; }
 .site-nav a:hover,.site-nav a:focus-visible { color:var(--ocean); }

@@ -1,1 +1,1 @@
-"""CatchCheck backend package."""
+"""Fishing Days backend package."""
