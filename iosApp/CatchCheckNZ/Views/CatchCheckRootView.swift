@@ -592,7 +592,7 @@ struct AccountView: View {
     }
     private var canSubmit: Bool {
         guard !vm.accountBusy, isEmailValid else { return false }
-        if createAccount { return password.count >= 10 && passwordsMatch }
+        if createAccount { return password.utf16.count >= 8 && password.utf16.count <= 128 && passwordsMatch }
         return !password.isEmpty
     }
 
@@ -650,6 +650,8 @@ struct AccountView: View {
                                 Label(vm.accountBusy ? "Saving…" : "Save profile", systemImage: "checkmark")
                                     .frame(maxWidth: .infinity)
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
+                            Text("Sign-in options").font(.headline)
+                            socialSignInButtons
                         }
                         Button("Sign out", role: .destructive) { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
                     } else if vm.hasStoredSession {
@@ -675,6 +677,8 @@ struct AccountView: View {
                             }
                             Text("Create an account or sign in to manage your Fishing Days profile.")
                                 .font(.subheadline).foregroundStyle(.secondary)
+                            socialSignInButtons
+                            Text("Or use your email").font(.caption).foregroundStyle(.secondary)
                             Picker("Account", selection: $createAccount) {
                                 Text("Create account").tag(true)
                                 Text("Sign in").tag(false)
@@ -690,7 +694,7 @@ struct AccountView: View {
                                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                                 }
                                 AccountInput(icon: "lock") {
-                                    SecureField(createAccount ? "Password · 10+ characters" : "Password", text: $password)
+                                    SecureField(createAccount ? "Password · 8+ characters" : "Password", text: $password)
                                         .textContentType(createAccount ? .newPassword : .password)
                                 }
                                 if createAccount {
@@ -704,8 +708,8 @@ struct AccountView: View {
                                             .foregroundStyle(passwordsMatch ? CatchCheckColor.navy : .red)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    if !password.isEmpty && password.count < 10 {
-                                        Text("Use at least 10 characters for your password.")
+                                    if !password.isEmpty && password.utf16.count < 8 {
+                                        Text("Use at least 8 characters for your password.")
                                             .font(.caption).foregroundStyle(.secondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
@@ -751,8 +755,31 @@ struct AccountView: View {
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-            .onChange(of: vm.account) { _, value in if let value { displayName = value.displayName; countryCode = value.countryCode; email = value.email } }
+            .task { await vm.refreshSignInProviders() }
+            .onChange(of: vm.account) { _, value in if let value { displayName = value.displayName; countryCode = value.countryCode; email = value.email; password = ""; confirmPassword = "" } }
             .onChange(of: vm.verificationPending) { _, pending in if pending { createAccount = false } }
+        }
+    }
+
+    private var socialSignInButtons: some View {
+        VStack(spacing: 12) {
+            ForEach(["google", "apple"], id: \.self) { provider in
+                let name = provider == "google" ? "Google" : "Apple"
+                let available = provider == "google" ? vm.signInProviders.google : vm.signInProviders.apple
+                let connected = vm.account != nil && vm.signInProviders.connected.contains(provider)
+                Button {
+                    Task { await vm.signInWithProvider(provider) }
+                } label: {
+                    HStack(spacing: 10) {
+                        if provider == "apple" { Image(systemName: "apple.logo") }
+                        Text(connected ? "\(name) connected" : vm.account == nil ? "Continue with \(name)" : "Connect \(name)")
+                    }.frame(maxWidth: .infinity).padding(.vertical, 6)
+                }
+                .buttonStyle(.bordered).disabled(vm.accountBusy || !available || connected)
+            }
+            if !vm.signInProviders.google && !vm.signInProviders.apple {
+                Text("Google and Apple sign-in will be available soon.").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 

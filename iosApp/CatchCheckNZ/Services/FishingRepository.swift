@@ -2,6 +2,47 @@ import Foundation
 import UIKit
 import Security
 import CoreLocation
+import AuthenticationServices
+
+struct SignInProviders: Decodable {
+    var google = false
+    var apple = false
+    var connected: [String] = []
+}
+
+private struct SocialSignInStart: Decodable {
+    let authorization_url: String
+    let exchange_secret: String
+}
+
+@MainActor
+final class SocialSignInBrowser: NSObject, ASWebAuthenticationPresentationContextProviding {
+    private var session: ASWebAuthenticationSession?
+
+    func authenticate(url: URL) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nz.fishingnz.catchcheck") { [weak self] callback, error in
+                Task { @MainActor in
+                    self?.session = nil
+                    if let error { continuation.resume(throwing: error) }
+                    else if let callback { continuation.resume(returning: callback) }
+                    else { continuation.resume(throwing: AccountAPIError(message: "Could not finish sign-in.", status: 400, code: nil)) }
+                }
+            }
+            session.presentationContextProvider = self
+            self.session = session
+            if !session.start() {
+                self.session = nil
+                continuation.resume(throwing: AccountAPIError(message: "Could not open sign-in. Please try again.", status: 400, code: nil))
+            }
+        }
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+    }
+}
 
 struct FishingRepository {
     private let decoder = JSONDecoder()
@@ -18,6 +59,26 @@ struct FishingRepository {
     func createAccount(email: String, password: String, displayName: String) async throws -> String {
         let response: AccountMessageResponse = try await accountRequest("/v1/auth/register", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password, "display_name": displayName.trimmingCharacters(in: .whitespacesAndNewlines)])
         return response.message
+    }
+
+    func signInProviders() async throws -> SignInProviders {
+        try await accountRequest("/v1/auth/providers", method: "GET", token: KeychainSession.load())
+    }
+
+    func startSocialSignIn(provider: String, link: Bool) async throws -> (url: URL, secret: String) {
+        let response: SocialSignInStart = try await accountRequest("/v1/auth/oauth/start", method: "POST",
+            body: ["provider": provider, "link": link, "return_uri": "nz.fishingnz.catchcheck://auth/callback"], token: KeychainSession.load())
+        guard let url = URL(string: response.authorization_url) else {
+            throw AccountAPIError(message: "Could not start sign-in. Please try again.", status: 502, code: nil)
+        }
+        return (url, response.exchange_secret)
+    }
+
+    func completeSocialSignIn(code: String, secret: String) async throws -> AccountSnapshot {
+        let response: AccountAuthResponse = try await accountRequest("/v1/auth/oauth/exchange", method: "POST",
+            body: ["code": code, "exchange_secret": secret])
+        try KeychainSession.save(response.token)
+        return AccountSnapshot(user: response.user, permissions: response.permissions)
     }
 
     func resendVerification(email: String) async throws -> String {

@@ -20,6 +20,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 
 class AccountRequestException(val statusCode: Int, val code: String?, message: String) : IOException(message)
+data class SignInProviders(val google: Boolean = false, val apple: Boolean = false, val connected: Set<String> = emptySet())
 
 class FishingRepository {
     private val accountBaseUrl: String get() = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/').ifBlank { "https://fishing.fishnz.space" }
@@ -176,6 +177,7 @@ class FishingRepository {
     }
 
     suspend fun signIn(email: String, password: String): AccountSnapshot = withContext(Dispatchers.IO) {
+        AccountSessionStore.clearOAuthSecret()
         val body = JSONObject().put("email", email.trim()).put("password", password)
         val response = accountRequest("/v1/auth/login", "POST", body)
         val token = response.getString("token")
@@ -187,6 +189,27 @@ class FishingRepository {
     suspend fun createAccount(email: String, password: String, displayName: String): String = withContext(Dispatchers.IO) {
         val response = accountRequest("/v1/auth/register", "POST", JSONObject().put("email", email.trim()).put("password", password).put("display_name", displayName.trim()))
         response.optString("message", "Check your email to confirm your account.")
+    }
+
+    suspend fun signInProviders(): SignInProviders = withContext(Dispatchers.IO) {
+        val response = accountRequest("/v1/auth/providers", "GET", token = AccountSessionStore.token())
+        val connected = response.optJSONArray("connected")
+        SignInProviders(response.optBoolean("google"), response.optBoolean("apple"),
+            (0 until (connected?.length() ?: 0)).mapNotNull { connected?.optString(it) }.toSet())
+    }
+
+    suspend fun startSocialSignIn(provider: String, link: Boolean): String = withContext(Dispatchers.IO) {
+        val response = accountRequest("/v1/auth/oauth/start", "POST", JSONObject()
+            .put("provider", provider).put("link", link).put("return_uri", "nz.fishingnz.app://auth/callback"), AccountSessionStore.token())
+        AccountSessionStore.saveOAuthSecret(response.getString("exchange_secret"))
+        response.getString("authorization_url")
+    }
+
+    suspend fun completeSocialSignIn(code: String, secret: String): AccountSnapshot = withContext(Dispatchers.IO) {
+        val response = accountRequest("/v1/auth/oauth/exchange", "POST", JSONObject().put("code", code).put("exchange_secret", secret))
+        val snapshot = parseAccountSnapshot(response.getJSONObject("user"), response.getJSONObject("permissions"))
+        AccountSessionStore.save(response.getString("token"))
+        snapshot
     }
 
     suspend fun resendVerification(email: String): String = withContext(Dispatchers.IO) {
@@ -214,6 +237,7 @@ class FishingRepository {
     }
 
     suspend fun signOut() = withContext(Dispatchers.IO) {
+        AccountSessionStore.clearOAuthSecret()
         AccountSessionStore.token()?.let { token -> runCatching { accountRequest("/v1/auth/logout", "POST", JSONObject(), token) } }
         AccountSessionStore.clear()
     }

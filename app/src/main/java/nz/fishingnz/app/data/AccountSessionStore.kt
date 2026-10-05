@@ -14,25 +14,43 @@ object AccountSessionStore {
     private const val KEY_ALIAS = "catchcheck_account_session"
     private const val PREFS_NAME = "catchcheck_account"
     private const val TOKEN_KEY = "encrypted_token"
+    private const val OAUTH_KEY = "encrypted_oauth"
     @Volatile private var appContext: Context? = null
 
     fun initialize(context: Context) { appContext = context.applicationContext }
 
-    @Synchronized fun save(token: String) {
+    @Synchronized fun save(token: String) = saveEncrypted(TOKEN_KEY, token)
+
+    @Synchronized fun saveOAuthSecret(secret: String) = saveEncrypted(OAUTH_KEY, "${System.currentTimeMillis() + 600_000}:$secret")
+
+    @Synchronized fun consumeOAuthSecret(): String? {
+        val value = readEncrypted(OAUTH_KEY)
+        clearOAuthSecret()
+        val parts = value?.split(':', limit = 2) ?: return null
+        return if (parts.size == 2 && (parts[0].toLongOrNull() ?: 0) > System.currentTimeMillis()) parts[1] else null
+    }
+
+    @Synchronized fun clearOAuthSecret() {
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.remove(OAUTH_KEY)?.commit()
+    }
+
+    private fun saveEncrypted(storageKey: String, token: String) {
         require(token.isNotBlank()) { "Cannot save an empty account session." }
         val context = appContext ?: error("Account storage is not ready. Please reopen the app and try again.")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val encrypted = cipher.iv + cipher.doFinal(token.toByteArray(Charsets.UTF_8))
         check(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(TOKEN_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit()) {
+            .putString(storageKey, Base64.encodeToString(encrypted, Base64.NO_WRAP)).commit()) {
             "Could not save your account session. Please try again."
         }
     }
 
-    @Synchronized fun token(): String? {
+    @Synchronized fun token(): String? = readEncrypted(TOKEN_KEY)
+
+    private fun readEncrypted(storageKey: String): String? {
         val context = appContext ?: return null
-        val encoded = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(TOKEN_KEY, null) ?: return null
+        val encoded = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(storageKey, null) ?: return null
         return try {
             val bytes = Base64.decode(encoded, Base64.NO_WRAP)
             if (bytes.size <= 12) error("Invalid stored account session.")
@@ -41,7 +59,7 @@ object AccountSessionStore {
             cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
         } catch (_: Exception) {
-            clear()
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(storageKey).commit()
             null
         }
     }

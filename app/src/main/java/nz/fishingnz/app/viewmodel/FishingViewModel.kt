@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.FishingRepository
 import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
+import nz.fishingnz.app.data.SignInProviders
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.data.SearchPreferencesStore
 import nz.fishingnz.app.model.*
@@ -59,6 +60,7 @@ data class FishingUiState(
     val recommendationsLoading: Boolean = false, val recommendationsError: String? = null, val savedRecommendations: List<Recommendation> = emptyList(),
     val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountLoading: Boolean = true,
     val hasStoredSession: Boolean = false,
+    val signInProviders: SignInProviders = SignInProviders(),
     val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false
 )
 
@@ -460,6 +462,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     if (version == accountVersion) _state.value = _state.value.copy(account = account,
                         hasStoredSession = true,
                         accountBusy = false, verificationPending = false, accountError = null, accountNotice = "You’re signed in.")
+                    refreshSignInProviders()
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -468,6 +471,62 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     verificationPending = _state.value.verificationPending || (error as? AccountRequestException)?.code in
                         setOf("email_not_verified", "email_delivery_failed"),
                     accountError = error.message ?: if (createAccount) "Could not create account." else "Could not sign in.")
+            }
+        }
+    }
+    fun refreshSignInProviders() {
+        viewModelScope.launch {
+            try { _state.value = _state.value.copy(signInProviders = repository.signInProviders()) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Email sign-in remains available if provider discovery fails. */ }
+        }
+    }
+
+    fun startSocialSignIn(provider: String, openBrowser: (String) -> Unit) {
+        val version = ++accountVersion
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                val url = repository.startSocialSignIn(provider, _state.value.account != null)
+                if (version != accountVersion) return@launch
+                openBrowser(url)
+                _state.value = _state.value.copy(accountBusy = false, accountNotice = "Finish signing in in your browser.")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                AccountSessionStore.clearOAuthSecret()
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    accountError = error.message ?: "Could not start sign-in.")
+            }
+        }
+    }
+
+    fun completeSocialSignIn(uri: Uri?) {
+        if (uri?.scheme != "nz.fishingnz.app" || uri.host != "auth" || uri.path != "/callback") return
+        val secret = AccountSessionStore.consumeOAuthSecret() ?: return
+        val version = ++accountVersion
+        selectTab(5)
+        val error = uri.getQueryParameter("oauth_error")
+        if (error != null) {
+            _state.value = _state.value.copy(accountBusy = false, accountLoading = false, accountNotice = null,
+                accountError = when (error) {
+                    "cancelled" -> "Sign-in was cancelled. You can try again."
+                    "account_exists" -> "This account already exists or is connected elsewhere. Sign in with your usual method, then connect Google or Apple from your profile."
+                    else -> "Could not finish sign-in. Please try again."
+                })
+            return
+        }
+        val code = uri.getQueryParameter("oauth_code") ?: return
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                val account = repository.completeSocialSignIn(code, secret)
+                if (version == accountVersion) _state.value = _state.value.copy(account = account, hasStoredSession = true,
+                    accountBusy = false, verificationPending = false, accountNotice = "You’re signed in.")
+                refreshSignInProviders()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    accountError = error.message ?: "Could not finish sign-in. Please try again.")
             }
         }
     }

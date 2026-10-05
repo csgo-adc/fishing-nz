@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreLocation
 import UIKit
+import AuthenticationServices
 
 enum FishingDatePreset: String, CaseIterable, Hashable {
     case today = "Today"
@@ -125,8 +126,10 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var accountError: String?
     @Published var accountNotice: String?
     @Published var verificationPending = false
+    @Published var signInProviders = SignInProviders()
 
     private let repository = FishingRepository()
+    private let socialSignInBrowser = SocialSignInBrowser()
     private let scoringService = FishingScoringService()
     private let locationManager = CLLocationManager()
     private var pendingFishPhoto: UIImage?
@@ -686,6 +689,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             } else {
                 let snapshot = try await repository.registerOrLogin(email: email, password: password)
                 account = snapshot.user; hasStoredSession = true; accountNotice = "You’re signed in."; verificationPending = false
+                await refreshSignInProviders()
             }
             accountBusy = false
             return true
@@ -705,6 +709,48 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             do { accountNotice = try await repository.resendVerification(email: email); verificationPending = true }
             catch { accountError = error.localizedDescription }
             accountBusy = false
+        }
+    }
+
+    func refreshSignInProviders() async {
+        if let providers = try? await repository.signInProviders() { signInProviders = providers }
+    }
+
+    func signInWithProvider(_ provider: String) async {
+        guard !accountBusy else { return }
+        accountRequestVersion += 1
+        let version = accountRequestVersion
+        let linking = account != nil
+        accountLoading = false; accountLoadFailed = false
+        accountBusy = true; accountError = nil; accountNotice = nil
+        defer { if version == accountRequestVersion { accountBusy = false } }
+        do {
+            let flow = try await repository.startSocialSignIn(provider: provider, link: linking)
+            let callback = try await socialSignInBrowser.authenticate(url: flow.url)
+            guard callback.scheme == "nz.fishingnz.catchcheck", callback.host == "auth", callback.path == "/callback",
+                  let components = URLComponents(url: callback, resolvingAgainstBaseURL: false) else {
+                throw AccountAPIError(message: "Invalid sign-in response. Please try again.", status: 400, code: nil)
+            }
+            let items = components.queryItems ?? []
+            if let error = items.first(where: { $0.name == "oauth_error" })?.value {
+                let message = error == "cancelled" ? "Sign-in was cancelled. You can try again." : error == "account_exists"
+                    ? "This account already exists or is connected elsewhere. Sign in with your usual method, then connect Google or Apple from your profile."
+                    : "Could not finish sign-in. Please try again."
+                throw AccountAPIError(message: message, status: 400, code: nil)
+            }
+            guard let code = items.first(where: { $0.name == "oauth_code" })?.value else {
+                throw AccountAPIError(message: "Could not finish sign-in. Please try again.", status: 400, code: nil)
+            }
+            let snapshot = try await repository.completeSocialSignIn(code: code, secret: flow.secret)
+            guard version == accountRequestVersion else { return }
+            account = snapshot.user; hasStoredSession = true; verificationPending = false
+            accountNotice = linking ? "Account connected. You can use it to sign in next time." : "You’re signed in."
+            await refreshSignInProviders()
+        } catch {
+            guard version == accountRequestVersion else { return }
+            if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                accountNotice = "Sign-in was cancelled. You can try again."
+            } else { accountError = error.localizedDescription }
         }
     }
     func saveAccountProfile(displayName: String, countryCode: String) {

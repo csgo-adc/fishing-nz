@@ -1,4 +1,6 @@
-export interface Env {
+import { handleSocialAuth, type SocialAuthEnv } from "./social-auth";
+
+export interface Env extends SocialAuthEnv {
   OPENAI_API_KEY: string;
   RULES_DB: D1Database;
   RULES_INGEST_TOKEN: string;
@@ -7,7 +9,7 @@ export interface Env {
   ACCOUNT_EMAIL_FROM?: string;
 }
 
-type Account = {
+export type Account = {
   id: string;
   email: string;
   display_name: string;
@@ -48,7 +50,7 @@ async function register(request: Request, env: Env): Promise<Response> {
   const password = typeof payload.password === "string" ? payload.password : "";
   const displayName = typeof payload.display_name === "string" ? payload.display_name.trim() : "";
   if (!isValidEmail(email)) return json({ error: "Enter a valid email address." }, 400);
-  if (password.length < 10 || password.length > 128) return json({ error: "Password must be between 10 and 128 characters." }, 400);
+  if (password.length < 8 || password.length > 128) return json({ error: "Password must be between 8 and 128 characters." }, 400);
   if (displayName.length > 80) return json({ error: "Display name must be 80 characters or fewer." }, 400);
 
   const id = crypto.randomUUID();
@@ -85,7 +87,7 @@ async function login(request: Request, env: Env): Promise<Response> {
     `SELECT id, email, display_name, country_code, plan, created_at, password_hash, password_salt, email_verified
      FROM account_users WHERE email = ? COLLATE NOCASE`
   ).bind(email).first<AccountWithCredentials>();
-  if (!row || !password || !constantTimeEqual(await hashPassword(password, row.password_salt), row.password_hash)) {
+  if (!row || !row.password_hash || !password || !constantTimeEqual(await hashPassword(password, row.password_salt), row.password_hash)) {
     return json({ error: "Email or password is incorrect." }, 401);
   }
   if (row.email_verified !== 1) return json({ error: "Confirm your email before signing in.", code: "email_not_verified" }, 403);
@@ -502,6 +504,9 @@ export default {
     const pathname = new URL(request.url).pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (pathname === "/__health") return json({ ok: true });
+    if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/")) {
+      return await handleSocialAuth(request, env, { authenticate, createSessionResponse });
+    }
     if (pathname === "/v1/rules/status" && request.method === "GET") return await getCrawlStatus(env);
     if (pathname === "/v1/rules" && request.method === "GET") return await getRules(request, env);
     if (pathname === "/v1/fish/rules" && request.method === "GET") return await getFishRules(request, env);

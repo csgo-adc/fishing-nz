@@ -1,17 +1,9 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { loadWorker } from "./load-worker.mjs";
 
-const project = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const source = readFileSync(resolve(project, "src", "index.ts"), "utf8");
-const javascript = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`);
+const worker = await loadWorker();
 
 test("fish identification always returns a useful result for model responses", async () => {
   const originalFetch = globalThis.fetch;

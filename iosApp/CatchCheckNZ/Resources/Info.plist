@@ -11,6 +11,10 @@
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>LSRequiresIPhoneOS</key><true/>
+    <key>CFBundleURLTypes</key><array><dict>
+        <key>CFBundleURLName</key><string>nz.fishingnz.catchcheck.auth</string>
+        <key>CFBundleURLSchemes</key><array><string>nz.fishingnz.catchcheck</string></array>
+    </dict></array>
     <key>NSCameraUsageDescription</key><string>Fishing Days uses the camera to identify a fish and check its rules.</string>
     <key>NSCalendarsWriteOnlyAccessUsageDescription</key><string>Fishing Days lets you choose to add a fishing trip to your calendar.</string>
     <key>NSLocationWhenInUseUsageDescription</key><string>Fishing Days uses your location to find nearby fishing spots, compare forecast conditions, and choose a fishing rules area.</string>

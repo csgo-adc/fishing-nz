@@ -495,13 +495,29 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
 }
 
 @Composable fun AccountScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
+    val context = LocalContext.current
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
     var displayName by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf("NZ") }
     var createAccount by rememberSaveable { mutableStateOf(false) }
     val validEmail = remember(email) { android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() }
-    val validPassword = password.isNotBlank() && (!createAccount || password.length >= 10)
+    val passwordsMatch = confirmPassword.isNotEmpty() && password == confirmPassword
+    val validPassword = password.isNotBlank() && password.length <= 128 && (!createAccount || (password.length >= 8 && passwordsMatch))
+    LaunchedEffect(Unit) { vm.refreshSignInProviders() }
+    val socialButtons: @Composable () -> Unit = {
+        listOf("google" to "Google", "apple" to "Apple").forEach { (provider, label) ->
+            val connected = s.account != null && provider in s.signInProviders.connected
+            val available = if (provider == "google") s.signInProviders.google else s.signInProviders.apple
+            OutlinedButton(enabled = !s.accountBusy && available && !connected, modifier = Modifier.fillMaxWidth(),
+                onClick = { vm.startSocialSignIn(provider) { url -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } }) {
+                Text(if (connected) "$label connected" else if (s.account != null) "Connect $label" else "Continue with $label")
+            }
+        }
+        if (!s.signInProviders.google && !s.signInProviders.apple) Text("Google and Apple sign-in will be available soon.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    }
     LaunchedEffect(s.account) {
         s.account?.let { displayName = it.user.displayName; countryCode = it.user.countryCode; email = it.user.email }
     }
@@ -509,6 +525,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         if (s.verificationPending || s.account != null) {
             createAccount = false
             password = ""
+            confirmPassword = ""
         }
     }
     Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -540,13 +557,19 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Secure access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
                 Text("Create an account or sign in to manage your profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                socialButtons()
+                Text("Or use your email", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = createAccount, onClick = { createAccount = true }, label = { Text("Create account") })
-                    FilterChip(selected = !createAccount, onClick = { createAccount = false }, label = { Text("Sign in") })
+                    FilterChip(selected = createAccount, onClick = { createAccount = true; password = ""; confirmPassword = "" }, label = { Text("Create account") })
+                    FilterChip(selected = !createAccount, onClick = { createAccount = false; password = ""; confirmPassword = "" }, label = { Text("Sign in") })
                 }
                 if (createAccount) OutlinedTextField(displayName, { displayName = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(password, { password = it }, label = { Text("Password") }, supportingText = { Text(if (createAccount) "At least 10 characters" else "Enter your password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(password, { password = it }, label = { Text("Password") }, supportingText = { Text(if (createAccount) "At least 8 characters" else "Enter your password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                if (createAccount) OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm password") },
+                    isError = confirmPassword.isNotEmpty() && !passwordsMatch,
+                    supportingText = { Text(if (confirmPassword.isEmpty()) "Enter your password again" else if (passwordsMatch) "Passwords match" else "Passwords don’t match") },
+                    singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
                 Button(enabled = !s.accountBusy && validEmail && validPassword, onClick = { vm.signIn(email.trim(), password, displayName, createAccount) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in") }
                 if (!createAccount && !s.verificationPending) TextButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email.trim()) }) { Text("Resend confirmation email") }
             } }
@@ -560,6 +583,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             OutlinedTextField(displayName, { displayName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(countryCode, { countryCode = it.take(2).uppercase() }, label = { Text("Country code") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedButton(enabled = !s.accountBusy, onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth()) { Text("Save profile") }
+            Text("Sign-in options", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+            socialButtons()
             OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
         }
     }
