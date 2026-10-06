@@ -4,12 +4,12 @@ Reviewed 6 October 2026 against the Android app, shared API, deployed provider s
 
 ## Current status
 
-All eleven initial Play setup tasks are saved, including reviewer sign-in details, target audience and Data safety. They remain unsubmitted in Publishing overview. This is **not yet a signed, uploaded or approved Play release**: Latest releases and bundles shows no releases and no app bundles, and the dashboard shows zero opted-in testers. The supporting service, account-deletion migration and five-per-day identification migration were deployed on 6 October 2026. The target audience declaration was changed to 18 and over on 6 October 2026, with Google Play’s optional minor restriction selected. The change is saved in Publishing overview and has not been sent for review.
+All initial Play setup tasks are saved, including reviewer sign-in details, target audience and Data safety. The target audience declaration is **18 and over**. The Advertising ID declaration is saved as **No**. A signed version-code-1 bundle was rebuilt from the current source, validated locally and **accepted by Google Play**. The New Zealand-only Alpha closed test release `0.1 - NZ closed test` and 13 other changes were submitted on 6 October 2026. Publishing overview shows **Changes in review** while Google runs quick checks. The selected tester email list contains **2 testers**, and the dashboard shows **0 opted-in testers**. The app is not yet approved or available to testers. The supporting service, account-deletion migration and five-per-day identification migration were deployed on 6 October 2026.
 
 | Requirement | Repository status |
 | --- | --- |
 | Target API | Target/compile SDK 37; meets Google's current minimum 36 for new phone apps. The installed SDK is stable, although AGP 9.1 emits a compatibility warning. |
-| App Bundle and signing | Release AAB builds. Upload-key configuration and a manual GitHub build workflow are provided. Production builds stop when signing credentials are missing. |
+| App Bundle and signing | Version-code-1 release AAB is signed with the locally configured upload key and uploaded to Google Play. The key and password configuration are private and Git-ignored; both need an encrypted backup. A manual GitHub build workflow is also provided. Production builds stop when signing credentials are missing. |
 | 64-bit / 16 KB pages | All 20 packaged native libraries have matching 64-bit coverage; all arm64/x86_64 ELF LOAD segments meet 16 KB alignment. Bundle requests `PAGE_ALIGNMENT_16K`; release APK passes `zipalign -c -P 16`. |
 | Account deletion | More → Account → Delete account, with permanent-deletion confirmation; authenticated API deletion removes the account and associated records transactionally. Web deletion uses an expiring email link and a separate confirmation POST. |
 | Public privacy policy | `/privacy` on the existing API host; includes Tristan, contact, data flows, providers, retention and deletion. Linked before sign-up and from settings. |
@@ -46,7 +46,7 @@ Verified in Google Analytics on 6 October: Google Signals is off, Google product
 
 ## Build the bundle to upload
 
-For a new app, create a private **upload key** in Android Studio's signed-bundle flow and enroll in Play App Signing. For an existing Play app, use its registered upload key. Keep a protected backup; never commit or paste passwords or the keystore into chat.
+The private **upload key** for this new app is configured at `/Users/apple/.android/fishdays-nz-play/upload-keystore.jks` with the ignored `signing.properties`. Play App Signing is shown as active in the release form. Keep an encrypted backup of **both** the keystore and signing properties; never commit or paste either into chat.
 
 Copy `signing.properties.example` to ignored `signing.properties` and set its four `PLAY_UPLOAD_*` values locally. Keep your real Firebase configuration at ignored `app/google-services.json`. Build with a version code higher than every version previously uploaded to Play:
 
@@ -57,7 +57,7 @@ python3 tools/check_android_native.py app/build/outputs/bundle/release/app-relea
 jarsigner -verify app/build/outputs/bundle/release/app-release.aab
 ```
 
-Upload `app/build/outputs/bundle/release/app-release.aab`, not the debug APK in GitHub Releases. The local audit bundle produced with `-PallowUnsignedRelease=true` is **unsigned and cannot be uploaded**; rebuild after configuring your upload key.
+The signed `app/build/outputs/bundle/release/app-release.aab` was uploaded to the Alpha track and accepted as version **1 (0.1)**. Use a higher version code for the next upload. A build produced with `-PallowUnsignedRelease=true` is **unsigned and cannot be uploaded**.
 
 Alternatively run the manual **Google Play bundle** GitHub workflow after configuring repository secrets `GOOGLE_SERVICES_JSON`, `PLAY_UPLOAD_KEYSTORE_BASE64`, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_ALIAS` and `PLAY_UPLOAD_KEY_PASSWORD`. It builds and saves a signed artifact; it does not submit to Play automatically.
 
@@ -74,9 +74,11 @@ Alternatively run the manual **Google Play bundle** GitHub workflow after config
 
 - Saved: privacy URL, ads (none), government apps (no), financial features (none), health features (none), content rating, Sports category/contact, and the main store listing with artwork and phone screenshots.
 - Reviewer account: publisher reports that it was created and email-confirmed in the Android emulator. The publisher saved its credentials directly in Play Console; the dashboard confirms Sign in details is complete. Credentials are not stored in this repository.
-- Reviewer instructions prepared: More → Account → Sign in; Home → What fish is this?; select an MPI area, Gallery photo, Identify fish, then Agree and upload. Planning, maps, tides and rules work without sign-in or location permission. AI results can be reported; feedback is under More → Settings → Feedback. No payment is required.
-- Data safety: all ten data types and purposes below are saved, ready to send for review in Publishing overview. The optional “Committed to follow the Play Families policy” badge is not selected; the underlying policy requirements still apply.
+- Reviewer instructions saved: More → Account → Sign in; Home → What fish is this?; select an MPI area, Gallery photo, Identify fish, then Agree and upload. The five-identifications-per-day limit and daily reset are explained. Planning, maps, tides, weather and rules work without sign-in or location permission. AI results can be reported; feedback is under More → Settings → Feedback. No payment is required.
+- Data safety: all ten data types and purposes below are saved and were submitted for review. The optional “Committed to follow the Play Families policy” badge is not selected; the app now targets adults only.
 - Audience: Play Console now says “The target age group for your app is: 18 and over” and “Your app restricted users determined to be minors.” Saved for review on 6 October 2026. The Android age screen and family mode were removed from the source. See [audience declarations](https://support.google.com/googleplay/android-developer/answer/9867159).
+- Advertising ID: Play Console shows the saved **No** declaration; the merged release manifest removes the AD_ID permission.
+- Alpha closed test: New Zealand is the only targeted country; an email list named `testers` is selected with 2 addresses; the feedback contact is `tc199558@gmail.com`. Version 1 (0.1) and 18+ release notes were submitted for Google review. Play flagged optional missing deobfuscation and native debug symbol files, with no release-blocking errors. The opt-in link remains unavailable until the release is approved and published.
 
 ## Data safety working answers
 
@@ -101,6 +103,6 @@ The saved declaration does not mark data as shared under Google's exemptions: Cl
 
 ## Verification and remaining release work
 
-Local verification: Android unit tests and iOS simulator build passed; Android release lint has 0 errors (existing warnings remain); 18 backend tests passed, rerun before service deployment on 6 October; shared API TypeScript check passed. The release AAB and APK build; packaged native checks, AAB 16 KB packaging request and release APK ZIP alignment pass. The renamed debug app was rebuilt and installed on the Android emulator, and the publisher reports successful account creation and email confirmation. Account-deletion tests use real local D1 and simulated email delivery. Production deletion mail, provider consent screens, signed-in Android deletion/photo-consent flows and Play review have not been verified live.
+Local verification: 73 Android unit tests passed on 6 October; Android release lint has 0 errors (existing warnings remain); the iOS simulator build and backend tests passed in earlier work; the shared API TypeScript check passed. The signed release AAB passes `jarsigner`, bundletool validation, packaged 64-bit and 16 KB checks. The Android emulator shows the current app, and the publisher reports successful reviewer-account creation and email confirmation. Account-deletion tests use real local D1 and simulated email delivery. Production deletion mail, provider consent screens, signed-in Android deletion/photo-consent flows and Play review have not been verified live.
 
-Before release, configure the upload key and build a signed AAB, verify live deletion and provider-held data deletion, finish Console declarations/reviewer access, and complete the required closed test. The current local audit AAB is unsigned and no upload signing configuration is present. Existing branding and provider-use findings remain in `docs/legal-risk-review.md`. This preparation does not establish brand clearance or Google approval.
+Before production release, wait for the closed test review and resolve any Play findings. Add at least 10 more willing testers to the selected list, then have at least 12 actually opt in and remain opted in continuously for 14 days. Verify live deletion and provider-held data deletion. Back up the private upload key and local signing configuration securely. Existing branding and provider-use findings remain in `docs/legal-risk-review.md`. This preparation does not establish brand clearance or Google approval.
