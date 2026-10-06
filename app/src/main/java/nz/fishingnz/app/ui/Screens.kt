@@ -483,7 +483,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         AlertDialog(onDismissRequest = { photoAwaitingConsent = null },
             title = { Text("Send this photo for AI identification?") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Your selected photo will be sent through Fishing Days’ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
+                Text("Your selected photo will be sent through the Fishdays - NZ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
                 Text("Avoid photos containing people or private information. You can cancel and keep using the other tools.")
                 TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
             } },
@@ -570,7 +570,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     }
     Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Text("Save your details and manage your Fishing Days profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        Text("Save your details and manage your Fishdays - NZ profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
         s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -657,7 +657,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Sign in to send feedback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Feedback is linked to your Fishing Days account so we can review it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Feedback is linked to your Fishdays - NZ account so we can review it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = { vm.selectTab(5) }) { Text("Go to account") }
                 }
             }

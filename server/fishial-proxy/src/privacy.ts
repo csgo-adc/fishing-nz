@@ -1,6 +1,6 @@
 import type { Env } from "./index";
 
-const genericNotice = "If a Fishing Days NZ account uses that email, a deletion link will be sent. Check your inbox, including spam. The link expires in 24 hours.";
+const genericNotice = "If a Fishdays - NZ account uses that email, a deletion link will be sent. Check your inbox, including spam. The link expires in 24 hours.";
 const deletionDetails = "Deletion permanently removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. You cannot undo it. It does not delete your Google or Apple account or photos saved on your phone. Cloudflare database recovery copies can retain deleted records for up to 30 days. Provider security and abuse-prevention records follow their own retention rules.";
 
 function escapeHtml(value: string): string {
@@ -8,7 +8,7 @@ function escapeHtml(value: string): string {
 }
 
 function page(title: string, body: string, status = 200): Response {
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Fishing Days NZ</title><style>body{font:17px/1.6 system-ui,sans-serif;color:#172235;background:#f6f8fc;margin:0;padding:32px 18px}main{max-width:760px;margin:auto;background:white;padding:28px;border-radius:16px}h1,h2{line-height:1.3}a{color:#315de0}input,button{font:inherit;padding:12px;border-radius:8px;box-sizing:border-box}input[type=email]{display:block;width:100%;margin:8px 0 20px;border:1px solid #8490a4}button{background:#315de0;color:white;border:0;cursor:pointer}label{display:block;margin:16px 0}nav{display:flex;gap:24px;flex-wrap:wrap}small{color:#536179}</style></head><body><main><nav><a href="/privacy">Privacy policy</a><a href="/delete-account">Delete account</a></nav><h1>${escapeHtml(title)}</h1>${body}</main></body></html>`, {
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Fishdays - NZ</title><style>body{font:17px/1.6 system-ui,sans-serif;color:#172235;background:#f6f8fc;margin:0;padding:32px 18px}main{max-width:760px;margin:auto;background:white;padding:28px;border-radius:16px}h1,h2{line-height:1.3}a{color:#315de0}input,button{font:inherit;padding:12px;border-radius:8px;box-sizing:border-box}input[type=email]{display:block;width:100%;margin:8px 0 20px;border:1px solid #8490a4}button{background:#315de0;color:white;border:0;cursor:pointer}label{display:block;margin:16px 0}nav{display:flex;gap:24px;flex-wrap:wrap}small{color:#536179}</style></head><body><main><nav><a href="/privacy">Privacy policy</a><a href="/delete-account">Delete account</a></nav><h1>${escapeHtml(title)}</h1>${body}</main></body></html>`, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
@@ -24,9 +24,9 @@ export function privacyPolicy(env: Env): Response {
   if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return page("Privacy policy unavailable", "<p>The publisher must configure a developer name and support email before this service is released.</p>", 503);
   }
-  return page("Fishing Days NZ privacy policy", `
+  return page("Fishdays - NZ privacy policy", `
     <p><small>Updated 5 October 2026</small></p>
-    <p>Fishing Days NZ is operated by ${escapeHtml(name)}, an individual developer. For privacy questions, access or correction requests, or help deleting data, contact <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>.</p>
+    <p>Fishdays - NZ is operated by ${escapeHtml(name)}, an individual developer. For privacy questions, access or correction requests, or help deleting data, contact <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>.</p>
     <h2>Accounts and feedback</h2><p>We collect your email, optional display name, country code, account identifier, sign-in connections and feedback to provide your account and respond to problems. Passwords are stored as salted hashes. Google or Apple sign-in supplies a provider identifier, verified email and, when available, your name. We do not receive your Google or Apple password. Cloudflare hosts the API and database; Resend sends account confirmation and deletion emails.</p>
     <h2>Location, weather and maps</h2><p>Location access is optional and used while you use the app to find nearby places, tides and rules. You can choose places manually or revoke access in Android settings. Coordinates for places you view or search are sent to Open-Meteo for weather and sea forecasts. Map tiles and styles come from OpenFreeMap and LINZ; those services receive the map areas requested and connection information such as your IP address. LINZ also supplies tide predictions. Your precise coordinates are not included in fish-photo requests to our API.</p>
     <h2>Fish photos and AI</h2><p>On Android, only a photo you choose and explicitly agree to upload is sent through Cloudflare to OpenAI for fish identification. Android uploads a JPEG without the original photo metadata. We do not save the image or identification result in our account database. OpenAI Responses storage is disabled for these requests, but provider abuse-monitoring records can remain for up to 30 days or longer where required for legal or safety reasons. Do not upload photos containing people or private information. Identification is an AI suggestion and can be wrong. Camera permission is optional; the system photo picker gives access only to selected photos.</p>
@@ -34,7 +34,7 @@ export function privacyPolicy(env: Env): Response {
     <h2>Retention and deletion</h2><p>Profiles and sign-in connections remain until account deletion. Sessions expire after 30 days, email confirmation and deletion links after 24 hours, and OAuth handoffs within minutes. Service events are removed after 90 days and feedback after 365 days by daily cleanup. Firebase retention is controlled by the publisher's Analytics configuration; contact us to request help with provider-held data. Provider email delivery and infrastructure security records follow provider retention policies.</p>
     <p>${escapeHtml(deletionDetails)}</p><p>Delete immediately in the Android app through More → Account → Delete account, or <a href="/delete-account">request deletion here without installing the app</a>. The web route verifies access to your account email and asks for confirmation before deletion. Contact us if you cannot access that inbox. Photos already in your gallery and device preferences can be removed on your device. Deleting an account resets optional Android analytics when performed in the app; provider-held records may need a separate request to us.</p>
     <h2>Security and your choices</h2><p>Data is transmitted using HTTPS. The Android app stores session credentials encrypted using Android Keystore and excludes them from backup. Core planning, maps, tides and rules can be used without an account. You may ask us to access or correct your information, or request deletion of particular data using the contact above. Providers may process information outside New Zealand. We update this policy when our data practices change.</p>
-    <h2>Independent fishing information</h2><p>Fishing Days NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ. Rule summaries use <a href="https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/">official MPI information</a>. Always check current official rules and local restrictions before fishing.</p>`);
+    <h2>Independent fishing information</h2><p>Fishdays - NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ. Rule summaries use <a href="https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/">official MPI information</a>. Always check current official rules and local restrictions before fishing.</p>`);
 }
 
 async function hash(value: string): Promise<string> {
@@ -70,7 +70,7 @@ export async function handlePrivacyRoute(request: Request, env: Env): Promise<Re
     if (Number(request.headers.get("content-length") || 0) > 4096) return page("Request too large", "<p>Use the deletion form.</p>", 413);
   }
   if (url.pathname === "/delete-account") {
-    if (request.method === "GET") return page("Delete your Fishing Days NZ account", `<p>${escapeHtml(deletionDetails)}</p><p>You can request deletion without installing the app or remembering your password. Enter the email used for your account, including your Apple private relay address if applicable. We send a secure link; you then confirm deletion. If you cannot access your inbox, use the support contact in our <a href="/privacy">privacy policy</a>.</p><form method="post" action="/delete-account"><label for="email">Account email</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"><button>Send deletion link</button></form>`);
+    if (request.method === "GET") return page("Delete your Fishdays - NZ account", `<p>${escapeHtml(deletionDetails)}</p><p>You can request deletion without installing the app or remembering your password. Enter the email used for your account, including your Apple private relay address if applicable. We send a secure link; you then confirm deletion. If you cannot access your inbox, use the support contact in our <a href="/privacy">privacy policy</a>.</p><form method="post" action="/delete-account"><label for="email">Account email</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"><button>Send deletion link</button></form>`);
     const form = await request.formData().catch(() => null);
     const email = String(form?.get("email") || "").trim().toLowerCase();
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return page("Check your email address", "<p>Enter a valid email on the <a href=\"/delete-account\">deletion form</a>.</p>", 400);
@@ -85,7 +85,7 @@ export async function handlePrivacyRoute(request: Request, env: Env): Promise<Re
         const deletionUrl = `${env.AUTH_BASE_URL || url.origin}/delete-account/confirm?token=${token}`;
         const sent = await fetch("https://api.resend.com/emails", {
           method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
-          body: JSON.stringify({ from: env.ACCOUNT_EMAIL_FROM, to: [account.email], subject: "Delete your Fishing Days NZ account", text: `Someone requested deletion of your Fishing Days NZ account. To review and confirm: ${deletionUrl}\n\n${deletionDetails}\n\nThe link expires in 24 hours. If you did not request deletion, ignore this email; your account will remain active.` }),
+          body: JSON.stringify({ from: env.ACCOUNT_EMAIL_FROM, to: [account.email], subject: "Delete your Fishdays - NZ account", text: `Someone requested deletion of your Fishdays - NZ account. To review and confirm: ${deletionUrl}\n\n${deletionDetails}\n\nThe link expires in 24 hours. If you did not request deletion, ignore this email; your account will remain active.` }),
         }).catch(() => null);
         if (!sent?.ok) {
           await env.RULES_DB.prepare("DELETE FROM account_deletion_tokens WHERE token_hash = ?").bind(tokenHash).run();
@@ -104,5 +104,5 @@ export async function handlePrivacyRoute(request: Request, env: Env): Promise<Re
   if (request.method === "GET") return page("Confirm account deletion", `<p>${escapeHtml(deletionDetails)}</p><form method="post" action="/delete-account/confirm"><input name="token" type="hidden" value="${token}"><label><input type="checkbox" name="confirm" value="delete" required> I understand and want to permanently delete my account.</label><button>Delete my account permanently</button></form><p><a href="/privacy">Cancel and view privacy policy</a></p>`);
   if (form?.get("confirm") !== "delete") return page("Confirmation required", "<p>Confirm deletion using the link in your email.</p>", 400);
   await deleteAccountData(env, row.user_id);
-  return page("Account deleted", "<p>Your Fishing Days NZ account and associated data have been removed from our live database. You can close this page.</p>");
+  return page("Account deleted", "<p>Your Fishdays - NZ account and associated data have been removed from our live database. You can close this page.</p>");
 }

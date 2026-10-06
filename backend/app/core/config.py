@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Fishing Days API"
+    app_name: str = "Fishdays - NZ API"
     app_version: str = "0.1.0"
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://catchcheck:catchcheck@localhost:5432/catchcheck"

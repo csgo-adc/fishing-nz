@@ -5,8 +5,8 @@
     <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>Fishing Days NZ</string>
-    <key>CFBundleDisplayName</key><string>Fishing Days NZ</string>
+    <key>CFBundleName</key><string>Fishdays - NZ</string>
+    <key>CFBundleDisplayName</key><string>Fishdays - NZ</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>CFBundleVersion</key><string>1</string>
@@ -15,9 +15,9 @@
         <key>CFBundleURLName</key><string>nz.fishingnz.catchcheck.auth</string>
         <key>CFBundleURLSchemes</key><array><string>nz.fishingnz.catchcheck</string></array>
     </dict></array>
-    <key>NSCameraUsageDescription</key><string>Fishing Days uses the camera to identify a fish and check its rules.</string>
-    <key>NSCalendarsWriteOnlyAccessUsageDescription</key><string>Fishing Days lets you choose to add a fishing trip to your calendar.</string>
-    <key>NSLocationWhenInUseUsageDescription</key><string>Fishing Days uses your location to find nearby fishing spots, compare forecast conditions, and choose a fishing rules area.</string>
+    <key>NSCameraUsageDescription</key><string>Fishdays - NZ uses the camera to identify a fish and check its rules.</string>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key><string>Fishdays - NZ lets you choose to add a fishing trip to your calendar.</string>
+    <key>NSLocationWhenInUseUsageDescription</key><string>Fishdays - NZ uses your location to find nearby fishing spots, compare forecast conditions, and choose a fishing rules area.</string>
     <key>FishIdentificationAPIBaseURL</key><string>https://fishing.fishnz.space</string>
     <key>UILaunchScreen</key><dict><key>UIColorName</key><string></string></dict>
 </dict></plist>

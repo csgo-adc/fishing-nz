@@ -13,7 +13,7 @@ internal fun openTripInCalendar(context: Context, trip: Recommendation): Boolean
         putExtra(CalendarContract.Events.EVENT_LOCATION, "${trip.name}, ${trip.area}, New Zealand")
         putExtra(
             CalendarContract.Events.DESCRIPTION,
-            "Fishing plan from Fishing Days NZ. Check the latest forecast, local access and fishing rules before you go."
+            "Fishing plan from Fishdays - NZ. Check the latest forecast, local access and fishing rules before you go."
         )
         if (trip.startsAtEpochSeconds > 0 && trip.durationHours > 0) {
             val startMillis = trip.startsAtEpochSeconds * 1_000

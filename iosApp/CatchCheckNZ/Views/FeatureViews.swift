@@ -809,7 +809,7 @@ struct TripCalendarEditor: UIViewControllerRepresentable {
         let event = EKEvent(eventStore: store)
         event.title = "Fishing at \(trip.name)"
         event.location = "\(trip.name), \(trip.area), New Zealand"
-        event.notes = "Fishing plan from Fishing Days NZ. Check the latest forecast, local access and fishing rules before you go."
+        event.notes = "Fishing plan from Fishdays - NZ. Check the latest forecast, local access and fishing rules before you go."
         let start = trip.startsAt ?? Date().addingTimeInterval(3_600)
         event.startDate = start
         event.endDate = trip.endsAt.flatMap { $0 > start ? $0 : nil } ?? start.addingTimeInterval(7_200)

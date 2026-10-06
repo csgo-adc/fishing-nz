@@ -102,12 +102,12 @@ export default function AdminPage() {
 
   return (
     <main className="cms-shell">
-      <header className="site-header cms-header"><Link className="brand" href="/admin"><NextImage className="brand-mark" src="/fishing-days-icon.png" width={36} height={36} alt="" unoptimized />Fishing Days NZ</Link><span className="back-link">Admin workspace</span></header>
+      <header className="site-header cms-header"><Link className="brand" href="/admin"><NextImage className="brand-mark" src="/fishing-days-icon.png" width={36} height={36} alt="" unoptimized />Fishdays - NZ</Link><span className="back-link">Admin workspace</span></header>
       <section className="cms-content">
-        <div className="cms-heading"><div><p className="kicker">Fishing Days operations</p><h1>Account CMS</h1><p>User, plan, feedback, and feature activity for the last 30 days.</p></div>{connected && <div className={styles.actions}><button className="signout-button" disabled={busy || loading} onClick={() => void refresh(usersOffset, feedbackOffset, appliedSearch)}>Refresh</button><button className="signout-button" disabled={busy} onClick={() => void signOut()}>Sign out</button></div>}</div>
+        <div className="cms-heading"><div><p className="kicker">Fishdays - NZ operations</p><h1>Account CMS</h1><p>User, plan, feedback, and feature activity for the last 30 days.</p></div>{connected && <div className={styles.actions}><button className="signout-button" disabled={busy || loading} onClick={() => void refresh(usersOffset, feedbackOffset, appliedSearch)}>Refresh</button><button className="signout-button" disabled={busy} onClick={() => void signOut()}>Sign out</button></div>}</div>
         {error && <p className="form-error" role="alert">{error}</p>}
         {loading && !connected && <div className="cms-login" role="status"><h2>Checking your session…</h2></div>}
-        {!loading && !connected && <form className="cms-login" onSubmit={signIn}><h2>Administrator sign in</h2><p>Use the account admin token configured on the Fishing Days Worker.</p><label>Admin token<input type="password" autoComplete="off" required value={token} onChange={(event) => setToken(event.target.value)} /></label><button className="button button-primary" disabled={busy}>{busy ? "Checking…" : "Open CMS"}</button></form>}
+        {!loading && !connected && <form className="cms-login" onSubmit={signIn}><h2>Administrator sign in</h2><p>Use the account admin token configured on the Fishdays - NZ Worker.</p><label>Admin token<input type="password" autoComplete="off" required value={token} onChange={(event) => setToken(event.target.value)} /></label><button className="button button-primary" disabled={busy}>{busy ? "Checking…" : "Open CMS"}</button></form>}
         {connected && !dashboard && <div className="cms-login" role="status"><h2>{loading ? "Loading dashboard…" : "Dashboard unavailable"}</h2>{!loading && <button className="button button-primary" onClick={() => void refresh()}>Try again</button>}</div>}
         {connected && dashboard && <>
           {loading && <p className={styles.refreshing} role="status">Updating dashboard…</p>}

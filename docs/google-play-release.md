@@ -1,4 +1,4 @@
-# Fishing Days NZ — Google Play release
+# Fishdays - NZ — Google Play release
 
 Reviewed 5 October 2026 against the Android app, shared API and Google's current primary-source requirements. Publisher: **Tristan**, an individual developer. Public support/privacy email: **tc199558@gmail.com**. Package: `nz.fishingnz.app`.
 
@@ -62,7 +62,7 @@ Alternatively run the manual **Google Play bundle** GitHub workflow after config
 ## Play Console setup
 
 1. Register/verify a **personal** developer account using your real legal identity. The public developer display name can be Tristan. Complete the account/contact/device verification requested in your Console; choose the supported countries deliberately.
-2. Create Fishing Days NZ as an app and configure Play App Signing. Suggested category: Sports; the current app contains no ads or purchase flow. If paid digital features are later sold in the app, review Play Billing before adding payment links.
+2. Create Fishdays - NZ as an app and configure Play App Signing. Suggested category: Sports; the current app contains no ads or purchase flow. If paid digital features are later sold in the app, review Play Billing before adding payment links.
 3. Add the listing in `assets/google-play/listing.md`, icon, feature graphic and phone screenshots. Enter the privacy and account-deletion URLs only after deployment and successful checks.
 4. Complete Data safety, account deletion, ads, government-app, content rating, target-audience, financial and health declarations requested by the Console. This is an independent app, not a government app; it communicates MPI rules. Complete the actual rating questionnaire; do not invent an IARC rating. Suggested initial audience is adult anglers; choose the actual intended ages and review Families requirements before including children.
 5. For **App access**, provide a dedicated, email-verified reviewer account and working password in Play Console. Fish identification requires sign-in, so “all functionality available without access restrictions” is inaccurate. Give steps for sign-in, selecting a photo/area, agreeing to upload, and sending an AI-result report. Reviewers should not need their own account or a fresh email verification. Keep provider credentials, service access and that account working throughout review.

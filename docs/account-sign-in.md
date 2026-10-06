@@ -1,6 +1,6 @@
 # Google and Apple sign-in setup
 
-The Android and iPhone apps share the Fishing Days account API. Password registration accepts **8–128 characters** and requires two matching password entries in both mobile apps. Email/password accounts still require email confirmation. The website is an administrator workspace; users create accounts and sign in through the mobile apps.
+The Android and iPhone apps share the Fishdays - NZ account API. Password registration accepts **8–128 characters** and requires two matching password entries in both mobile apps. Email/password accounts still require email confirmation. The website is an administrator workspace; users create accounts and sign in through the mobile apps.
 
 Google and Apple use the system browser and a server authorization-code flow. New provider accounts can sign in immediately after the API verifies their identity and verified email. Apple’s Hide My Email addresses are supported. Existing users should sign in with their current method, open **Account → Sign-in options**, and connect a provider. Matching email addresses alone never merge accounts.
 
@@ -8,7 +8,7 @@ The buttons remain unavailable until the corresponding provider credentials are 
 
 ## Google
 
-1. In [Google Cloud Console](https://console.cloud.google.com/auth/overview), create or select the Fishing Days project and configure the OAuth consent screen with the app’s name, support email, homepage, privacy policy, and terms links.
+1. In [Google Cloud Console](https://console.cloud.google.com/auth/overview), create or select the Fishdays - NZ project and configure the OAuth consent screen with the app’s name, support email, homepage, privacy policy, and terms links.
 2. Create an OAuth client with application type **Web application**. This type supports the shared API’s HTTPS callback; it does not require a public user website. The apps open the system browser for provider authentication, then return directly to the mobile app.
 3. Add this exact authorized redirect URI:
 
@@ -29,7 +29,7 @@ See [Google’s OpenID Connect setup and flow](https://developers.google.com/ide
 
 ## Apple
 
-1. In your [Apple Developer account](https://developer.apple.com/account/), register or select the primary App ID for Fishing Days and enable Sign in with Apple. The current iPhone bundle identifier is `nz.fishingnz.catchcheck`; use your actual registered identifier if it differs.
+1. In your [Apple Developer account](https://developer.apple.com/account/), register or select the primary App ID for Fishdays - NZ and enable Sign in with Apple. The current iPhone bundle identifier is `nz.fishingnz.catchcheck`; use your actual registered identifier if it differs.
 2. Register a **Services ID**, enable Sign in with Apple for it, and associate it with the primary App ID. This Services ID is the `APPLE_CLIENT_ID` used by the shared browser flow.
 3. In the Services ID’s website configuration, add domain `fishing.fishnz.space` and this exact return URL:
 

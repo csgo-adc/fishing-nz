@@ -1,8 +1,8 @@
-# Google Play listing — Fishing Days NZ
+# Google Play listing — Fishdays - NZ
 
 ## Listing fields
 
-**App name:** Fishing Days NZ
+**App name:** Fishdays - NZ
 
 **Developer:** Tristan
 
@@ -18,15 +18,15 @@
 
 Plan your next fishing day around New Zealand with tides, weather and places to fish.
 
-Fishing Days NZ helps land and boat anglers compare fishing areas and suggested two-hour windows. Choose a town or use your current location, set your travel distance and pick dates and preferred hours. Suggestions explain the forecast conditions and show relevant weather and sea-condition warnings.
+Fishdays - NZ helps land and boat anglers compare fishing areas and suggested two-hour windows. Choose a town or use your current location, set your travel distance and pick dates and preferred hours. Suggestions explain the forecast conditions and show relevant weather and sea-condition warnings.
 
 Explore a map of named fishing spots, check conditions for a place, compare hourly and daily weather, and keep a shortlist while planning. See official LINZ high and low tide predictions, then explore the estimated tide curve between those events.
 
-Choose an MPI fishing area and search species for rule summaries, with links to the official information. If you create an account, you can also take or select a photo for an AI fish-species suggestion. You choose whether to send each photo to OpenAI through the Fishing Days service. Results include uncertainty guidance and can be reported inside the app.
+Choose an MPI fishing area and search species for rule summaries, with links to the official information. If you create an account, you can also take or select a photo for an AI fish-species suggestion. You choose whether to send each photo to OpenAI through the Fishdays - NZ service. Results include uncertainty guidance and can be reported inside the app.
 
 Location and camera access are optional. Choose places manually or use the system photo picker. Core planning, maps, tides and rules work without an account. Optional usage analytics is off by default. Manage your profile or delete your account in the app; the public account-deletion page also works without installing it.
 
-Fishing Days NZ is an independent app and is not affiliated with or endorsed by the New Zealand Government, Fisheries New Zealand, MPI or LINZ.
+Fishdays - NZ is an independent app and is not affiliated with or endorsed by the New Zealand Government, Fisheries New Zealand, MPI or LINZ.
 
 Official fishing-rule source:
 https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/
@@ -39,7 +39,7 @@ Forecasts use Open-Meteo. A marked fishing spot does not guarantee public access
 ## Artwork and accessibility descriptions
 
 - `icon-512.png`: 512×512, 32-bit PNG with opaque alpha; exported from existing brand artwork. Resolve brand rights before publication.
-- `feature-graphic-1024x500.png`: 1024×500, RGB PNG. Alt text: “Fishing Days NZ helps plan a fishing day around tides, weather and places to fish.”
+- `feature-graphic-1024x500.png`: 1024×500, RGB PNG. Alt text: “Fishdays - NZ helps plan a fishing day around tides, weather and places to fish.”
 - `phone-1.png`: Actual Android home screen, 1080×1920 RGB PNG. Alt text: “Set a land or boat fishing plan and choose a photo for fish identification.”
 - `phone-2.png`: Actual Android map screen, 1080×1920 RGB PNG. Alt text: “Explore named fishing spots on a New Zealand map with source attribution.”
 

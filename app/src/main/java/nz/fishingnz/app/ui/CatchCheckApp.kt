@@ -223,7 +223,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
     var analyticsEnabled by remember { mutableStateOf(PrivacyPreferences.analyticsEnabled()) }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Terms & privacy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("A short guide to using Fishing Days NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("A short guide to using Fishdays - NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Terms of use", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -236,7 +236,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Text("Privacy", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
                 Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
-                Text("If you sign in or send feedback, your account details and feedback are sent to the Fishing Days service. Signing out removes the saved session from this device.")
+                Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
                 Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
                 Text("Publisher: Tristan · tc199558@gmail.com")
                 TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read full privacy policy") }
@@ -244,14 +244,14 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Optional usage analytics", fontWeight = FontWeight.SemiBold)
-                        Text("Share app interactions, device information, app-instance identifiers and approximate location from your IP address with Firebase, and signed-in feature usage with Fishing Days. Off by default. Turning this off resets the analytics identifier.", style = MaterialTheme.typography.bodySmall)
+                        Text("Share app interactions, device information, app-instance identifiers and approximate location from your IP address with Firebase, and signed-in feature usage with Fishdays - NZ. Off by default. Turning this off resets the analytics identifier.", style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = analyticsEnabled, onCheckedChange = {
                         analyticsEnabled = it
                         PrivacyPreferences.setAnalyticsEnabled(it)
                     })
                 }
-                Text("Fishing Days NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ.")
+                Text("Fishdays - NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ.")
             }
         }
     }

@@ -1,4 +1,4 @@
-# Fishing Days NZ icon
+# Fishdays - NZ icon
 
 The mark combines a white fish moving forward with a simplified white silver-fern tail, royal-blue belly `#071FB3`, red dorsal fin `#D10000`, and black eye `#000000`. These colours are sampled from the supplied New Zealand reference. A very light sea-blue background fades from `#E1F5FC` to `#BFE7F5`, with a few quiet ripples. A subtle blue edge `#4B91AF` separates the white body and fern from the pale water; the deeper blue belly remains distinct.
 
@@ -18,4 +18,4 @@ Android uses separate fish foreground and pale-ocean background layers. The wate
 
 iOS includes opaque icons for iPhone, iPad, Settings, Spotlight and the App Store in the AppIcon asset catalogue. The source images have square corners so the operating system can apply its own mask. See [Apple's asset-catalog configuration](https://developer.apple.com/documentation/xcode/configuring-your-app-icon).
 
-Both apps display **Fishing Days NZ**. Existing bundle IDs, account storage keys and the internal Xcode target name remain compatible with previous installations. The website and account confirmation text use the new public name as well.
+Both apps display **Fishdays - NZ**. Existing bundle IDs, account storage keys and the internal Xcode target name remain compatible with previous installations. The website and account confirmation text use the new public name as well.

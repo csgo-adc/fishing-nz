@@ -1,6 +1,6 @@
-# Fishing Days API
+# Fishdays - NZ API
 
-FastAPI service shared by the Fishing Days web, iOS, and Android clients.
+FastAPI service shared by the Fishdays - NZ web, iOS, and Android clients.
 
 ## Local development
 
