@@ -15,6 +15,9 @@ val signing = Properties().apply {
     val file = rootProject.file("signing.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
+val projectVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
 fun signingValue(name: String): String? = providers.environmentVariable(name).orNull
     ?: signing.getProperty(name)
 val uploadStore = signingValue("PLAY_UPLOAD_STORE_FILE")
@@ -38,8 +41,10 @@ android {
         applicationId = "nz.fishingnz.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = providers.gradleProperty("playVersionCode").orNull?.toInt() ?: 1
-        versionName = providers.gradleProperty("playVersionName").orNull ?: "0.1"
+        versionCode = providers.gradleProperty("playVersionCode").orNull?.toInt()
+            ?: projectVersion.getProperty("versionCode").toInt()
+        versionName = providers.gradleProperty("playVersionName").orNull
+            ?: projectVersion.getProperty("versionName")
         buildConfigField("String", "FISH_ID_API_BASE_URL", quotedBuildValue(releaseApiBase))
     }
 

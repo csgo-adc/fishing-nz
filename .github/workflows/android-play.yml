@@ -5,12 +5,11 @@ on:
     inputs:
       version_code:
         description: Version code (higher than every previously uploaded bundle)
-        required: true
+        required: false
         type: string
       version_name:
-        description: Public version name
-        required: true
-        default: '0.1'
+        description: Public version name (leave blank to use version.properties)
+        required: false
         type: string
 
 permissions:
@@ -54,7 +53,12 @@ jobs:
           PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
           PLAY_VERSION_CODE: ${{ inputs.version_code }}
           PLAY_VERSION_NAME: ${{ inputs.version_name }}
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintRelease :app:bundleRelease "-PplayVersionCode=$PLAY_VERSION_CODE" "-PplayVersionName=$PLAY_VERSION_NAME"
+        run: |
+          python3 tools/version.py check
+          args=()
+          if [ -n "$PLAY_VERSION_CODE" ]; then args+=("-PplayVersionCode=$PLAY_VERSION_CODE"); fi
+          if [ -n "$PLAY_VERSION_NAME" ]; then args+=("-PplayVersionName=$PLAY_VERSION_NAME"); fi
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintRelease :app:bundleRelease "${args[@]}"
       - name: Check native library compatibility
         run: python3 tools/check_android_native.py app/build/outputs/bundle/release/app-release.aab
       - name: Verify bundle signature
