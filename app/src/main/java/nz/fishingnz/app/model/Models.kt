@@ -179,7 +179,8 @@ data class FishCheck(
     val isFish: Boolean = true,
     val otherPossibilities: List<String> = emptyList(),
     val visibleClues: String = "",
-    val identificationNote: String = ""
+    val identificationNote: String = "",
+    val fishIdentityQuota: FishIdentityQuota? = null
 )
 
 // BEGIN GENERATED FISHING LOCATIONS

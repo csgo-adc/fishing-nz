@@ -121,8 +121,8 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         switchToDeviceOriginOnGrant = false
     }
     fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
     fun useCurrentLocation() {
         homeLocationLoading = true
         if (hasLocationPermission()) {
@@ -460,6 +460,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
                 Icon(Icons.Default.PhotoLibrary, null); Spacer(Modifier.width(4.dp)); Text("Gallery")
             }
         }
+        val remainingIdentifications = s.account?.fishIdentityQuota?.remainingToday
         Button(enabled = !s.fishChecking && !s.accountLoading && (!hasFishAccess || s.fishPhoto != null), onClick = {
             if (needsAccountRefresh) vm.refreshAccount()
             else if (s.account == null) vm.selectTab(5)
@@ -472,6 +473,13 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             needsAccountRefresh -> "Retry account check"
             else -> "Sign in to identify fish"
         }) }
+        if (hasFishAccess) Text(
+            remainingIdentifications?.let { "$it of ${s.account?.fishIdentityQuota?.limit} identifications left today · Resets at midnight NZ time" }
+                ?: "5 fish identifications per day · Resets at midnight NZ time",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        if (hasFishAccess && remainingIdentifications == 0) TextButton(enabled = !s.accountLoading, onClick = vm::refreshAccount) {
+            Text("Refresh daily allowance")
+        }
         if (!hasFishAccess) Text(when {
             s.accountLoading -> "Checking your account access."
             needsAccountRefresh -> "Your saved session is still on this device, but account access could not be checked."
@@ -530,112 +538,6 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     if (showCamera) Dialog(onDismissRequest = { showCamera = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         FishCameraScreen(onClose = { showCamera = false }, onPhotoCaptured = { vm.setFishPhoto(it); showCamera = false })
     }
-}
-
-@Composable fun AccountScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
-    val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
-    var showDeleteConfirmation by remember { mutableStateOf(false) }
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var confirmPassword by rememberSaveable { mutableStateOf("") }
-    var displayName by rememberSaveable { mutableStateOf("") }
-    var countryCode by rememberSaveable { mutableStateOf("NZ") }
-    var createAccount by rememberSaveable { mutableStateOf(false) }
-    val validEmail = remember(email) { android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() }
-    val passwordsMatch = confirmPassword.isNotEmpty() && password == confirmPassword
-    val validPassword = password.isNotBlank() && password.length <= 128 && (!createAccount || (password.length >= 8 && passwordsMatch))
-    LaunchedEffect(Unit) { vm.refreshSignInProviders() }
-    val socialButtons: @Composable () -> Unit = {
-        listOf("google" to "Google", "apple" to "Apple").forEach { (provider, label) ->
-            val connected = s.account != null && provider in s.signInProviders.connected
-            val available = if (provider == "google") s.signInProviders.google else s.signInProviders.apple
-            OutlinedButton(enabled = !s.accountBusy && available && !connected, modifier = Modifier.fillMaxWidth(),
-                onClick = { vm.startSocialSignIn(provider) { url -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } }) {
-                Text(if (connected) "$label connected" else if (s.account != null) "Connect $label" else "Continue with $label")
-            }
-        }
-        if (!s.signInProviders.google && !s.signInProviders.apple) Text("Google and Apple sign-in will be available soon.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-    }
-    LaunchedEffect(s.account) {
-        s.account?.let { displayName = it.user.displayName; countryCode = it.user.countryCode; email = it.user.email }
-    }
-    LaunchedEffect(s.verificationPending, s.account) {
-        if (s.verificationPending || s.account != null) {
-            createAccount = false
-            password = ""
-            confirmPassword = ""
-        }
-    }
-    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Your account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Text("Save your details and manage your Fishdays - NZ profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-        s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
-        s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
-            Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                Text(it, color = MaterialTheme.colorScheme.error)
-                if (s.account == null && it.startsWith("Could not check your account")) TextButton(onClick = vm::refreshAccount) { Text("Retry account check") }
-            }
-        } }
-        if (s.account == null && s.accountLoading) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(12.dp))
-                Text("Checking your account…", color = Navy)
-            }
-        } else if (s.account == null && s.hasStoredSession) {
-            Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Session saved", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-                    Text("Your sign-in is saved, but we could not check account access. Check your connection and try again.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = vm::refreshAccount) { Text("Retry account check") }
-                }
-            }
-        } else if (s.account == null) {
-            if (s.verificationPending) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Check your inbox", color = Navy, fontWeight = FontWeight.Bold); Text("Open the confirmation email, then sign in. The link expires after 24 hours.", color = Navy); OutlinedButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") } } }
-            Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Secure access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-                Text("Create an account or sign in to manage your profile.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
-                socialButtons()
-                Text("Or use your email", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = createAccount, onClick = { createAccount = true; password = ""; confirmPassword = "" }, label = { Text("Create account") })
-                    FilterChip(selected = !createAccount, onClick = { createAccount = false; password = ""; confirmPassword = "" }, label = { Text("Sign in") })
-                }
-                if (createAccount) OutlinedTextField(displayName, { displayName = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(password, { password = it }, label = { Text("Password") }, supportingText = { Text(if (createAccount) "At least 8 characters" else "Enter your password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-                if (createAccount) OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm password") },
-                    isError = confirmPassword.isNotEmpty() && !passwordsMatch,
-                    supportingText = { Text(if (confirmPassword.isEmpty()) "Enter your password again" else if (passwordsMatch) "Passwords match" else "Passwords don’t match") },
-                    singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-                Button(enabled = !s.accountBusy && validEmail && validPassword, onClick = { vm.signIn(email.trim(), password, displayName, createAccount) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in") }
-                if (!createAccount && !s.verificationPending) TextButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email.trim()) }) { Text("Resend confirmation email") }
-            } }
-        } else {
-            Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Signed in", color = Navy, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Fish identification and your fishing tools are ready.", color = Navy)
-            } }
-            Text("Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
-            Text(s.account.user.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(displayName, { displayName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(countryCode, { countryCode = it.take(2).uppercase() }, label = { Text("Country code") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedButton(enabled = !s.accountBusy, onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth()) { Text("Save profile") }
-            Text("Sign-in options", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-            socialButtons()
-            OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
-            OutlinedButton(enabled = !s.accountBusy, onClick = { showDeleteConfirmation = true }, modifier = Modifier.fillMaxWidth()) { Text("Delete account", color = MaterialTheme.colorScheme.error) }
-        }
-        TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.deletion) }) { Text("Request account deletion on the web") }
-    }
-    if (showDeleteConfirmation) AlertDialog(onDismissRequest = { showDeleteConfirmation = false },
-        title = { Text("Permanently delete your account?") },
-        text = { Text("This removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. It also clears this device’s selected fish photo and trip shortlist and resets optional analytics. It cannot be undone. Recovery copies can remain for up to 30 days. Your Google or Apple account and gallery photos remain available.") },
-        confirmButton = { TextButton(enabled = !s.accountBusy, onClick = { showDeleteConfirmation = false; vm.deleteAccount() }) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") } })
 }
 
 @Composable fun FeedbackScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
@@ -1198,8 +1100,8 @@ internal val fishingRulesAreas = listOf(
     val area = fishingRulesAreas.firstOrNull { it.id == selectedAreaId }
 
     fun hasLocationPermission() =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
     fun refreshLocation(selectCurrentArea: Boolean = false) {
         if (!hasLocationPermission() || locationLoading) return
         locationLoading = true

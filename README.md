@@ -23,7 +23,7 @@ The Tide page selects the nearest supported tide station from your location. You
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location for a short rule summary, then open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
 - **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and up to 16 forecast days with familiar weather icons and plain labels. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
 - **Account:** Create an account in the mobile app with an 8-character minimum password entered twice, or use Google or Apple once sign-in is configured. Manage your profile, connect sign-in options, and send feedback. The website is for administrators. [Sign-in setup](docs/account-sign-in.md).
-- **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information.
+- **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information. Each account has five identifications per day, shared across devices and reset at midnight New Zealand time. Failed requests do not use the allowance.
 
 ## Good to know
 

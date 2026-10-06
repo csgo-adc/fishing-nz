@@ -1,5 +1,6 @@
 import { handleSocialAuth, type SocialAuthEnv } from "./social-auth";
 import { handlePrivacyRoute, deleteAccountData, cleanupAccountData } from "./privacy";
+import { identificationDay, identificationQuota, reserveIdentification, releaseIdentification } from "./identification-quota";
 
 export interface Env extends SocialAuthEnv {
   OPENAI_API_KEY: string;
@@ -221,6 +222,7 @@ async function permissions(request: Request, env: Env): Promise<Response> {
   return json({
     plan: auth.account.plan,
     features: { fishing_rules: true, trip_planning: true, fish_identity: true },
+    fish_identity_quota: await identificationQuota(env.RULES_DB, auth.account.id),
   });
 }
 
@@ -375,7 +377,8 @@ async function createSessionResponse(env: Env, account: Account, status: number)
     token_type: "Bearer",
     expires_at: expiresAt,
     user: publicAccount(account),
-    permissions: { plan: account.plan, features: { fishing_rules: true, trip_planning: true, fish_identity: true } },
+    permissions: { plan: account.plan, features: { fishing_rules: true, trip_planning: true, fish_identity: true },
+      fish_identity_quota: await identificationQuota(env.RULES_DB, account.id) },
   }, status);
 }
 
@@ -548,12 +551,20 @@ export default {
       return json({ error: "Upload a JPEG, PNG, or WebP image under 20 MB. Export HEIC photos as JPEG first." }, 400);
     }
 
+    let reservedDay: string | null = null;
     try {
       if (!env.OPENAI_API_KEY) return json({ error: "Fish identification is not configured. Add the OpenAI API key to the Worker secrets." }, 503);
       const image = await request.arrayBuffer();
       if (image.byteLength === 0 || image.byteLength > 20 * 1024 * 1024) {
         return json({ error: "Upload an image smaller than 20 MB." }, 400);
       }
+      const day = identificationDay();
+      const quota = await reserveIdentification(env.RULES_DB, auth.account.id, day);
+      if (!quota) return json({
+        error: "You’ve used your 5 fish identifications for today. Try again after midnight New Zealand time.",
+        code: "daily_identification_limit", fish_identity_quota: await identificationQuota(env.RULES_DB, auth.account.id, day),
+      }, 429);
+      reservedDay = day;
       const identification = await identifyFishWithOpenAI(image, contentType, env.OPENAI_API_KEY);
       const result = presentFishIdentification(identification);
       const commonName = result.commonName;
@@ -566,6 +577,7 @@ export default {
       await recordAccountEvent(env, auth.account.id, "fish_identity_used", "fish_identity", clientPlatform(request))
         .catch((error) => console.error("Could not record fish identification event", error));
       return json({
+        fish_identity_quota: quota,
         isFish: result.isFish,
         commonName,
         scientificName: result.scientificName,
@@ -585,6 +597,8 @@ export default {
         fishRules: ruleResult.fishRules,
       });
     } catch (error) {
+      if (reservedDay) await releaseIdentification(env.RULES_DB, auth.account.id, reservedDay)
+        .catch((refundError) => console.error("Could not release fish identification allowance", refundError));
       const message = error instanceof Error ? error.message : "Fish identification is temporarily unavailable.";
       return json({ error: message }, message.startsWith("OpenAI API usage limit") ? 429 : 502);
     }

@@ -22,7 +22,7 @@ Fishdays - NZ helps land and boat anglers compare fishing areas and suggested tw
 
 Explore a map of named fishing spots, check conditions for a place, compare hourly and daily weather, and keep a shortlist while planning. See official LINZ high and low tide predictions, then explore the estimated tide curve between those events.
 
-Choose an MPI fishing area and search species for rule summaries, with links to the official information. If you create an account, you can also take or select a photo for an AI fish-species suggestion. You choose whether to send each photo to OpenAI through the Fishdays - NZ service. Results include uncertainty guidance and can be reported inside the app.
+Choose an MPI fishing area and search species for rule summaries, with links to the official information. Users who create an account can also take or select a photo for an AI fish-species suggestion. You choose whether to send each photo to OpenAI through the Fishdays - NZ service. Results include uncertainty guidance and can be reported inside the app.
 
 Location and camera access are optional. Choose places manually or use the system photo picker. Core planning, maps, tides and rules work without an account. Optional usage analytics is off by default. Manage your profile or delete your account in the app; the public account-deletion page also works without installing it.
 

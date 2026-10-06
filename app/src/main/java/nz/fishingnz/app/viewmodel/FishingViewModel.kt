@@ -367,6 +367,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             fishError = "Could not read this photo. Choose another image and try again.")
     }
     fun identifyFish(image: ByteArray, point: GeoPoint, hasDeviceLocation: Boolean) {
+        if (_state.value.fishChecking) return
+        val accountRequestVersion = accountVersion
         val requestGeneration = ++fishIdentifyGeneration
         if (hasDeviceLocation) updateLocation(point)
         _state.value = _state.value.copy(fishChecking = true, fishError = null)
@@ -379,7 +381,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto) {
                         fishRulesJob?.cancel()
                         _state.value = current.copy(fishCheck = result, fishChecking = false,
-                            fishRulesLoading = false, fishRulesError = null)
+                            fishRulesLoading = false, fishRulesError = null,
+                            account = current.account?.copy(fishIdentityQuota = result.fishIdentityQuota ?: current.account.fishIdentityQuota))
                         if (result.isFish && result.areaId != _state.value.fishRulesAreaId) refreshFishRulesForSelection()
                     }
                 }
@@ -387,8 +390,14 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     val current = _state.value
                     if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto)
                         _state.value = current.copy(fishChecking = false,
-                            fishError = it.message ?: "Could not identify this photo.")
+                            fishError = it.message ?: "Could not identify this photo.",
+                            account = current.account?.copy(fishIdentityQuota =
+                                (it as? AccountRequestException)?.fishIdentityQuota ?: current.account.fishIdentityQuota))
                 }
+            runCatching { repository.currentAccount() }.onSuccess { account ->
+                if (accountRequestVersion == accountVersion && account != null) _state.value = _state.value.copy(
+                    account = account.copy(fishIdentityQuota = account.fishIdentityQuota ?: _state.value.account?.fishIdentityQuota))
+            }
         }
     }
     fun retryFishRules() = refreshFishRulesForSelection(force = true)

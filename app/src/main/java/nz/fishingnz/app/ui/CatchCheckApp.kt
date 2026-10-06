@@ -240,7 +240,6 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
                 Text("Publisher: Tristan · tc199558@gmail.com")
                 TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read full privacy policy") }
-                TextButton(onClick = { uriHandler.openUri(PrivacyLinks.deletion) }) { Text("Request account deletion on the web") }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Optional usage analytics", fontWeight = FontWeight.SemiBold)

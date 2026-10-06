@@ -19,7 +19,9 @@ object AccountSessionStore {
 
     fun initialize(context: Context) { appContext = context.applicationContext }
 
-    @Synchronized fun save(token: String) = saveEncrypted(TOKEN_KEY, token)
+    @Synchronized fun save(token: String) {
+        saveEncrypted(TOKEN_KEY, token)
+    }
 
     @Synchronized fun saveOAuthSecret(secret: String) = saveEncrypted(OAUTH_KEY, "${System.currentTimeMillis() + 600_000}:$secret")
 

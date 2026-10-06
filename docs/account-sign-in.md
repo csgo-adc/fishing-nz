@@ -2,6 +2,7 @@
 
 The Android and iPhone apps share the Fishdays - NZ account API. Password registration accepts **8–128 characters** and requires two matching password entries in both mobile apps. Email/password accounts still require email confirmation. The website is an administrator workspace; users create accounts and sign in through the mobile apps.
 
+
 Google and Apple use the system browser and a server authorization-code flow. New provider accounts can sign in immediately after the API verifies their identity and verified email. Apple’s Hide My Email addresses are supported. Existing users should sign in with their current method, open **Account → Sign-in options**, and connect a provider. Matching email addresses alone never merge accounts.
 
 The buttons remain unavailable until the corresponding provider credentials are configured. One provider can be enabled independently of the other.
@@ -50,6 +51,14 @@ See [Google’s OpenID Connect setup and flow](https://developers.google.com/ide
 The API generates a short-lived signed Apple client secret for each exchange, so there is no static six-month client secret to renew. Keep the `.p8` file out of Git and the apps. If you send email to Apple private relay addresses, configure your sending domain/email sources in Apple’s private email relay settings.
 
 See [Apple’s cross-platform authorization flow](https://developer.apple.com/documentation/signinwithapple/incorporating-sign-in-with-apple-into-other-platforms) and [token validation](https://developer.apple.com/documentation/signinwithapplerestapi/generate-and-validate-tokens).
+
+## Daily fish identification allowance
+
+Every account, on either plan, has five completed fish identification requests per New Zealand calendar day (`Pacific/Auckland`). The shared API reserves each use atomically before calling the AI provider, so requests from multiple devices share the same allowance. Invalid uploads and provider failures do not use an allowance. Any completed result, including a non-fish or uncertain result, counts as one use.
+
+Sign-in responses, `GET /v1/me/permissions`, successful identifications and daily-limit errors include `fish_identity_quota` with `limit`, `used`, `remaining`, `day` and `time_zone`. A sixth request returns HTTP 429 with `code: daily_identification_limit` before calling the provider. The identification screen displays the remaining allowance; the Account page does not repeat it. Usage records are deleted with the account and expire after 90 days. The server alone enforces the limit; mobile clients display its count and pass through limit errors. Successful checks made earlier on 6 October 2026 were backfilled into the account quota.
+
+Apply migration `0007_identification_daily_limit.sql` before deploying the API; the updated API requires its table. Updated mobile builds are needed to show the allowance and redesigned account page. Older app versions still obey the server limit.
 
 ## Deploy and check
 

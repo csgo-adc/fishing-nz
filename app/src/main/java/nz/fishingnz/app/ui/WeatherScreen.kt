@@ -87,9 +87,10 @@ private class WeatherLocationStore(context: Context) {
     fun saveSelected(id: String) { prefs.edit().putString("selected_station_id", id).apply() }
 }
 
-private fun weatherPlaces(savedIds: List<String>, extraId: String?): List<WeatherPlace> {
+private fun weatherPlaces(savedIds: List<String>, extraId: String?, allowCurrentLocation: Boolean): List<WeatherPlace> {
     val ids = (savedIds + listOfNotNull(extraId)).distinct()
-    return listOf(WeatherPlace("current", "Current location", null)) + ids.mapNotNull { id ->
+    val current = if (allowCurrentLocation) listOf(WeatherPlace("current", "Current location", null)) else emptyList()
+    return current + ids.mapNotNull { id ->
         tideStations.firstOrNull { it.id == id }?.let {
             WeatherPlace(it.id, it.name, GeoPoint(it.latitude, it.longitude))
         }
@@ -104,7 +105,7 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
     var savedIds by remember(store) { mutableStateOf(store.saved()) }
     var selectedId by remember(store) { mutableStateOf(initiallySelected) }
     val places = remember(savedIds, selectedId) {
-        weatherPlaces(savedIds, selectedId.takeIf { it != "current" && it !in savedIds })
+        weatherPlaces(savedIds, selectedId.takeIf { it != "current" && it !in savedIds }, true)
     }
     val pager = rememberPagerState(initialPage = places.indexOfFirst { it.id == initiallySelected }.coerceAtLeast(0)) { places.size }
     val selected = places.firstOrNull { it.id == selectedId } ?: places.first()

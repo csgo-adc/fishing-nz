@@ -98,7 +98,7 @@ struct FishingRepository {
         do {
             let profile: AccountProfileEnvelope = try await accountRequest("/v1/me", method: "GET", token: token)
             let permissions: AccountPermissionsEnvelope = try await accountRequest("/v1/me/permissions", method: "GET", token: token)
-            return AccountSnapshot(user: profile.user, permissions: AccountPermissions(plan: permissions.plan, features: permissions.features))
+            return AccountSnapshot(user: profile.user, permissions: permissions)
         } catch let error as AccountAPIError where error.status == 401 {
             KeychainSession.clear()
             return nil
@@ -236,10 +236,12 @@ struct FishingRepository {
         request.timeoutInterval = 30
         let (data, response) = try await URLSession.shared.data(for: request)
         let payload = try JSONDecoder().decode(FishIdentificationResponse.self, from: data)
-        guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NSError(domain: "FishIdentification", code: 1, userInfo: [NSLocalizedDescriptionKey: payload.error ?? "Fish identification failed."]) }
+        guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else {
+            throw FishIdentificationError(message: payload.error ?? "Fish identification failed.", quota: payload.fishIdentityQuota)
+        }
         let commonName = payload.commonName ?? "Unknown fish"
         let scientificName = payload.scientificName ?? ""
-        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaID: payload.areaID, areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: payload.rulesSourceURL.flatMap(URL.init(string:)), fishRules: payload.fishRules ?? [], isFish: payload.isFish ?? true, otherPossibilities: payload.otherPossibilities ?? [], visibleClues: payload.visibleClues ?? "", identificationNote: payload.identificationNote ?? "")
+        return FishCheck(commonName: commonName, scientificName: scientificName, confidence: Int((payload.confidence ?? 0) * 100), areaID: payload.areaID, areaName: payload.areaName ?? "Choose an MPI fishing area", areaIsEstimated: payload.areaIsEstimated ?? false, rulesNeedsReview: payload.rulesNeedsReview ?? false, rulesReviewedAt: payload.rulesReviewedAt, rulesSourceURL: payload.rulesSourceURL.flatMap(URL.init(string:)), fishRules: payload.fishRules ?? [], isFish: payload.isFish ?? true, otherPossibilities: payload.otherPossibilities ?? [], visibleClues: payload.visibleClues ?? "", identificationNote: payload.identificationNote ?? "", fishIdentityQuota: payload.fishIdentityQuota)
     }
 
     func fishRules(species: String, areaID: String) async throws -> FishRulesResult {
@@ -270,12 +272,19 @@ struct FishingRepository {
 private struct FishIdentificationResponse: Decodable {
     let commonName: String?; let scientificName: String?; let confidence: Double?; let error: String?
     let isFish: Bool?; let otherPossibilities: [String]?; let visibleClues: String?; let identificationNote: String?
-    let areaID: String?; let areaName: String?; let areaIsEstimated: Bool?; let rulesNeedsReview: Bool?; let rulesReviewedAt: String?; let rulesSourceURL: String?; let fishRules: [FishRuleMatch]?
+    let areaID: String?; let areaName: String?; let areaIsEstimated: Bool?; let rulesNeedsReview: Bool?; let rulesReviewedAt: String?; let rulesSourceURL: String?; let fishRules: [FishRuleMatch]?; let fishIdentityQuota: FishIdentityQuota?
     enum CodingKeys: String, CodingKey {
         case commonName, scientificName, confidence, error, isFish, otherPossibilities, visibleClues, identificationNote, areaName, areaIsEstimated, rulesNeedsReview, rulesReviewedAt, fishRules
         case areaID = "areaId"
         case rulesSourceURL = "rulesSourceUrl"
+        case fishIdentityQuota = "fish_identity_quota"
     }
+}
+
+struct FishIdentificationError: LocalizedError {
+    let message: String
+    let quota: FishIdentityQuota?
+    var errorDescription: String? { message }
 }
 
 private struct AccountErrorResponse: Decodable { let error: String?; let code: String? }

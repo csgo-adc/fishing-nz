@@ -158,6 +158,7 @@ struct FishCheck {
     let rulesNeedsReview: Bool; let rulesReviewedAt: String?; let rulesSourceURL: URL?
     let fishRules: [FishRuleMatch]; let isFish: Bool; let otherPossibilities: [String]
     let visibleClues: String; let identificationNote: String
+    var fishIdentityQuota: FishIdentityQuota? = nil
 
     func withRules(_ rules: FishRulesResult) -> FishCheck {
         FishCheck(commonName: commonName, scientificName: scientificName, confidence: confidence,
@@ -186,10 +187,28 @@ struct AccountProfile: Decodable, Equatable {
     enum CodingKeys: String, CodingKey { case id, email, plan; case displayName = "display_name"; case countryCode = "country_code" }
 }
 struct AccountFeatures: Decodable { let fishIdentity: Bool; enum CodingKeys: String, CodingKey { case fishIdentity = "fish_identity" } }
-struct AccountPermissions: Decodable { let plan: String; let features: AccountFeatures }
+struct FishIdentityQuota: Decodable {
+    let limit: Int
+    let used: Int
+    let remaining: Int
+    let day: String
+    var remainingToday: Int {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        formatter.dateFormat = "yyyy-MM-dd"
+        return day == formatter.string(from: .now) ? remaining : limit
+    }
+}
+struct AccountPermissions: Decodable {
+    let plan: String
+    let features: AccountFeatures
+    let fishIdentityQuota: FishIdentityQuota?
+    enum CodingKeys: String, CodingKey { case plan, features; case fishIdentityQuota = "fish_identity_quota" }
+}
 struct AccountSnapshot: Decodable { let user: AccountProfile; let permissions: AccountPermissions? }
 struct AccountProfileEnvelope: Decodable { let user: AccountProfile }
-struct AccountPermissionsEnvelope: Decodable { let plan: String; let features: AccountFeatures }
+typealias AccountPermissionsEnvelope = AccountPermissions
 struct AccountAuthResponse: Decodable { let token: String; let user: AccountProfile; let permissions: AccountPermissions }
 
 // Verified daily-prediction locations and coordinates from the LINZ tide prediction list and 2026 CSV headers.

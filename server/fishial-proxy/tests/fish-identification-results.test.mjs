@@ -26,6 +26,7 @@ test("fish identification always returns a useful result for model responses", a
         bind() {
           return {
             async first() {
+              if (sql.includes("account_identification_usage")) return { used: 1 };
               if (sql.includes("FROM account_sessions")) return { id: "tester", plan: "free", email_verified: 1 };
               if (sql.includes("FROM mpi_fishing_rules")) { rulesQueries += 1; return null; }
               throw new Error(`Unexpected query: ${sql}`);

@@ -8,4 +8,8 @@ data class AccountProfile(
     val plan: String,
 )
 
-data class AccountSnapshot(val user: AccountProfile, val fishIdentity: Boolean)
+data class FishIdentityQuota(val limit: Int, val used: Int, val remaining: Int, val day: String) {
+    val remainingToday: Int get() = if (day == java.time.LocalDate.now(java.time.ZoneId.of("Pacific/Auckland")).toString()) remaining else limit
+}
+
+data class AccountSnapshot(val user: AccountProfile, val fishIdentity: Boolean, val fishIdentityQuota: FishIdentityQuota? = null)

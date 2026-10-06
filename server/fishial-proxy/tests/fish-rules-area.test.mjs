@@ -43,6 +43,7 @@ test("fish identification attaches limits only for a selected MPI area", async (
         bind(...args) {
           return {
             async first() {
+              if (sql.includes("account_identification_usage")) return { used: 1 };
               if (sql.includes("FROM account_sessions")) return { id: "tester", plan: "free", email_verified: 1 };
               if (sql.includes("SELECT content_sha256, reviewed_at FROM mpi_fishing_rules")) return { content_sha256: "0".repeat(64), reviewed_at: ruleRow.reviewed_at };
               if (sql.includes("FROM mpi_fishing_rules")) {

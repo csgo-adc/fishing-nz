@@ -19,7 +19,10 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 
-class AccountRequestException(val statusCode: Int, val code: String?, message: String) : IOException(message)
+class AccountRequestException(
+    val statusCode: Int, val code: String?, message: String,
+    val fishIdentityQuota: FishIdentityQuota? = null,
+) : IOException(message)
 data class SignInProviders(val google: Boolean = false, val apple: Boolean = false, val connected: Set<String> = emptySet())
 
 class FishingRepository {
@@ -108,7 +111,11 @@ class FishingRepository {
             val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() }.orEmpty()
             val payload = JSONObject(body)
-            if (connection.responseCode !in 200..299) error(payload.optString("error", "Fish identification failed."))
+            if (connection.responseCode !in 200..299) throw AccountRequestException(
+                connection.responseCode, payload.optString("code"),
+                payload.optString("error", "Fish identification failed."),
+                parseFishIdentityQuota(payload.optJSONObject("fish_identity_quota")),
+            )
             val commonName = payload.getString("commonName")
             val scientificName = payload.getString("scientificName")
             val possibilities = payload.optJSONArray("otherPossibilities")
@@ -130,7 +137,8 @@ class FishingRepository {
                 isFish = payload.optBoolean("isFish", true),
                 otherPossibilities = otherPossibilities,
                 visibleClues = payload.optString("visibleClues"),
-                identificationNote = payload.optString("identificationNote")
+                identificationNote = payload.optString("identificationNote"),
+                fishIdentityQuota = parseFishIdentityQuota(payload.optJSONObject("fish_identity_quota"))
             )
         } finally { connection.disconnect() }
     }
@@ -272,7 +280,12 @@ class FishingRepository {
         return AccountSnapshot(
             AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free")),
             permissions.optJSONObject("features")?.optBoolean("fish_identity") == true,
+            parseFishIdentityQuota(permissions.optJSONObject("fish_identity_quota")),
         )
+    }
+
+    private fun parseFishIdentityQuota(value: JSONObject?): FishIdentityQuota? = value?.let {
+        FishIdentityQuota(it.getInt("limit"), it.getInt("used"), it.getInt("remaining"), it.getString("day"))
     }
 
     private fun accountRequest(path: String, method: String, payload: JSONObject? = null, token: String? = null, platform: String? = null): JSONObject {

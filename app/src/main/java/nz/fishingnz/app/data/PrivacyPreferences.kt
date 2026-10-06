@@ -2,15 +2,17 @@ package nz.fishingnz.app.data
 
 import android.content.Context
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.FirebaseApp
 
 object PrivacyPreferences {
     private var appContext: Context? = null
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        FirebaseApp.initializeApp(context)
         FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(analyticsEnabled())
     }
-    fun analyticsEnabled(): Boolean = appContext?.getSharedPreferences("privacy", Context.MODE_PRIVATE)
-        ?.getBoolean("analytics_enabled", false) ?: false
+    fun analyticsEnabled(): Boolean =
+        (appContext?.getSharedPreferences("privacy", Context.MODE_PRIVATE)?.getBoolean("analytics_enabled", false) ?: false)
 
     fun setAnalyticsEnabled(enabled: Boolean) {
         val context = appContext ?: return

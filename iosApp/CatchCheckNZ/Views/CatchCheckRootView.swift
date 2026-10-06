@@ -484,7 +484,22 @@ private struct FishIdentifierView: View {
         let galleryLabel = vm.selectedPhoto == nil ? "Choose photo" : "Gallery"
         Card {
             HStack { Image(systemName: "camera.fill").font(.title2).foregroundStyle(CatchCheckColor.navy).frame(width: 44, height: 44).background(CatchCheckColor.seafoam, in: Circle()); VStack(alignment: .leading) { Text("What fish is this?").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy); Text("AI ID + local rules check").font(.caption).foregroundStyle(.secondary) }; Spacer() }
-            if let photo = vm.selectedPhoto { Image(uiImage: photo).resizable().scaledToFill().frame(height: 160).clipShape(RoundedRectangle(cornerRadius: 12)) }
+            if let photo = vm.selectedPhoto {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(CatchCheckColor.cream)
+                    .frame(height: 200)
+                    .overlay {
+                        GeometryReader { bounds in
+                            Image(uiImage: photo)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: bounds.size.width, height: bounds.size.height)
+                                .accessibilityLabel("Selected fish photo")
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(CatchCheckColor.outline, lineWidth: 1))
+            }
             if let result = vm.fishCheck { FishCheckCard(result: result) }
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
@@ -540,6 +555,15 @@ private struct FishIdentifierView: View {
             }
             .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
             .disabled(vm.isCheckingFish || vm.accountLoading || (vm.fishIdentityAvailable && vm.selectedPhoto == nil))
+            if vm.fishIdentityAvailable {
+                Text(vm.remainingIdentifications.map { "\($0) of \(vm.fishIdentityQuota?.limit ?? 5) identifications left today · Resets at midnight NZ time" }
+                     ?? "5 fish identifications per day · Resets at midnight NZ time")
+                    .font(.caption).foregroundStyle(.secondary)
+                if vm.remainingIdentifications == 0 {
+                    Button("Refresh daily allowance") { vm.refreshAccount() }
+                        .font(.subheadline).disabled(vm.accountLoading)
+                }
+            }
             if !vm.fishIdentityAvailable {
                 Text(vm.accountLoading ? "Checking your account access."
                      : vm.hasStoredSession ? "Your saved session is still on this device, but account access could not be checked."
@@ -600,23 +624,30 @@ struct AccountView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack(spacing: 14) {
-                        Image(systemName: "person.crop.circle.fill.badge.checkmark")
-                            .font(.system(size: 34, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 62, height: 62)
-                            .background(CatchCheckColor.hero, in: RoundedRectangle(cornerRadius: 20))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Fishdays - NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(CatchCheckColor.orange)
-                            Text(vm.account == nil ? "Your fishing account" : "Welcome back")
-                                .font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 36, weight: .medium))
+                                .foregroundStyle(.white)
+                                .frame(width: 60, height: 60)
+                                .background(.white.opacity(0.12), in: Circle())
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("FISHDAYS · NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.92))
+                                Text(vm.account?.displayName.isEmpty == false ? vm.account!.displayName : vm.account == nil ? "Welcome aboard" : "Your account")
+                                    .font(.title2.bold()).foregroundStyle(.white)
+                            }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
+                        Text(vm.account == nil ? "A little help with your next catch. Sign in to identify fish and manage your profile."
+                             : "Manage your profile and sign-in options in one place.")
+                            .font(.subheadline).foregroundStyle(.white.opacity(0.8))
+                        if vm.account != nil {
+                            Label("Signed in securely", systemImage: "checkmark.shield.fill")
+                                .font(.caption.weight(.semibold)).foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.92))
+                        }
                     }
-                    if vm.account == nil {
-                        Text("Save your profile and manage your Fishdays - NZ account in one place.")
-                            .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
+                    .padding(24).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(LinearGradient(colors: [CatchCheckColor.hero, Color(red: 0.09, green: 0.29, blue: 0.38)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 28))
                     if let notice = vm.accountNotice {
                         Label(notice, systemImage: "checkmark.circle.fill")
                             .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
@@ -636,10 +667,6 @@ struct AccountView: View {
                     if vm.accountLoading {
                         Card { ProgressView("Checking your account…") }
                     } else if let account = vm.account {
-                        Card(background: CatchCheckColor.seafoam) {
-                            Label("Signed in", systemImage: "checkmark.seal.fill").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
-                            Text("Fish identification and your fishing tools are ready.").font(.subheadline).foregroundStyle(.secondary)
-                        }
                         accountSection("Profile", subtitle: account.email, icon: "person.text.rectangle") {
                             AccountInput(icon: "person") { TextField("Name", text: $displayName).textContentType(.name) }
                             AccountInput(icon: "globe") {
@@ -650,10 +677,11 @@ struct AccountView: View {
                                 Label(vm.accountBusy ? "Saving…" : "Save profile", systemImage: "checkmark")
                                     .frame(maxWidth: .infinity)
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
-                            Text("Sign-in options").font(.headline)
+                        }
+                        accountSection("Sign-in options", subtitle: "Choose how you get back on board.", icon: "lock.shield") {
                             socialSignInButtons
                         }
-                        Button("Sign out", role: .destructive) { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
+                        Button("Sign out") { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
                     } else if vm.hasStoredSession {
                         Card {
                             Text("Session saved").font(.headline).foregroundStyle(CatchCheckColor.navy)
@@ -673,15 +701,15 @@ struct AccountView: View {
                         VStack(alignment: .leading, spacing: 18) {
                             HStack(spacing: 8) {
                                 Image(systemName: "lock.shield.fill").foregroundStyle(CatchCheckColor.orange)
-                                Text("Secure access").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                                Text(createAccount ? "Join Fishdays" : "Good to see you").font(.headline).foregroundStyle(CatchCheckColor.navy)
                             }
-                            Text("Create an account or sign in to manage your Fishdays - NZ profile.")
+                            Text("Sign in to use your fishing tools.")
                                 .font(.subheadline).foregroundStyle(.secondary)
                             socialSignInButtons
                             Text("Or use your email").font(.caption).foregroundStyle(.secondary)
                             Picker("Account", selection: $createAccount) {
-                                Text("Create account").tag(true)
                                 Text("Sign in").tag(false)
+                                Text("Create account").tag(true)
                             }
                             .pickerStyle(.segmented)
                             .onChange(of: createAccount) { _, _ in password = ""; confirmPassword = "" }
@@ -755,7 +783,11 @@ struct AccountView: View {
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-            .task { await vm.refreshSignInProviders() }
+            .task {
+                if let account = vm.account { displayName = account.displayName; countryCode = account.countryCode; email = account.email }
+                vm.refreshAccount()
+                await vm.refreshSignInProviders()
+            }
             .onChange(of: vm.account) { _, value in if let value { displayName = value.displayName; countryCode = value.countryCode; email = value.email; password = ""; confirmPassword = "" } }
             .onChange(of: vm.verificationPending) { _, pending in if pending { createAccount = false } }
         }
