@@ -248,7 +248,6 @@ test("password reset, password change and abuse limits with real D1", { timeout:
 
     await t.test("sign-in takes similar time for unknown emails and wrong passwords", async () => {
       await register("timing@example.com", "198.51.100.50");
-      const median = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
       const time = async (email, index) => {
         const started = performance.now();
         await api("/v1/auth/login", "POST", { email, password: "Wrong-pass-1" }, { ip: `192.0.2.${index}` });
@@ -257,11 +256,16 @@ test("password reset, password change and abuse limits with real D1", { timeout:
       await time("timing@example.com", 1);
       const wrong = [];
       const unknown = [];
-      for (let index = 0; index < 7; index++) {
+      for (let index = 0; index < 9; index++) {
         wrong.push(await time("timing@example.com", 10 + index));
         unknown.push(await time(`nobody${index}@example.com`, 30 + index));
       }
-      assert.ok(median(unknown) > median(wrong) * 0.5, `unknown ${median(unknown).toFixed(1)}ms vs wrong ${median(wrong).toFixed(1)}ms`);
+      // Compare the fastest runs. Other test files run at the same time and a busy CPU only ever makes a run slower, so the
+      // fastest run is the closest to the real cost. If unknown emails skipped the password hash (the bug this guards against)
+      // their fastest run would be a small fraction of the wrong-password one.
+      const fastestWrong = Math.min(...wrong);
+      const fastestUnknown = Math.min(...unknown);
+      assert.ok(fastestUnknown > fastestWrong * 0.5, `fastest unknown ${fastestUnknown.toFixed(1)}ms vs fastest wrong ${fastestWrong.toFixed(1)}ms`);
     });
 
     await t.test("limits sign-ups, verification resends and feedback", async () => {

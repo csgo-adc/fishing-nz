@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.12 — 2026-10-08 (build code 13)
+
+- Fix a flaky API test: the sign-in timing check compared median times, which a busy CI
+  runner could skew. It now compares the fastest runs, and was checked to still fail when
+  unknown emails skip the password hash. No change to the app or the service.
+
 ## 1.0.11 — 2026-10-08 (build code 12)
 
 - iOS: add **Delete account** to the Account screen, with a confirmation that matches
