@@ -413,6 +413,17 @@ enum AnalyticsPayload {
     }
 }
 
+/// Whether the person ticked "Don't ask me again" when agreeing to send a photo to OpenAI. It is only ever switched on from
+/// the consent sheet, which shows the full disclosure, and it is cleared on sign-out and account deletion.
+enum PhotoUploadConsent {
+    private static let rememberedKey = "photo_upload_consent_remembered"
+
+    static var isRemembered: Bool {
+        get { UserDefaults.standard.bool(forKey: rememberedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: rememberedKey) }
+    }
+}
+
 enum AnalyticsPreferences {
     private static let enabledKey = "analytics_enabled"
     private static let deviceIDKey = "analytics_device_id"

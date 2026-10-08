@@ -835,6 +835,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
                 signInProviders = SignInProviders()
                 AnalyticsPreferences.setEnabled(false)
+                PhotoUploadConsent.isRemembered = false
                 accountNotice = "Your account and associated data have been deleted."
             } catch { accountError = error.localizedDescription }
             accountBusy = false
@@ -846,6 +847,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         accountLoadFailed = false
         accountLoading = false
         accountBusy = true; accountError = nil; accountNotice = nil
+        PhotoUploadConsent.isRemembered = false
         Task { await repository.signOut(); account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false; accountBusy = false; accountNotice = "You’re signed out." }
     }
     func identifyFish() {

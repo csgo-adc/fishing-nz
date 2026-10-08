@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.15 — 2026-10-09 (build code 16)
+
+- iOS: ask before a fish photo is sent to OpenAI. A sheet names Cloudflare and OpenAI first.
+  It has a **Don't ask me again** box that is off by default, is kept only if the person taps
+  **Agree and upload**, is cleared on sign-out and account deletion, and can be switched
+  back on in More → Settings → Terms & privacy. Apple requires permission before personal
+  data goes to third-party AI (guideline 5.1.2(i)). Terms & privacy now names OpenAI, Cloudflare and
+  Open-Meteo and shows the publisher's contact.
+- iOS: add the Apple privacy manifest (`PrivacyInfo.xcprivacy`: no tracking, the data the app
+  collects, and the `UserDefaults` reason) and declare that the app uses only exempt encryption.
+- iOS: offer Google sign-in only together with Sign in with Apple (guideline 4.8). Until Apple
+  sign-in is configured on the service, the iPhone app shows email and password only, with no
+  disabled buttons or "available soon" text.
+- Add `docs/app-store-release.md`: App Store readiness, the steps only the account holder can
+  do, listing copy, App Privacy answers and App Review notes.
+- No change to the Android app or the service.
+
 ## 1.0.14 — 2026-10-08 (build code 15)
 
 - Tidy up the repository history. The Android APK workflow now keeps only the newest build in

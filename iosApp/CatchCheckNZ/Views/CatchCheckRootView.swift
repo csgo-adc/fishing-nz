@@ -198,6 +198,7 @@ private struct AppearanceView: View {
 
 private struct TermsPrivacyView: View {
     @State private var analyticsOn = AnalyticsPreferences.isEnabled
+    @State private var photoConsentRemembered = PhotoUploadConsent.isRemembered
 
     private var privacyPolicyURL: URL? {
         let base = (Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space"
@@ -218,8 +219,10 @@ private struct TermsPrivacyView: View {
                 Card {
                     Text("Privacy").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
-                    Text("If you choose a fish photo, it is sent through the Fishdays - NZ service to an image analysis provider for identification.")
-                    Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
+                    Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
+                    Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device. You can delete your account from the Account page.")
+                    Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
+                    Text("Publisher: Tristan · tc199558@gmail.com")
                     if let privacyPolicyURL { Link("Read the full privacy policy", destination: privacyPolicyURL).font(.subheadline.weight(.semibold)) }
                     Toggle(isOn: $analyticsOn) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -229,6 +232,17 @@ private struct TermsPrivacyView: View {
                         }
                     }
                     .onChange(of: analyticsOn) { _, enabled in AnalyticsPreferences.setEnabled(enabled) }
+                    if photoConsentRemembered {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Fish photos").fontWeight(.semibold)
+                            Text("You chose not to be asked before a photo is sent to OpenAI for identification.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                            Button("Ask me before sending photos again") {
+                                PhotoUploadConsent.isRemembered = false
+                                photoConsentRemembered = false
+                            }.font(.subheadline.weight(.semibold))
+                        }
+                    }
                 }
             }.padding(20)
         }
@@ -502,10 +516,68 @@ private struct PlanningSheet: View {
     }
 }
 
+/// Explicit permission before a photo leaves the phone (App Review guideline 5.1.2(i)). The box is off by default and is only
+/// kept when the person agrees; cancelling never stores it.
+private struct PhotoUploadConsentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var dontAskAgain = false
+    let onAgree: (_ dontAskAgain: Bool) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Send this photo for AI identification?").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text("Your selected photo will be sent through the Fishdays - NZ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
+                Text("Avoid photos containing people or private information. You can cancel and keep using the other tools. Details: More → Settings → Terms & privacy.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Toggle(isOn: $dontAskAgain) {
+                    Text("Don’t ask me again before sending a photo")
+                }
+                .toggleStyle(CheckboxToggleStyle())
+            }
+            .padding(24)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 4) {
+                Button {
+                    dismiss()
+                    onAgree(dontAskAgain)
+                } label: { Text("Agree and upload").frame(maxWidth: .infinity).padding(.vertical, 6) }
+                    .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+            }
+            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
+            .background(.bar)
+        }
+        .background(CatchCheckColor.cream)
+    }
+}
+
+private struct CheckboxToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
+                    .font(.title3)
+                    .foregroundStyle(configuration.isOn ? CatchCheckColor.accent : Color.secondary)
+                configuration.label.font(.subheadline).foregroundStyle(CatchCheckColor.navy).multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isToggle)
+        .accessibilityValue(configuration.isOn ? "On" : "Off")
+    }
+}
+
 private struct FishIdentifierView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Binding var photoItem: PhotosPickerItem?
     @Binding var showCamera: Bool
+    @State private var showingPhotoConsent = false
     let openAccount: () -> Void
     var body: some View {
         let galleryLabel = vm.selectedPhoto == nil ? "Choose photo" : "Gallery"
@@ -573,7 +645,9 @@ private struct FishIdentifierView: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
             Button {
-                if vm.fishIdentityAvailable { vm.identifyFish() }
+                if vm.fishIdentityAvailable {
+                    if PhotoUploadConsent.isRemembered { vm.identifyFish() } else { showingPhotoConsent = true }
+                }
                 else if vm.hasStoredSession { vm.refreshAccount() }
                 else { openAccount() }
             } label: {
@@ -598,6 +672,13 @@ private struct FishIdentifierView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
+        }
+        .sheet(isPresented: $showingPhotoConsent) {
+            PhotoUploadConsentSheet { rememberChoice in
+                if rememberChoice { PhotoUploadConsent.isRemembered = true }
+                vm.identifyFish()
+            }
+            .presentationDetents([.large])
         }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
@@ -713,8 +794,10 @@ struct AccountView: View {
                                     .frame(maxWidth: .infinity)
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
                         }
-                        accountSection("Sign-in options", subtitle: "Choose how you get back on board.", icon: "lock.shield") {
-                            socialSignInButtons
+                        if !offeredSignInProviders.isEmpty {
+                            accountSection("Sign-in options", subtitle: "Choose how you get back on board.", icon: "lock.shield") {
+                                socialSignInButtons
+                            }
                         }
                         accountSection("Password", subtitle: account.hasPassword ? "Keep your account safe." : "Add one to also sign in with your email.", icon: "key") {
                             if account.hasPassword {
@@ -768,8 +851,10 @@ struct AccountView: View {
                             }
                             Text("Sign in to use your fishing tools.")
                                 .font(.subheadline).foregroundStyle(.secondary)
-                            socialSignInButtons
-                            Text("Or use your email").font(.caption).foregroundStyle(.secondary)
+                            if !offeredSignInProviders.isEmpty {
+                                socialSignInButtons
+                                Text("Or use your email").font(.caption).foregroundStyle(.secondary)
+                            }
                             Picker("Account", selection: $createAccount) {
                                 Text("Sign in").tag(false)
                                 Text("Create account").tag(true)
@@ -864,11 +949,16 @@ struct AccountView: View {
         }
     }
 
+    /// App Review guideline 4.8: Google sign-in may only be offered together with Sign in with Apple.
+    private var offeredSignInProviders: [String] {
+        guard vm.signInProviders.apple else { return [] }
+        return vm.signInProviders.google ? ["google", "apple"] : ["apple"]
+    }
+
     private var socialSignInButtons: some View {
         VStack(spacing: 12) {
-            ForEach(["google", "apple"], id: \.self) { provider in
+            ForEach(offeredSignInProviders, id: \.self) { provider in
                 let name = provider == "google" ? "Google" : "Apple"
-                let available = provider == "google" ? vm.signInProviders.google : vm.signInProviders.apple
                 let connected = vm.account != nil && vm.signInProviders.connected.contains(provider)
                 Button {
                     Task { await vm.signInWithProvider(provider) }
@@ -878,10 +968,7 @@ struct AccountView: View {
                         Text(connected ? "\(name) connected" : vm.account == nil ? "Continue with \(name)" : "Connect \(name)")
                     }.frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
-                .buttonStyle(.bordered).disabled(vm.accountBusy || !available || connected)
-            }
-            if !vm.signInProviders.google && !vm.signInProviders.apple {
-                Text("Google and Apple sign-in will be available soon.").font(.caption).foregroundStyle(.secondary)
+                .buttonStyle(.bordered).disabled(vm.accountBusy || connected)
             }
         }
     }
