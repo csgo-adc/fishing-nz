@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5 — 2026-10-08 (build code 6)
+
+- Admin CMS: add a **Usage analysis** page (`/admin/analytics`) with an overview
+  (active and anonymous devices, accounts, events, API calls), ranked accounts and
+  devices with search, sort and paging, and a detail view for any account or device
+  showing its API use by route and day, what it did, and a timeline that includes
+  activity from before the account signed in.
+- Forward the read-only analysis routes through the CMS proxy.
+
 ## 1.0.4 — 2026-10-08 (build code 5)
 
 - Worker: add behaviour analytics that work without an account. Apps register a

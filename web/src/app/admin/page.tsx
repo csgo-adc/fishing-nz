@@ -102,7 +102,7 @@ export default function AdminPage() {
 
   return (
     <main className="cms-shell">
-      <header className="site-header cms-header"><Link className="brand" href="/admin"><NextImage className="brand-mark" src="/fishing-days-icon.png" width={36} height={36} alt="" unoptimized />Fishdays - NZ</Link><span className="back-link">Admin workspace</span></header>
+      <header className="site-header cms-header"><Link className="brand" href="/admin"><NextImage className="brand-mark" src="/fishing-days-icon.png" width={36} height={36} alt="" unoptimized />Fishdays - NZ</Link><Link className="back-link" href="/admin/analytics">Usage analysis →</Link></header>
       <section className="cms-content">
         <div className="cms-heading"><div><p className="kicker">Fishdays - NZ operations</p><h1>Account CMS</h1><p>User, plan, feedback, and feature activity for the last 30 days.</p></div>{connected && <div className={styles.actions}><button className="signout-button" disabled={busy || loading} onClick={() => void refresh(usersOffset, feedbackOffset, appliedSearch)}>Refresh</button><button className="signout-button" disabled={busy} onClick={() => void signOut()}>Sign out</button></div>}</div>
         {error && <p className="form-error" role="alert">{error}</p>}

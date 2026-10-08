@@ -55,6 +55,23 @@ async function proxy(request: Request): Promise<Response> {
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return errorResponse("Sign in to the CMS.", 401);
 
+  const analytics = path.match(/^\/analytics\/(overview|subjects|(?:users|devices)\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i);
+  if (analytics && request.method === "GET") {
+    // Read-only pass-through: only these filters are forwarded, so the page cannot reach other admin routes.
+    const filters = new URLSearchParams();
+    for (const key of ["days", "type", "search", "sort", "scope", "limit", "offset"]) {
+      const value = url.searchParams.get(key);
+      if (value !== null) filters.set(key, value.slice(0, 121));
+    }
+    const result = await fetch(`${API_BASE}/v1/admin/analytics/${analytics[1]}?${filters}`, { headers: { "x-account-admin-token": token }, cache: "no-store" }).catch(() => null);
+    if (!result) return errorResponse("Could not reach the account service.", 503);
+    if (result.status === 401) return expiredSession();
+    const payload = await result.json().catch(() => null);
+    if (!payload || typeof payload !== "object") return errorResponse("The account service returned an invalid response.", 502);
+    if (result.status >= 500) return errorResponse("The account service could not load analytics. Try again.", 502);
+    return Response.json(payload, { status: result.status, headers: { "cache-control": "no-store" } });
+  }
+
   if (path === "/dashboard" && request.method === "GET") {
     const usersOffset = pageOffset(url.searchParams.get("users_offset"));
     const feedbackOffset = pageOffset(url.searchParams.get("feedback_offset"));
