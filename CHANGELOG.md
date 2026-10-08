@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8 — 2026-10-08 (build code 9)
+
+- Add a manual **Deploy** workflow (Actions → Deploy). It checks the Cloudflare secrets, runs
+  the API tests, applies pending D1 migrations, deploys the Worker, confirms the live
+  version, and can deploy the admin CMS. It needs the repository secrets
+  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` and never runs on its own.
+- Document the GitHub and local deploy routes in the API README.
+
 ## 1.0.7 — 2026-10-08 (build code 8)
 
 - iOS: add the same optional behaviour tracking as Android, behind a new **Optional usage

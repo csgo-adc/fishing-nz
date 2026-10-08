@@ -74,6 +74,10 @@ npx wrangler dev    # local Worker
 
 ## Deploy
 
+**From GitHub (recommended).** Add two repository secrets under Settings → Secrets and variables → Actions: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The token needs Account → Workers Scripts: Edit and D1: Edit, plus Zone → Workers Routes: Edit and DNS: Edit on the `fishnz.space` zone. Then open Actions → **Deploy** → Run workflow on `main`. It checks the credentials, runs these tests, applies pending database migrations, deploys the Worker, confirms `/__health` reports this version, and (optional) deploys the admin CMS. It never runs on its own.
+
+**From your machine:**
+
 ```sh
 npx wrangler d1 migrations apply RULES_DB --remote   # run before deploying code that needs new tables
 npm run deploy
