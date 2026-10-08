@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 — 2026-10-08 (build code 3)
+
+- Fix the new Checks workflow: install `tools/requirements.txt` before running the
+  Python tool tests, which need BeautifulSoup.
+
 ## 1.0.1 — 2026-10-08 (build code 2)
 
 - Add password reset: **Forgot password?** on both sign-in screens opens a web

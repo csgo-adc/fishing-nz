@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.1 (build code 2)**. The original code is preserved
+Current project version: **1.0.2 (build code 3)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
