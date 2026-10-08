@@ -33,6 +33,8 @@ struct CatchCheckRootView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @AppStorage("catchcheckAppearance") private var appearance = "light"
     @State private var moreDestination: MoreDestination?
+    // Shown once, until answered. Nothing is collected before then.
+    @State private var showAnalyticsNotice = AnalyticsPreferences.needsNotice
 
     private var preferredAppearance: ColorScheme? {
         switch appearance {
@@ -63,6 +65,15 @@ struct CatchCheckRootView: View {
             }
         }
         .task { vm.requestLocation() }
+        .alert("Help improve Fishdays - NZ", isPresented: $showAnalyticsNotice) {
+            Button("Keep sharing") {
+                AnalyticsPreferences.setEnabled(true)
+                Analytics.track("app_open")
+            }
+            Button("Turn off", role: .cancel) { AnalyticsPreferences.setEnabled(false) }
+        } message: {
+            Text("We count which screens are used and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone. It works whether or not you are signed in. It never includes your location, photos, email or anything you type. You can change this at any time in More → Settings → Terms & privacy.")
+        }
     }
 }
 
@@ -188,6 +199,11 @@ private struct AppearanceView: View {
 private struct TermsPrivacyView: View {
     @State private var analyticsOn = AnalyticsPreferences.isEnabled
 
+    private var privacyPolicyURL: URL? {
+        let base = (Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space"
+        return URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/privacy")
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -204,10 +220,11 @@ private struct TermsPrivacyView: View {
                     Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
                     Text("If you choose a fish photo, it is sent through the Fishdays - NZ service to an image analysis provider for identification.")
                     Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
+                    if let privacyPolicyURL { Link("Read the full privacy policy", destination: privacyPolicyURL).font(.subheadline.weight(.semibold)) }
                     Toggle(isOn: $analyticsOn) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Optional usage analytics").fontWeight(.semibold)
-                            Text("Share which screens you use and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Off by default. Turning this off erases what we stored for this identifier and resets it.")
+                            Text("Anonymous usage statistics").fontWeight(.semibold)
+                            Text("On by default after a first notice. Shares which screens you use and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Turning this off erases what we stored for this identifier and resets it.")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
@@ -613,6 +630,9 @@ struct AccountView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @State private var showChangePassword = false
+    @State private var showSignOutEverywhere = false
+    @State private var showDeleteConfirmation = false
     @State private var createAccount = false
     @State private var email = ""
     @State private var password = ""
@@ -696,7 +716,35 @@ struct AccountView: View {
                         accountSection("Sign-in options", subtitle: "Choose how you get back on board.", icon: "lock.shield") {
                             socialSignInButtons
                         }
+                        accountSection("Password", subtitle: account.hasPassword ? "Keep your account safe." : "Add one to also sign in with your email.", icon: "key") {
+                            if account.hasPassword {
+                                Button { showChangePassword = true } label: { Label("Change password", systemImage: "key").frame(maxWidth: .infinity) }
+                                    .buttonStyle(.bordered).disabled(vm.accountBusy)
+                            } else if let forgotPasswordURL {
+                                Button {
+                                    Analytics.track("password_reset_opened")
+                                    openURL(forgotPasswordURL)
+                                } label: { Label("Add a password", systemImage: "key").frame(maxWidth: .infinity) }
+                                    .buttonStyle(.bordered).disabled(vm.accountBusy)
+                            }
+                            Button("Sign out of all devices") { showSignOutEverywhere = true }
+                                .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy)
+                                .alert("Sign out of all devices?", isPresented: $showSignOutEverywhere) {
+                                    Button("Sign out everywhere", role: .destructive) { vm.signOutEverywhere() }
+                                    Button("Cancel", role: .cancel) {}
+                                } message: {
+                                    Text("This ends every session for your account, including this phone. You will need to sign in again everywhere.")
+                                }
+                        }
                         Button("Sign out") { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
+                        Button("Delete account", role: .destructive) { showDeleteConfirmation = true }
+                            .disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 4)
+                            .alert("Permanently delete your account?", isPresented: $showDeleteConfirmation) {
+                                Button("Delete permanently", role: .destructive) { vm.deleteAccount() }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("This removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. It also clears this phone’s selected fish photo and trip shortlist and turns off usage statistics. It does not delete your Google or Apple account or photos saved on your phone. It cannot be undone.")
+                            }
                     } else if vm.hasStoredSession {
                         Card {
                             Text("Session saved").font(.headline).foregroundStyle(CatchCheckColor.navy)
@@ -805,6 +853,7 @@ struct AccountView: View {
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .sheet(isPresented: $showChangePassword) { ChangePasswordSheet().environmentObject(vm) }
             .task {
                 if let account = vm.account { displayName = account.displayName; countryCode = account.countryCode; email = account.email }
                 vm.refreshAccount()
@@ -851,6 +900,49 @@ struct AccountView: View {
         .padding(18)
         .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(CatchCheckColor.outline, lineWidth: 1))
+    }
+}
+
+private struct ChangePasswordSheet: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentPassword = ""
+    @State private var newPassword = ""
+    @State private var repeatedPassword = ""
+
+    private var problem: String? {
+        if !newPassword.isEmpty && (newPassword.utf16.count < 8 || newPassword.utf16.count > 128) { return "Use 8 to 128 characters for the new password." }
+        if !newPassword.isEmpty && newPassword == currentPassword { return "Choose a password you are not already using." }
+        if !repeatedPassword.isEmpty && repeatedPassword != newPassword { return "The new passwords don’t match." }
+        return nil
+    }
+    private var canSubmit: Bool {
+        !vm.accountBusy && !currentPassword.isEmpty && (8...128).contains(newPassword.utf16.count)
+            && newPassword != currentPassword && repeatedPassword == newPassword
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(footer: Text("You stay signed in on this phone. Every other device is signed out.")) {
+                    SecureField("Current password", text: $currentPassword).textContentType(.password)
+                    SecureField("New password · 8+ characters", text: $newPassword).textContentType(.newPassword)
+                    SecureField("Repeat new password", text: $repeatedPassword).textContentType(.newPassword)
+                }
+                if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
+            }
+            .navigationTitle("Change password")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Change") {
+                        vm.changePassword(current: currentPassword, new: newPassword)
+                        dismiss()
+                    }.disabled(!canSubmit)
+                }
+            }
+        }
     }
 }
 

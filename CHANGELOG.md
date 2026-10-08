@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.11 — 2026-10-08 (build code 12)
+
+- iOS: add **Delete account** to the Account screen, with a confirmation that matches
+  Android. It removes the account and its analytics from the service, clears the phone's
+  saved session, photo and trip shortlist, and turns usage statistics off. Apple requires
+  this for apps that create accounts.
+- iOS: our own anonymous usage statistics are now **on by default after a one-time notice**
+  ("Keep sharing" / "Turn off"); nothing is collected before it is answered. The Terms &
+  privacy switch is renamed and the screen now links to the full privacy policy.
+- iOS: add **Change password** (or **Add a password** for Google/Apple accounts) and
+  **Sign out of all devices** to the Account screen.
+- **Review the Apple privacy labels in App Store Connect before releasing this build**
+  (Identifiers: device ID, for analytics).
+
 ## 1.0.10 — 2026-10-08 (build code 11)
 
 - Android: our own anonymous usage statistics are now **on by default after a one-time notice**

@@ -789,6 +789,57 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             return false
         }
     }
+    func changePassword(current: String, new: String) {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                try await repository.changePassword(current: current, new: new)
+                Analytics.track("password_changed")
+                accountNotice = "Password changed. Your other devices were signed out."
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func signOutEverywhere() {
+        accountRequestVersion += 1
+        accountLoadFailed = false
+        accountLoading = false
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                try await repository.logoutEverywhere()
+                Analytics.track("signed_out_everywhere")
+                account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
+                accountNotice = "You’re signed out of every device."
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func deleteAccount() {
+        guard !accountBusy else { return }
+        accountRequestVersion += 1
+        accountLoadFailed = false
+        accountLoading = false
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                try await repository.deleteAccount()
+                // Forget everything tied to the account on this phone, and stop any fish check still in flight.
+                fishIdentifyRequestID = UUID()
+                fishRulesTask?.cancel()
+                fishRulesRequestID = UUID()
+                pendingFishPhoto = nil
+                selectedPhoto = nil; fishCheck = nil; isCheckingFish = false; self.error = nil
+                isLoadingFishRules = false; fishRulesError = nil
+                savedSpotNames = []; savedRecommendations = [:]; activeTrip = nil
+                account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
+                signInProviders = SignInProviders()
+                AnalyticsPreferences.setEnabled(false)
+                accountNotice = "Your account and associated data have been deleted."
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
     func signOut() {
         Analytics.track("sign_out")
         accountRequestVersion += 1

@@ -122,6 +122,27 @@ struct FishingRepository {
         KeychainSession.clear()
     }
 
+    /// The service keeps this session signed in and ends the account's others. Errors carry a message fit to show.
+    func changePassword(current: String, new: String) async throws {
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in again to change your password.", status: 401, code: nil) }
+        let _: EmptyResponse = try await accountRequest("/v1/me/password", method: "POST", body: ["current_password": current, "new_password": new], token: token)
+    }
+
+    /// Ends every session for the account, including this one, so the saved session is cleared afterwards.
+    func logoutEverywhere() async throws {
+        if let token = KeychainSession.load() {
+            let _: EmptyResponse = try await accountRequest("/v1/auth/logout-all", method: "POST", body: [String: String](), token: token)
+        }
+        KeychainSession.clear()
+    }
+
+    func deleteAccount() async throws {
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in again to delete your account.", status: 401, code: nil) }
+        let response: AccountDeleteResponse = try await accountRequest("/v1/me", method: "DELETE", body: ["confirm": true], token: token)
+        guard response.deleted else { throw AccountAPIError(message: "Account deletion could not be confirmed. Please try again.", status: 500, code: nil) }
+        KeychainSession.clear()
+    }
+
     private func accountRequest<T: Decodable>(_ path: String, method: String, body: Any? = nil, token: String? = nil, platform: String? = nil) async throws -> T {
         var request = URLRequest(url: URL(string: accountBaseURL + path)!)
         request.httpMethod = method
@@ -292,6 +313,7 @@ struct FishIdentificationError: LocalizedError {
 private struct AccountErrorResponse: Decodable { let error: String?; let code: String? }
 private struct AccountMessageResponse: Decodable { let message: String }
 private struct EmptyResponse: Decodable {}
+private struct AccountDeleteResponse: Decodable { let deleted: Bool }
 struct AccountAPIError: LocalizedError { let message: String; let status: Int; let code: String?; var errorDescription: String? { message } }
 
 private enum KeychainSession {
@@ -396,7 +418,14 @@ enum AnalyticsPreferences {
     private static let deviceIDKey = "analytics_device_id"
     private static let queue = DispatchQueue(label: "nz.fishingnz.analytics.preferences")
 
-    static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+    /// The person's answer to the one-time notice or the Settings switch. Nil until they have answered.
+    static var choice: Bool? { UserDefaults.standard.object(forKey: enabledKey) as? Bool }
+
+    /// True while the one-time notice has not been answered.
+    static var needsNotice: Bool { choice == nil }
+
+    /// Our own anonymous usage statistics are on by default, but nothing is collected before the notice is answered.
+    static var isEnabled: Bool { choice ?? false }
 
     /// The random id that tells our analytics one install from another. It is made when analytics is first used, is never
     /// an advertising or hardware id, and is returned only while analytics is on.
