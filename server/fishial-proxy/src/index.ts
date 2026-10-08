@@ -1,6 +1,10 @@
 import { handleSocialAuth, type SocialAuthEnv } from "./social-auth";
 import { handlePrivacyRoute, deleteAccountData, cleanupAccountData } from "./privacy";
 import { identificationDay, identificationQuota, reserveIdentification, releaseIdentification } from "./identification-quota";
+import { changePassword, handlePasswordRoute } from "./password-reset";
+import { HOUR, MINUTE, allowAttempt, clientAddress, isRateLimited, rateKey, recordAttempt, tooManyRequests } from "./rate-limit";
+import { constantTimeEqual, hashPassword, passwordMatches, randomHex, sha256 } from "./security";
+import packageInfo from "../package.json";
 
 export interface Env extends SocialAuthEnv {
   OPENAI_API_KEY: string;
@@ -26,9 +30,8 @@ export type Account = {
 type AccountWithCredentials = Account & { password_hash: string; password_salt: string };
 type AuthContext = { account: Account; sessionToken: string };
 type PublicAccount = Omit<Account, "email_verified"> & { email_verified: boolean };
-// Cloudflare Workers caps a single PBKDF2 operation at 100,000 iterations.
-const PASSWORD_ITERATIONS = 100_000;
 const SESSION_LIFETIME_DAYS = 30;
+const LOGIN_WINDOW = 15 * MINUTE;
 
 const rulesAreas = new Map([
   ["auckland-kermadec", "Auckland / Kermadec"], ["central", "Central"],
@@ -56,6 +59,10 @@ async function register(request: Request, env: Env): Promise<Response> {
   if (!isValidEmail(email)) return json({ error: "Enter a valid email address." }, 400);
   if (password.length < 8 || password.length > 128) return json({ error: "Password must be between 8 and 128 characters." }, 400);
   if (displayName.length > 80) return json({ error: "Display name must be 80 characters or fewer." }, 400);
+
+  if (!await allowAttempt(env.RULES_DB, { key: await rateKey("register-ip", clientAddress(request)), limit: 10 }, HOUR)) {
+    return tooManyRequests("Too many sign-up attempts from this network. Try again later.", HOUR, corsHeaders());
+  }
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -87,11 +94,25 @@ async function login(request: Request, env: Env): Promise<Response> {
   if (!payload) return json({ error: "Send a JSON object." }, 400);
   const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
   const password = typeof payload.password === "string" ? payload.password : "";
+  // Failed sign-ins count against the network, the network-and-email pair, and the email alone.
+  // Only failures count, so a signed-in user is never slowed down by their own successful logins.
+  const address = clientAddress(request);
+  const attempts = [
+    { key: await rateKey("login-ip", address), limit: 30 },
+    { key: await rateKey("login-account", address, email), limit: 5 },
+    { key: await rateKey("login-email", email), limit: 20 },
+  ];
+  if (await isRateLimited(env.RULES_DB, attempts, LOGIN_WINDOW)) {
+    return tooManyRequests("Too many sign-in attempts. Try again in a few minutes.", LOGIN_WINDOW, corsHeaders());
+  }
   const row = await env.RULES_DB.prepare(
     `SELECT id, email, display_name, country_code, plan, created_at, password_hash, password_salt, email_verified
      FROM account_users WHERE email = ? COLLATE NOCASE`
   ).bind(email).first<AccountWithCredentials>();
-  if (!row || !row.password_hash || !password || !constantTimeEqual(await hashPassword(password, row.password_salt), row.password_hash)) {
+  // Always hash, even when the account is missing, so response time does not reveal which emails exist.
+  const passwordCorrect = await passwordMatches(password, row);
+  if (!row || !passwordCorrect) {
+    await recordAttempt(env.RULES_DB, attempts.map((rule) => rule.key), LOGIN_WINDOW);
     return json({ error: "Email or password is incorrect." }, 401);
   }
   if (row.email_verified !== 1) return json({ error: "Confirm your email before signing in.", code: "email_not_verified" }, 403);
@@ -103,6 +124,9 @@ async function resendVerification(request: Request, env: Env): Promise<Response>
   const payload = await readJson(request);
   if (!payload || typeof payload.email !== "string" || !isValidEmail(payload.email.trim())) return json({ error: "Enter a valid email address." }, 400);
   const email = payload.email.trim().toLowerCase();
+  if (!await allowAttempt(env.RULES_DB, { key: await rateKey("resend-ip", clientAddress(request)), limit: 10 }, HOUR)) {
+    return tooManyRequests("Too many requests from this network. Try again later.", HOUR, corsHeaders());
+  }
   const row = await env.RULES_DB.prepare("SELECT id, email, email_verified FROM account_users WHERE email = ? COLLATE NOCASE")
     .bind(email).first<{ id: string; email: string; email_verified: number }>();
   if (row && row.email_verified !== 1 && !await issueVerificationEmail(request, env, row.id, row.email)) {
@@ -195,6 +219,25 @@ async function logout(request: Request, env: Env): Promise<Response> {
   return json({ ok: true });
 }
 
+async function logoutEverywhere(request: Request, env: Env): Promise<Response> {
+  const auth = await authenticate(request, env);
+  if (!auth) return json({ error: "Authentication required." }, 401);
+  await env.RULES_DB.prepare("DELETE FROM account_sessions WHERE user_id = ?").bind(auth.account.id).run();
+  return json({ ok: true });
+}
+
+async function updatePassword(request: Request, env: Env): Promise<Response> {
+  const auth = await authenticate(request, env);
+  if (!auth) return json({ error: "Authentication required." }, 401);
+  const payload = await readJson(request);
+  if (!payload) return json({ error: "Send a JSON object." }, 400);
+  const result = await changePassword(request, env, auth.account, auth.sessionToken, payload.current_password, payload.new_password);
+  if (result.ok) return json({ changed: true });
+  return result.status === 429
+    ? tooManyRequests(result.error, 15 * MINUTE, corsHeaders())
+    : json({ error: result.error, code: result.code }, result.status);
+}
+
 async function me(request: Request, env: Env): Promise<Response> {
   const auth = await authenticate(request, env);
   if (!auth) return json({ error: "Authentication required." }, 401);
@@ -237,6 +280,9 @@ async function submitFeedback(request: Request, env: Env): Promise<Response> {
   if (category !== "general" && category !== "bug" && category !== "idea") return json({ error: "Category must be general, bug, or idea." }, 400);
   if (message.length < 3 || message.length > 4000) return json({ error: "Feedback must be between 3 and 4000 characters." }, 400);
   if (rating !== null && (!Number.isInteger(rating) || Number(rating) < 1 || Number(rating) > 5)) return json({ error: "Rating must be an integer from 1 to 5." }, 400);
+  if (!await allowAttempt(env.RULES_DB, { key: await rateKey("feedback-user", auth.account.id), limit: 10 }, HOUR)) {
+    return tooManyRequests("You have sent a lot of feedback. Please try again later.", HOUR, corsHeaders());
+  }
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   await env.RULES_DB.prepare("INSERT INTO account_feedback (id, user_id, category, message, rating, created_at) VALUES (?, ?, ?, ?, ?, ?)")
@@ -406,41 +452,6 @@ function clientPlatform(request: Request): "web" | "ios" | "android" {
   return platform === "ios" || platform === "android" ? platform : "web";
 }
 
-async function hashPassword(password: string, saltHex: string): Promise<string> {
-  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const derived = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: hexToBytes(saltHex), iterations: PASSWORD_ITERATIONS },
-    material,
-    256,
-  );
-  return bytesToHex(new Uint8Array(derived));
-}
-
-async function sha256(value: string): Promise<string> {
-  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
-}
-
-function randomHex(byteLength: number): string {
-  const bytes = new Uint8Array(byteLength);
-  crypto.getRandomValues(bytes);
-  return bytesToHex(bytes);
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function hexToBytes(value: string): Uint8Array {
-  return new Uint8Array(value.match(/.{2}/g)?.map((byte) => parseInt(byte, 16)) || []);
-}
-
-function constantTimeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index++) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  return difference === 0;
-}
-
 function isValidEmail(email: string): boolean {
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -514,9 +525,11 @@ export default {
     try {
     const pathname = new URL(request.url).pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
-    if (pathname === "/__health") return json({ ok: true });
+    if (pathname === "/__health") return json({ ok: true, version: packageInfo.version });
     const privacyResponse = await handlePrivacyRoute(request, env);
     if (privacyResponse) return privacyResponse;
+    const passwordResponse = await handlePasswordRoute(request, env);
+    if (passwordResponse) return passwordResponse;
     if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/")) {
       return await handleSocialAuth(request, env, { authenticate, createSessionResponse });
     }
@@ -531,6 +544,8 @@ export default {
     if (pathname === "/v1/auth/verify-email" && request.method === "GET") return await verificationPage(request);
     if (pathname === "/v1/auth/verify-email" && request.method === "POST") return await verifyEmail(request, env);
     if (pathname === "/v1/auth/logout" && request.method === "POST") return await logout(request, env);
+    if (pathname === "/v1/auth/logout-all" && request.method === "POST") return await logoutEverywhere(request, env);
+    if (pathname === "/v1/me/password" && request.method === "POST") return await updatePassword(request, env);
     if (pathname === "/v1/me" && ["GET", "PATCH", "DELETE"].includes(request.method)) return await me(request, env);
     if (pathname === "/v1/me/permissions" && request.method === "GET") return await permissions(request, env);
     if (pathname === "/v1/feedback" && request.method === "POST") return await submitFeedback(request, env);
@@ -834,8 +849,13 @@ function findFishRules(tablesJson: string, commonName: string): FishRuleMatch[] 
   return [...found.values()].slice(0, 8);
 }
 
+function ingestTokenValid(request: Request, env: Env): boolean {
+  const supplied = request.headers.get("x-rules-ingest-token") || "";
+  return Boolean(env.RULES_INGEST_TOKEN && supplied && constantTimeEqual(supplied, env.RULES_INGEST_TOKEN));
+}
+
 async function getMpiSource(request: Request, env: Env): Promise<Response> {
-  if (!env.RULES_INGEST_TOKEN || request.headers.get("x-rules-ingest-token") !== env.RULES_INGEST_TOKEN) {
+  if (!ingestTokenValid(request, env)) {
     return json({ error: "Unauthorized." }, 401);
   }
   let payload: { area_id?: unknown };
@@ -898,7 +918,7 @@ async function getCrawlStatus(env: Env): Promise<Response> {
 }
 
 async function importRules(request: Request, env: Env): Promise<Response> {
-  if (!env.RULES_INGEST_TOKEN || request.headers.get("x-rules-ingest-token") !== env.RULES_INGEST_TOKEN) {
+  if (!ingestTokenValid(request, env)) {
     return json({ error: "Unauthorized." }, 401);
   }
   const contentLength = Number(request.headers.get("content-length") || 0);

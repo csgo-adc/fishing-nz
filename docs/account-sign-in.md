@@ -1,6 +1,6 @@
 # Google and Apple sign-in setup
 
-The Android and iPhone apps share the Fishdays - NZ account API. Password registration accepts **8–128 characters** and requires two matching password entries in both mobile apps. Email/password accounts still require email confirmation. The website is an administrator workspace; users create accounts and sign in through the mobile apps.
+The Android and iPhone apps share the Fishdays - NZ account API. Password registration accepts **8–128 characters** and requires two matching password entries in both mobile apps. Email/password accounts still require email confirmation. People who forget a password can use **Forgot password?** on the sign-in screen, which opens `/forgot-password` on the API; see the [API guide](../server/fishial-proxy/README.md). The website is an administrator workspace; users create accounts and sign in through the mobile apps.
 
 
 Google and Apple use the system browser and a server authorization-code flow. New provider accounts can sign in immediately after the API verifies their identity and verified email. Apple’s Hide My Email addresses are supported. Existing users should sign in with their current method, open **Account → Sign-in options**, and connect a provider. Matching email addresses alone never merge accounts.

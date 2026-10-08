@@ -1,1 +1,0 @@
-"""Fishdays - NZ backend package."""
