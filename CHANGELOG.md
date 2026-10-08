@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.4 — 2026-10-08 (build code 5)
+
+- Worker: add behaviour analytics that work without an account. Apps register a
+  random device id with device details and send allowlisted events through
+  `POST /v1/analytics/batch`; `DELETE /v1/analytics/device` erases a device.
+- Worker: count API calls per day by route for each signed-in account and each
+  device that sends `x-device-id`.
+- Worker: add admin analysis endpoints under `/v1/admin/analytics/` (overview, ranked
+  accounts and devices, and per-account and per-device detail with timelines).
+- Add D1 migration `0010_device_analytics_and_api_usage.sql`. **Apply it with
+  `wrangler d1 migrations apply RULES_DB --remote` before deploying the Worker.**
+- Delete analytics after 90 days, and when an account is deleted. Update the
+  privacy policy. Move shared HTTP helpers into `http.ts`.
+- The apps do not send these events yet; Android and iOS instrumentation follow.
+
 ## 1.0.3 — 2026-10-08 (build code 4)
 
 - Record the Git workflow in `AGENTS.md`: commit directly to `main` and leave
