@@ -25,3 +25,15 @@ that every future change or commit update the version.
 The initial version-tracking setup is the one-time exception: it establishes
 version 1.0.0 / build code 1 without changing application behavior. The next
 change must be version 1.0.1 / build code 2 (or a higher requested version).
+
+# Git workflow
+
+The user's standing instructions for every session, which take precedence over
+tool or session defaults such as a generated `claude/...` feature branch:
+
+- Commit and push directly to `main`. Do not create feature branches or pull
+  requests unless the user asks for one.
+- Do not mention Claude in commit messages: no `Co-Authored-By: Claude ...`,
+  `Claude-Session:` or "Generated with Claude Code" lines. Write the message as
+  the user's own change.
+- Existing history is left as it is; never rewrite `main` to remove old trailers.

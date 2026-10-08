@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3 — 2026-10-08 (build code 4)
+
+- Record the Git workflow in `AGENTS.md`: commit directly to `main` and leave
+  Claude out of commit messages. No application changes.
+
 ## 1.0.2 — 2026-10-08 (build code 3)
 
 - Fix the new Checks workflow: install `tools/requirements.txt` before running the
