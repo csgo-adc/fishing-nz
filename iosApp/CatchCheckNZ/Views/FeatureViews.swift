@@ -1014,6 +1014,7 @@ struct RulesView: View {
             request.timeoutInterval = 15
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("CatchCheckNZ-iOS/1.0", forHTTPHeaderField: "User-Agent")
+            if let deviceID = AnalyticsPreferences.deviceID() { request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id") }
             let (data, response) = try await URLSession.shared.data(for: request)
             guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
             let envelope = try JSONDecoder().decode(SavedRulesEnvelope.self, from: data)

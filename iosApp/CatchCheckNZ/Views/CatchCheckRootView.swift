@@ -186,6 +186,8 @@ private struct AppearanceView: View {
 }
 
 private struct TermsPrivacyView: View {
+    @State private var analyticsOn = AnalyticsPreferences.isEnabled
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -202,6 +204,14 @@ private struct TermsPrivacyView: View {
                     Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
                     Text("If you choose a fish photo, it is sent through the Fishdays - NZ service to an image analysis provider for identification.")
                     Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
+                    Toggle(isOn: $analyticsOn) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Optional usage analytics").fontWeight(.semibold)
+                            Text("Share which screens you use and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Off by default. Turning this off erases what we stored for this identifier and resets it.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    .onChange(of: analyticsOn) { _, enabled in AnalyticsPreferences.setEnabled(enabled) }
                 }
             }.padding(20)
         }
@@ -602,6 +612,7 @@ private struct FishIdentifierView: View {
 struct AccountView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var createAccount = false
     @State private var email = ""
     @State private var password = ""
@@ -766,7 +777,11 @@ struct AccountView: View {
                             .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
                             .disabled(!canSubmit)
                             if !createAccount, let forgotPasswordURL {
-                                Link("Forgot password?", destination: forgotPasswordURL).font(.subheadline.weight(.semibold))
+                                Button("Forgot password?") {
+                                    Analytics.track("password_reset_opened")
+                                    openURL(forgotPasswordURL)
+                                }
+                                .font(.subheadline.weight(.semibold))
                             }
                             if !vm.verificationPending && vm.accountError != nil {
                                 Button("Resend confirmation email") { vm.resendVerification(email: email) }

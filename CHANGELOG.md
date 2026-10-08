@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.7 — 2026-10-08 (build code 8)
+
+- iOS: add the same optional behaviour tracking as Android, behind a new **Optional usage
+  analytics** switch in More → Settings → Terms & privacy (off by default), with the same
+  allowlisted events, random install id, device details and API-usage header. Turning it
+  off discards queued events and asks the server to erase the device's data.
+- iOS: stop sending the phone's coordinates with fish photos. The service never used
+  them, and the privacy policy says they are not sent.
+- iOS: the Forgot password button records an analytics event; the app version and build
+  number now come from the project settings that `tools/version.py` updates
+  (`Info.plist` previously fixed them at 0.1 and 1).
+
 ## 1.0.6 — 2026-10-08 (build code 7)
 
 - Android: add behaviour tracking behind the existing optional analytics switch, which

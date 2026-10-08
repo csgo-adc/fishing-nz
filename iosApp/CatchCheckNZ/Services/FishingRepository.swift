@@ -128,6 +128,8 @@ struct FishingRepository {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let platform { request.setValue(platform, forHTTPHeaderField: "X-Client-Platform") }
+        // Lets the service count this device's API use; present only while optional analytics is on.
+        if let deviceID = AnalyticsPreferences.deviceID() { request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         request.timeoutInterval = 15
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -228,9 +230,8 @@ struct FishingRepository {
         request.httpMethod = "POST"; request.httpBody = imageData
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("\(point.latitude),\(point.longitude)", forHTTPHeaderField: "X-Location-Lat-Lon")
-        request.setValue(hasDeviceLocation ? "device" : "fallback", forHTTPHeaderField: "X-Location-Source")
         request.setValue("ios", forHTTPHeaderField: "X-Client-Platform")
+        if let deviceID = AnalyticsPreferences.deviceID() { request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id") }
         if let selectedRulesAreaID { request.setValue(selectedRulesAreaID, forHTTPHeaderField: "X-Fishing-Rules-Area") }
         if let token = KeychainSession.load() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.timeoutInterval = 30
@@ -250,6 +251,7 @@ struct FishingRepository {
         guard let url = components.url else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let deviceID = AnalyticsPreferences.deviceID() { request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id") }
         request.timeoutInterval = 15
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else {
@@ -329,3 +331,238 @@ private extension DateFormatter {
     }
 }
 private struct WeatherResponse: Decodable { let current: Current; struct Current: Decodable { let temperature2m: Double; let windSpeed10m: Double; let precipitation: Double; enum CodingKeys: String, CodingKey { case temperature2m = "temperature_2m", windSpeed10m = "wind_speed_10m", precipitation } } }
+
+// MARK: - Optional analytics
+//
+// Everything below does nothing unless the person turns on "Optional usage analytics" in Terms & privacy. It works
+// whether or not they are signed in. Events are queued and sent in batches; a signed-in session links them to the
+// account. Only the event names and properties the service allows are kept (server/fishial-proxy/src/analytics.ts).
+// Never pass coordinates, email addresses, photos or typed text.
+
+/// A value an analytics event may carry. Only simple values exist, so free text and coordinates have no slot.
+enum AnalyticsValue: Sendable, Equatable {
+    case text(String)
+    case number(Double)
+    case flag(Bool)
+}
+
+struct AnalyticsEvent: Sendable {
+    let name: String
+    let props: [String: AnalyticsValue]
+    let at: Date
+}
+
+/// The random per-install id plus coarse device details. Nothing here identifies a person or a hardware unit.
+struct AnalyticsDevice: Sendable {
+    let id: String
+    let platform: String
+    let osVersion: String
+    let deviceModel: String
+    let appVersion: String
+    let locale: String
+    let timeZone: String
+}
+
+enum AnalyticsPayload {
+    static let maxEventsPerUpload = 50
+
+    /// Body for POST /v1/analytics/batch. Each event carries how long ago it happened, not the phone's clock time.
+    static func build(device: AnalyticsDevice, events: [AnalyticsEvent], now: Date) -> [String: Any] {
+        let eventList: [[String: Any]] = events.map { event in
+            var props: [String: Any] = [:]
+            for (key, value) in event.props {
+                switch value {
+                case .text(let text): props[key] = text
+                case .number(let number): props[key] = number
+                case .flag(let flag): props[key] = flag
+                }
+            }
+            return ["name": event.name, "offset_ms": max(0, Int(now.timeIntervalSince(event.at) * 1000)), "props": props]
+        }
+        let deviceInfo: [String: Any] = [
+            "id": device.id, "platform": device.platform, "os_version": device.osVersion, "device_model": device.deviceModel,
+            "app_version": device.appVersion, "locale": device.locale, "time_zone": device.timeZone,
+        ]
+        return ["device": deviceInfo, "events": eventList]
+    }
+
+    static func confidenceLevel(percent: Int) -> String {
+        percent >= 80 ? "high" : (percent >= 50 ? "medium" : "low")
+    }
+}
+
+enum AnalyticsPreferences {
+    private static let enabledKey = "analytics_enabled"
+    private static let deviceIDKey = "analytics_device_id"
+    private static let queue = DispatchQueue(label: "nz.fishingnz.analytics.preferences")
+
+    static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+
+    /// The random id that tells our analytics one install from another. It is made when analytics is first used, is never
+    /// an advertising or hardware id, and is returned only while analytics is on.
+    static func deviceID() -> String? {
+        queue.sync {
+            guard isEnabled else { return nil }
+            if let existing = UserDefaults.standard.string(forKey: deviceIDKey) { return existing }
+            let created = UUID().uuidString.lowercased()
+            UserDefaults.standard.set(created, forKey: deviceIDKey)
+            return created
+        }
+    }
+
+    /// Turning analytics off forgets the id, discards anything queued, and asks the service to erase what it stored.
+    static func setEnabled(_ enabled: Bool) {
+        let forgotten: String? = queue.sync {
+            let old = enabled ? nil : UserDefaults.standard.string(forKey: deviceIDKey)
+            UserDefaults.standard.set(enabled, forKey: enabledKey)
+            if !enabled { UserDefaults.standard.removeObject(forKey: deviceIDKey) }
+            return old
+        }
+        if !enabled { Analytics.erase(deviceID: forgotten) }
+    }
+}
+
+enum Analytics {
+    /// Queue an event. Does nothing unless the person turned optional analytics on.
+    static func track(_ name: String, _ props: [String: AnalyticsValue] = [:]) {
+        guard AnalyticsPreferences.isEnabled else { return }
+        let event = AnalyticsEvent(name: name, props: props, at: Date())
+        Task { await AnalyticsEngine.shared.add(event) }
+    }
+
+    /// Send what is queued now, for example when the app goes to the background.
+    static func flush() {
+        Task { await AnalyticsEngine.shared.flush() }
+    }
+
+    /// Drop anything queued and, if an id had been made, ask the service to erase everything stored for it.
+    static func erase(deviceID: String?) {
+        Task {
+            await AnalyticsEngine.shared.discard()
+            if let deviceID { await AnalyticsUploader.erase(deviceID: deviceID) }
+        }
+    }
+
+    /// A short, non-identifying reason for a failed request.
+    static func errorCode(_ error: Error) -> String {
+        if let api = error as? AccountAPIError { return api.code ?? "http_\(api.status)" }
+        if error is FishIdentificationError { return "rejected" }
+        return "network"
+    }
+
+    static func deviceInfo() -> AnalyticsDevice? {
+        guard let id = AnalyticsPreferences.deviceID() else { return nil }
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        var system = utsname()
+        uname(&system)
+        let model = withUnsafeBytes(of: &system.machine) { raw in
+            String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
+        }
+        return AnalyticsDevice(
+            id: id, platform: "ios", osVersion: "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)", deviceModel: model,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+            locale: Locale.current.identifier.replacingOccurrences(of: "_", with: "-"), timeZone: TimeZone.current.identifier)
+    }
+}
+
+actor AnalyticsEngine {
+    static let shared = AnalyticsEngine()
+
+    private let capacity = 200
+    private var buffer: [AnalyticsEvent] = []
+    private var scheduled: Task<Void, Never>?
+    private var lastUpload = Date.distantPast
+    private var uploading = false
+
+    func add(_ event: AnalyticsEvent) {
+        guard AnalyticsPreferences.isEnabled else { return }
+        buffer.append(event)
+        if buffer.count > capacity { buffer.removeFirst(buffer.count - capacity) }
+        schedule()
+    }
+
+    func flush() async {
+        guard AnalyticsPreferences.isEnabled else {
+            // Events queued under an earlier consent must never be sent after it was withdrawn.
+            buffer.removeAll()
+            return
+        }
+        await upload()
+    }
+
+    func discard() {
+        buffer.removeAll()
+        scheduled?.cancel()
+        scheduled = nil
+    }
+
+    private func schedule() {
+        guard scheduled == nil else { return }
+        // The first upload goes quickly so a new install shows up; later ones wait a minute after the previous upload.
+        let wait = min(60, max(2, lastUpload.addingTimeInterval(60).timeIntervalSinceNow))
+        scheduled = Task {
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self.upload()
+        }
+    }
+
+    private func upload() async {
+        scheduled = nil
+        guard !uploading else { return }
+        uploading = true
+        defer { uploading = false }
+        while AnalyticsPreferences.isEnabled, !buffer.isEmpty {
+            guard let device = Analytics.deviceInfo() else { break }
+            let batch = Array(buffer.prefix(AnalyticsPayload.maxEventsPerUpload))
+            buffer.removeFirst(batch.count)
+            do {
+                try await AnalyticsUploader.send(device: device, events: batch)
+                lastUpload = Date()
+            } catch let error as AccountAPIError where error.status != 429 && error.status < 500 {
+                // A rejected upload would be rejected again, so these events are dropped.
+                break
+            } catch {
+                buffer.insert(contentsOf: batch, at: 0)
+                if buffer.count > capacity { buffer.removeFirst(buffer.count - capacity) }
+                break
+            }
+        }
+        if !AnalyticsPreferences.isEnabled { buffer.removeAll() }
+    }
+}
+
+enum AnalyticsUploader {
+    private static var baseURL: String {
+        ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    static func send(device: AnalyticsDevice, events: [AnalyticsEvent]) async throws {
+        guard let url = URL(string: baseURL + "/v1/analytics/batch") else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("ios", forHTTPHeaderField: "X-Client-Platform")
+        request.setValue(device.id, forHTTPHeaderField: "X-Device-Id")
+        if let token = KeychainSession.load() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try JSONSerialization.data(withJSONObject: AnalyticsPayload.build(device: device, events: events, now: Date()))
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 500
+        guard 200...299 ~= status else {
+            let payload = try? JSONDecoder().decode(AccountErrorResponse.self, from: data)
+            throw AccountAPIError(message: payload?.error ?? "Analytics upload failed.", status: status, code: payload?.code)
+        }
+    }
+
+    static func erase(deviceID: String) async {
+        guard let url = URL(string: baseURL + "/v1/analytics/device") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id")
+        request.timeoutInterval = 15
+        _ = try? await URLSession.shared.data(for: request)
+    }
+}
