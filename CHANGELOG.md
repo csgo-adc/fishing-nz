@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.10 — 2026-10-08 (build code 11)
+
+- Android: our own anonymous usage statistics are now **on by default after a one-time notice**
+  ("Keep sharing" / "Turn off"). Nothing is collected before the notice is answered, and a
+  person who had turned analytics off stays off. Google Analytics (Firebase) is now a
+  separate switch that stays off unless turned on. Settings → Terms & privacy has both switches.
+- Android: add **Change password** (or **Add a password** for Google/Apple accounts) and
+  **Sign out of all devices** to the Account screen.
+- Update the Play Data safety notes: usage statistics and the install id are collected by
+  default. **Re-answer the Data safety form in Play Console before releasing this build.**
+
 ## 1.0.9 — 2026-10-08 (build code 10)
 
 - API: account objects (`/v1/me`, sign-in, social sign-in and the admin user list) now include

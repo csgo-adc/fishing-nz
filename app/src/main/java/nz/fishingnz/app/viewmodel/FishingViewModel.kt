@@ -587,6 +587,32 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             .onSuccess { _state.value = _state.value.copy(account = it, accountBusy = false, accountNotice = "Profile saved.") }
             .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not save profile.") } }
     }
+    fun changePassword(currentPassword: String, newPassword: String) {
+        _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
+        viewModelScope.launch { runCatching { repository.changePassword(currentPassword, newPassword) }
+            .onSuccess {
+                Analytics.track("password_changed")
+                _state.value = _state.value.copy(accountBusy = false, accountNotice = "Password changed. Your other devices were signed out.")
+            }
+            .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not change your password.") } }
+    }
+    fun signOutEverywhere() {
+        val version = ++accountVersion
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                repository.signOutEverywhere()
+                Analytics.track("signed_out_everywhere")
+                if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
+                    hasStoredSession = false, verificationPending = false, accountNotice = "You’re signed out of every device.")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    accountError = error.message ?: "Could not sign out of every device. Please try again.")
+            }
+        }
+    }
     fun deleteAccount() {
         if (_state.value.accountBusy) return
         val version = ++accountVersion

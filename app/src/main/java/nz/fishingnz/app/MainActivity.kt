@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         AccountSessionStore.initialize(applicationContext)
         SearchPreferencesStore.initialize(applicationContext)
         PrivacyPreferences.initialize(applicationContext)
-        if (PrivacyPreferences.analyticsEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
+        if (PrivacyPreferences.firebaseEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
         Analytics.track("app_open")
         fishingViewModel.completeSocialSignIn(intent.data)
         setContent { CatchCheckApp(fishingViewModel) }

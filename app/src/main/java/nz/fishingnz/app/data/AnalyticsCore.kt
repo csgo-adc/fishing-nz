@@ -64,3 +64,22 @@ object AnalyticsPayload {
 
     fun confidenceLevel(percent: Int): String = if (percent >= 80) "high" else if (percent >= 50) "medium" else "low"
 }
+
+/** Whether our own usage statistics may be collected, and whether the person still has to be told about them. */
+data class AnalyticsConsentState(val needsNotice: Boolean, val enabled: Boolean)
+
+/**
+ * Our own anonymous usage statistics are on by default, but only after the one-time notice has been answered.
+ * Nothing is collected before that, and an earlier "off" always stays off.
+ */
+object AnalyticsConsent {
+    /**
+     * One-time upgrade from the old single analytics switch. A choice already stored for the new setting wins; otherwise an
+     * explicit earlier choice on the old switch carries over (on or off); otherwise the person has not decided yet.
+     */
+    fun migratedChoice(usageStats: Boolean?, oldSwitch: Boolean?): Boolean? = usageStats ?: oldSwitch
+
+    /** [choice] is null until the person has answered the notice or used the switch. */
+    fun resolve(choice: Boolean?): AnalyticsConsentState =
+        if (choice == null) AnalyticsConsentState(needsNotice = true, enabled = false) else AnalyticsConsentState(needsNotice = false, enabled = choice)
+}

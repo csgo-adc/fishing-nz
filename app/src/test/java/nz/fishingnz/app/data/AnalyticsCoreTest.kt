@@ -93,4 +93,35 @@ class AnalyticsCoreTest {
         assertEquals("medium", AnalyticsPayload.confidenceLevel(50))
         assertEquals("low", AnalyticsPayload.confidenceLevel(49))
     }
+
+    @Test
+    fun beforeTheNoticeIsAnsweredNothingIsCollectedAndTheNoticeIsDue() {
+        val state = AnalyticsConsent.resolve(null)
+        assertTrue(state.needsNotice)
+        assertEquals(false, state.enabled)
+    }
+
+    @Test
+    fun keepSharingEnablesAndTurnOffDisablesWithoutAskingAgain() {
+        assertEquals(AnalyticsConsentState(needsNotice = false, enabled = true), AnalyticsConsent.resolve(true))
+        assertEquals(AnalyticsConsentState(needsNotice = false, enabled = false), AnalyticsConsent.resolve(false))
+    }
+
+    @Test
+    fun anExplicitEarlierChoiceOnTheOldSwitchCarriesOver() {
+        assertEquals(true, AnalyticsConsent.migratedChoice(usageStats = null, oldSwitch = true))
+        assertEquals(false, AnalyticsConsent.migratedChoice(usageStats = null, oldSwitch = false))
+    }
+
+    @Test
+    fun aPersonWhoNeverChoseStaysUndecidedAfterTheUpgrade() {
+        assertEquals(null, AnalyticsConsent.migratedChoice(usageStats = null, oldSwitch = null))
+        assertTrue(AnalyticsConsent.resolve(AnalyticsConsent.migratedChoice(null, null)).needsNotice)
+    }
+
+    @Test
+    fun aChoiceAlreadyStoredForTheNewSettingBeatsTheOldSwitch() {
+        assertEquals(false, AnalyticsConsent.migratedChoice(usageStats = false, oldSwitch = true))
+        assertEquals(true, AnalyticsConsent.migratedChoice(usageStats = true, oldSwitch = false))
+    }
 }

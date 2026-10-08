@@ -252,6 +252,20 @@ class FishingRepository {
         AccountSessionStore.clear()
     }
 
+    /** The service keeps this session signed in and ends the account's others. Errors carry a message fit to show. */
+    suspend fun changePassword(currentPassword: String, newPassword: String) = withContext(Dispatchers.IO) {
+        val token = AccountSessionStore.token() ?: error("Sign in again to change your password.")
+        accountRequest("/v1/me/password", "POST", JSONObject().put("current_password", currentPassword).put("new_password", newPassword), token, "android")
+        Unit
+    }
+
+    /** Ends every session for the account, including this one, so the saved session is cleared afterwards. */
+    suspend fun signOutEverywhere() = withContext(Dispatchers.IO) {
+        AccountSessionStore.token()?.let { token -> accountRequest("/v1/auth/logout-all", "POST", JSONObject(), token, "android") }
+        AccountSessionStore.clearOAuthSecret()
+        AccountSessionStore.clear()
+    }
+
     suspend fun deleteAccount() = withContext(Dispatchers.IO) {
         val token = AccountSessionStore.token() ?: error("Sign in again to delete your account.")
         val response = accountRequest("/v1/me", "DELETE", JSONObject().put("confirm", true), token)
@@ -259,6 +273,7 @@ class FishingRepository {
         AccountSessionStore.clearOAuthSecret()
         AccountSessionStore.clear()
         PrivacyPreferences.setAnalyticsEnabled(false)
+        PrivacyPreferences.setFirebaseEnabled(false)
         PrivacyPreferences.clearFishPhotos()
     }
 
@@ -281,7 +296,7 @@ class FishingRepository {
 
     private fun parseAccountSnapshot(profile: JSONObject, permissions: JSONObject): AccountSnapshot {
         return AccountSnapshot(
-            AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free")),
+            AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free"), profile.optBoolean("has_password", true)),
             permissions.optJSONObject("features")?.optBoolean("fish_identity") == true,
             parseFishIdentityQuota(permissions.optJSONObject("fish_identity_quota")),
         )
