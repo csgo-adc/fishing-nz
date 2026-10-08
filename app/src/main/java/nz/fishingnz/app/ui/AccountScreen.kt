@@ -141,6 +141,7 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                     if (s.accountBusy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary); Spacer(Modifier.width(10.dp)) }
                     Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in")
                 }
+                if (!createAccount) TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.forgotPassword) }) { Text("Forgot password?") }
                 if (!createAccount && !s.verificationPending) TextButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email.trim()) }) { Text("Resend confirmation email") }
             }
         } else {

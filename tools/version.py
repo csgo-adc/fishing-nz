@@ -34,16 +34,18 @@ def replace(text, pattern, value, expected):
 def metadata(name, code):
     """Prepare every edit before writing, and reject unexpected file layouts."""
     updates = {VERSION_FILE: f"versionName={name}\nversionCode={code}\n"}
-    for relative in ("web/package.json", "web/package-lock.json"):
+    for relative in (
+        "web/package.json",
+        "web/package-lock.json",
+        "server/fishial-proxy/package.json",
+        "server/fishial-proxy/package-lock.json",
+    ):
         path = ROOT / relative
         data = json.loads(path.read_text())
         data["version"] = name
         if relative.endswith("package-lock.json"):
             data["packages"][""]["version"] = name
         updates[path] = json.dumps(data, indent=2) + "\n"
-
-    path = ROOT / "backend/pyproject.toml"
-    updates[path] = replace(path.read_text(), r'(?m)^(version = ")[^"]+("$)', name, 1)
 
     path = ROOT / "iosApp/CatchCheckNZ.xcodeproj/project.pbxproj"
     text = replace(path.read_text(), r"(CURRENT_PROJECT_VERSION = )[^;]+(;)", str(code), 2)

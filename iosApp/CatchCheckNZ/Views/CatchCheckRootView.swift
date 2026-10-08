@@ -610,6 +610,10 @@ struct AccountView: View {
     @State private var countryCode = "NZ"
 
     private var passwordsMatch: Bool { !confirmPassword.isEmpty && password == confirmPassword }
+    private var forgotPasswordURL: URL? {
+        let base = (Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space"
+        return URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/forgot-password")
+    }
     private var isEmailValid: Bool {
         email.trimmingCharacters(in: .whitespacesAndNewlines)
             .range(of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#, options: .regularExpression) != nil
@@ -761,6 +765,9 @@ struct AccountView: View {
                             }
                             .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
                             .disabled(!canSubmit)
+                            if !createAccount, let forgotPasswordURL {
+                                Link("Forgot password?", destination: forgotPasswordURL).font(.subheadline.weight(.semibold))
+                            }
                             if !vm.verificationPending && vm.accountError != nil {
                                 Button("Resend confirmation email") { vm.resendVerification(email: email) }
                                     .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy || !isEmailValid)
