@@ -28,6 +28,7 @@ class RulesRepository {
             readTimeout = 15_000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "CatchCheckNZ-Android/1.0")
+            PrivacyPreferences.analyticsDeviceId()?.let { setRequestProperty("X-Device-Id", it) }
         }
         try {
             if (connection.responseCode !in 200..299) error("Saved rules are unavailable right now. Try again shortly.")

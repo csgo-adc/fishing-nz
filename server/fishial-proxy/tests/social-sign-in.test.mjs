@@ -113,6 +113,7 @@ test("Google and Apple sign-in with signed provider tokens and real D1", { timeo
       googleSession = await finish(flow);
       assert.equal(googleSession.user.email_verified, true);
       assert.equal(googleSession.user.plan, "free");
+      assert.equal(googleSession.user.has_password, false, "a social account has no password until it adds one");
       assert.equal(googleSession.permissions.features.fish_identity, true);
       assert.equal((await call("/v1/auth/oauth/exchange", { code: googleSession.code, exchange_secret: flow.secret })).response.status, 401);
       assert.equal((await call("/v1/auth/login", { email: googleSession.user.email, password: "whatever" })).response.status, 401);

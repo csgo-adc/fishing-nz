@@ -6,6 +6,8 @@ data class AccountProfile(
     val displayName: String,
     val countryCode: String,
     val plan: String,
+    // False for a Google or Apple account that never set a password. Treated as true when the service does not say.
+    val hasPassword: Boolean = true,
 )
 
 data class FishIdentityQuota(val limit: Int, val used: Int, val remaining: Int, val day: String) {

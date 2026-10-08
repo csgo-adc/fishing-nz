@@ -31,6 +31,8 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showChangePassword by remember { mutableStateOf(false) }
+    var showSignOutEverywhere by remember { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -141,7 +143,10 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                     if (s.accountBusy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary); Spacer(Modifier.width(10.dp)) }
                     Text(if (s.accountBusy) "Please wait…" else if (createAccount) "Create account" else "Sign in")
                 }
-                if (!createAccount) TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.forgotPassword) }) { Text("Forgot password?") }
+                if (!createAccount) TextButton(onClick = {
+                    nz.fishingnz.app.data.Analytics.track("password_reset_opened")
+                    uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.forgotPassword)
+                }) { Text("Forgot password?") }
                 if (!createAccount && !s.verificationPending) TextButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email.trim()) }) { Text("Resend confirmation email") }
             }
         } else {
@@ -155,6 +160,18 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 AccountSectionHeading("Sign-in options", "Choose how you get back on board.", Icons.Default.Lock)
                 socialButtons()
             }
+            AccountPanel {
+                AccountSectionHeading("Password", if (s.account.user.hasPassword) "Keep your account safe." else "Add one to also sign in with your email.", Icons.Default.Lock)
+                if (s.account.user.hasPassword) {
+                    OutlinedButton(enabled = !s.accountBusy, onClick = { showChangePassword = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text("Change password") }
+                } else {
+                    OutlinedButton(enabled = !s.accountBusy, onClick = {
+                        nz.fishingnz.app.data.Analytics.track("password_reset_opened")
+                        uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.forgotPassword)
+                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text("Add a password") }
+                }
+                TextButton(enabled = !s.accountBusy, onClick = { showSignOutEverywhere = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Sign out of all devices") }
+            }
             OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
                 Icon(Icons.Default.Logout, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Sign out")
             }
@@ -164,6 +181,42 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
             TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
         }
     }
+    if (showChangePassword) {
+        var current by remember { mutableStateOf("") }
+        var next by remember { mutableStateOf("") }
+        var again by remember { mutableStateOf("") }
+        var visible by remember { mutableStateOf(false) }
+        val problem = when {
+            next.isNotEmpty() && (next.length < 8 || next.length > 128) -> "Use 8 to 128 characters for the new password."
+            next.isNotEmpty() && next == current -> "Choose a password you are not already using."
+            again.isNotEmpty() && again != next -> "The new passwords don’t match."
+            else -> null
+        }
+        val valid = current.isNotEmpty() && next.length in 8..128 && next != current && again == next
+        val masking = if (visible) VisualTransformation.None else PasswordVisualTransformation()
+        AlertDialog(onDismissRequest = { showChangePassword = false },
+            title = { Text("Change password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("You stay signed in on this phone. Every other device is signed out.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(current, { current = it }, label = { Text("Current password") }, singleLine = true, visualTransformation = masking,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = { IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (visible) "Hide passwords" else "Show passwords") } })
+                    OutlinedTextField(next, { next = it }, label = { Text("New password") }, singleLine = true, visualTransformation = masking,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(again, { again = it }, label = { Text("Repeat new password") }, singleLine = true, visualTransformation = masking,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
+                    problem?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
+            },
+            confirmButton = { TextButton(enabled = valid && !s.accountBusy, onClick = { showChangePassword = false; vm.changePassword(current, next) }) { Text("Change password") } },
+            dismissButton = { TextButton(onClick = { showChangePassword = false }) { Text("Cancel") } })
+    }
+    if (showSignOutEverywhere) AlertDialog(onDismissRequest = { showSignOutEverywhere = false },
+        title = { Text("Sign out of all devices?") },
+        text = { Text("This ends every session for your account, including this phone. You will need to sign in again everywhere.") },
+        confirmButton = { TextButton(enabled = !s.accountBusy, onClick = { showSignOutEverywhere = false; vm.signOutEverywhere() }) { Text("Sign out everywhere") } },
+        dismissButton = { TextButton(onClick = { showSignOutEverywhere = false }) { Text("Cancel") } })
     if (showDeleteConfirmation) AlertDialog(onDismissRequest = { showDeleteConfirmation = false },
         title = { Text("Permanently delete your account?") },
         text = { Text("This removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. It also clears this device’s selected fish photo and trip shortlist and resets optional analytics. It cannot be undone. Recovery copies can remain for up to 30 days. Your Google or Apple account and gallery photos remain available.") },

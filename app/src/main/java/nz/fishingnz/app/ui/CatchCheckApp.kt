@@ -49,6 +49,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import nz.fishingnz.app.model.recommendationKey
 import nz.fishingnz.app.viewmodel.FishingViewModel
+import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.PrivacyLinks
 import nz.fishingnz.app.data.PrivacyPreferences
 
@@ -104,6 +105,13 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
         }
     }
     MaterialTheme(colorScheme = palette) {
+        // Shown once, until answered. Nothing is collected before then.
+        var analyticsNotice by remember { mutableStateOf(PrivacyPreferences.analyticsNoticeNeeded()) }
+        if (analyticsNotice) AnalyticsNoticeDialog(onAnswer = { keep ->
+            PrivacyPreferences.setAnalyticsEnabled(keep)
+            if (keep) Analytics.track("app_open")
+            analyticsNotice = false
+        })
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
         Scaffold(containerColor = palette.background, bottomBar = {
             if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {
@@ -221,6 +229,7 @@ private fun AppearanceScreen(modifier: Modifier, selectedAppearance: Appearance,
 private fun TermsPrivacyScreen(modifier: Modifier) {
     val uriHandler = LocalUriHandler.current
     var analyticsEnabled by remember { mutableStateOf(PrivacyPreferences.analyticsEnabled()) }
+    var firebaseEnabled by remember { mutableStateOf(PrivacyPreferences.firebaseEnabled()) }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Terms & privacy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("A short guide to using Fishdays - NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -242,12 +251,22 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read full privacy policy") }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Optional usage analytics", fontWeight = FontWeight.SemiBold)
-                        Text("Share app interactions, device information, app-instance identifiers and approximate location from your IP address with Firebase, and signed-in feature usage with Fishdays - NZ. Off by default. Turning this off resets the analytics identifier.", style = MaterialTheme.typography.bodySmall)
+                        Text("Anonymous usage statistics", fontWeight = FontWeight.SemiBold)
+                        Text("On by default after a first notice. Shares which screens you use and how searches and fish photos go, with your device model, Android version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Turning this off erases what we stored for this identifier and resets it.", style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = analyticsEnabled, onCheckedChange = {
                         analyticsEnabled = it
                         PrivacyPreferences.setAnalyticsEnabled(it)
+                    })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Google Analytics (Firebase)", fontWeight = FontWeight.SemiBold)
+                        Text("Also share app interactions, device information, app-instance identifiers and approximate location from your IP address with Google. Off unless you turn it on.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = firebaseEnabled, onCheckedChange = {
+                        firebaseEnabled = it
+                        PrivacyPreferences.setFirebaseEnabled(it)
                     })
                 }
                 Text("Fishdays - NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ.")
@@ -276,3 +295,19 @@ val Cream: Color
     @Composable get() = MaterialTheme.colorScheme.background
 val Orange: Color
     @Composable get() = MaterialTheme.colorScheme.tertiary
+
+@Composable
+private fun AnalyticsNoticeDialog(onAnswer: (Boolean) -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    AlertDialog(onDismissRequest = {},
+        title = { Text("Help improve Fishdays - NZ") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("We count which screens are used and how searches and fish photos go, with your device model, Android version, app version, language and a random identifier made on this phone. It works whether or not you are signed in.")
+                Text("It never includes your location, photos, email or anything you type. You can turn it off now, or at any time in More → Settings → Terms & privacy.")
+                TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read the privacy policy") }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onAnswer(true) }) { Text("Keep sharing") } },
+        dismissButton = { TextButton(onClick = { onAnswer(false) }) { Text("Turn off") } })
+}

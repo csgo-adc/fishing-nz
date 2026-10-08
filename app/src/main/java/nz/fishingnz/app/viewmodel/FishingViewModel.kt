@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.FishingRepository
 import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
+import nz.fishingnz.app.data.Analytics
+import nz.fishingnz.app.data.AnalyticsPayload
 import nz.fishingnz.app.data.SignInProviders
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.data.SearchPreferencesStore
@@ -121,6 +123,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         if (value !in 0..11 || old.tab == value) return
         _state.value = old.copy(tab = value)
         val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance", "weather")
+        Analytics.track("screen_view", "screen" to features[value])
         if (old.account != null) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
     }
     fun canGoBack(): Boolean = _state.value.let { it.selectedSpot != null || it.showResults || it.tab != 0 }
@@ -248,6 +251,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             _state.value = old.copy(originName = value, tidePlaceName = value)
     }
     fun chooseFishRulesArea(id: String?) {
+        if (id != null) Analytics.track("rules_area_selected", "area_id" to id)
         fishRulesAreaManuallySelected = id != null
         _state.value = _state.value.copy(fishRulesAreaId = id, fishRulesAreaIsSuggested = false)
         refreshFishRulesForSelection()
@@ -295,6 +299,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         else _state.value = _state.value.copy(recommendationsError = "Device location is unavailable. Go back to Home to choose a city.")
     }
     fun chooseStation(value: TideStation) {
+        Analytics.track("tide_station_selected", "station_id" to value.id)
         _state.value = _state.value.copy(selectedStation = value, tideStationManual = true, tideLocationNotice = null)
         refreshStationTide()
     }
@@ -314,7 +319,10 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun changeTideDate(value: LocalDate) { _state.value = _state.value.copy(tideDate = value); refreshStationTide() }
     fun showResults() { _state.value = _state.value.copy(showResults = true); refreshRecommendations() }
     fun closeResults() { _state.value = _state.value.copy(showResults = false) }
-    fun openSpot(value: Recommendation) { _state.value = _state.value.copy(selectedSpot = value) }
+    fun openSpot(value: Recommendation) {
+        Analytics.track("spot_opened", "spot_id" to recommendationKey(value), "mode" to if (value.boat) "boat" else "land")
+        _state.value = _state.value.copy(selectedSpot = value)
+    }
     fun closeSpot() { _state.value = _state.value.copy(selectedSpot = null) }
     fun startTrip() { _state.value.selectedSpot?.let { _state.value = _state.value.copy(activeTrip = it, selectedSpot = null) } }
     fun endTrip() { _state.value = _state.value.copy(activeTrip = null) }
@@ -346,6 +354,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     query.preferredTime, query.selectedSearchStation.takeIf { query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION },
                     priority = query.preference, land = query.landPreferences)
                 _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false)
+                Analytics.track("search_run", "mode" to if (query.boat) "boat" else "land", "radius_km" to query.radiusKm,
+                    "date_preset" to query.dateLabel, "result_count" to result.items.size)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -372,11 +382,13 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val requestGeneration = ++fishIdentifyGeneration
         if (hasDeviceLocation) updateLocation(point)
         _state.value = _state.value.copy(fishChecking = true, fishError = null)
+        Analytics.track("fish_identify_started")
         val requestedPhoto = _state.value.fishPhoto
         val selectedArea = _state.value.fishRulesAreaId
         viewModelScope.launch {
             runCatching { repository.identifyFish(image, selectedArea) }
                 .onSuccess { result ->
+                    Analytics.track("fish_identify_succeeded", "is_fish" to result.isFish, "confidence_level" to AnalyticsPayload.confidenceLevel(result.confidence))
                     val current = _state.value
                     if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto) {
                         fishRulesJob?.cancel()
@@ -387,6 +399,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     }
                 }
                 .onFailure {
+                    Analytics.track("fish_identify_failed", "error_code" to Analytics.errorCode(it))
                     val current = _state.value
                     if (requestGeneration == fishIdentifyGeneration && current.fishPhoto == requestedPhoto)
                         _state.value = current.copy(fishChecking = false,
@@ -464,10 +477,12 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             try {
                 if (createAccount) {
                     val notice = repository.createAccount(email, password, displayName)
+                    Analytics.track("sign_up_succeeded")
                     if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
                         verificationPending = true, accountNotice = notice)
                 } else {
                     val account = repository.signIn(email, password)
+                    Analytics.track("sign_in_succeeded", "method" to "password")
                     if (version == accountVersion) _state.value = _state.value.copy(account = account,
                         hasStoredSession = true,
                         accountBusy = false, verificationPending = false, accountError = null, accountNotice = "You’re signed in.")
@@ -476,6 +491,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                Analytics.track("sign_in_failed", "method" to if (createAccount) "sign_up" else "password", "error_code" to Analytics.errorCode(error))
                 if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
                     verificationPending = _state.value.verificationPending || (error as? AccountRequestException)?.code in
                         setOf("email_not_verified", "email_delivery_failed"),
@@ -492,6 +508,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
 
     fun startSocialSignIn(provider: String, openBrowser: (String) -> Unit) {
+        Analytics.track("social_sign_in_started", "method" to provider)
         val version = ++accountVersion
         _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
         viewModelScope.launch {
@@ -529,6 +546,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         viewModelScope.launch {
             try {
                 val account = repository.completeSocialSignIn(code, secret)
+                Analytics.track("sign_in_succeeded", "method" to "social")
                 if (version == accountVersion) _state.value = _state.value.copy(account = account, hasStoredSession = true,
                     accountBusy = false, verificationPending = false, accountNotice = "You’re signed in.")
                 refreshSignInProviders()
@@ -550,6 +568,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
         viewModelScope.launch {
             try {
+                Analytics.track("sign_out")
                 repository.signOut()
                 if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
                     hasStoredSession = false,
@@ -567,6 +586,32 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         viewModelScope.launch { runCatching { repository.saveProfile(displayName, countryCode) }
             .onSuccess { _state.value = _state.value.copy(account = it, accountBusy = false, accountNotice = "Profile saved.") }
             .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not save profile.") } }
+    }
+    fun changePassword(currentPassword: String, newPassword: String) {
+        _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
+        viewModelScope.launch { runCatching { repository.changePassword(currentPassword, newPassword) }
+            .onSuccess {
+                Analytics.track("password_changed")
+                _state.value = _state.value.copy(accountBusy = false, accountNotice = "Password changed. Your other devices were signed out.")
+            }
+            .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not change your password.") } }
+    }
+    fun signOutEverywhere() {
+        val version = ++accountVersion
+        _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        viewModelScope.launch {
+            try {
+                repository.signOutEverywhere()
+                Analytics.track("signed_out_everywhere")
+                if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
+                    hasStoredSession = false, verificationPending = false, accountNotice = "You’re signed out of every device.")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
+                    accountError = error.message ?: "Could not sign out of every device. Please try again.")
+            }
+        }
     }
     fun deleteAccount() {
         if (_state.value.accountBusy) return
@@ -594,7 +639,10 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun sendFeedback(category: String, message: String, rating: Int) {
         _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
         viewModelScope.launch { runCatching { repository.sendFeedback(category, message, rating) }
-            .onSuccess { _state.value = _state.value.copy(accountBusy = false, accountNotice = "Thanks for your feedback.") }
+            .onSuccess {
+                Analytics.track("feedback_sent")
+                _state.value = _state.value.copy(accountBusy = false, accountNotice = "Thanks for your feedback.")
+            }
             .onFailure { _state.value = _state.value.copy(accountBusy = false, accountError = it.message ?: "Could not send feedback.") } }
     }
     fun refreshConditions() {

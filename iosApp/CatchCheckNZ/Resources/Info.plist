@@ -8,8 +8,8 @@
     <key>CFBundleName</key><string>Fishdays - NZ</string>
     <key>CFBundleDisplayName</key><string>Fishdays - NZ</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>CFBundleURLTypes</key><array><dict>
         <key>CFBundleURLName</key><string>nz.fishingnz.catchcheck.auth</string>

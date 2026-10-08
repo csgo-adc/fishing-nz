@@ -35,7 +35,7 @@ const providers = {
     keys: createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys")),
   },
 };
-const accountColumns = "id, email, display_name, country_code, plan, created_at, email_verified";
+const accountColumns = "id, email, display_name, country_code, plan, created_at, email_verified, (password_hash != '') AS has_password";
 
 function enabled(env: SocialAuthEnv, provider: Provider): boolean {
   return provider === "google" ? Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)

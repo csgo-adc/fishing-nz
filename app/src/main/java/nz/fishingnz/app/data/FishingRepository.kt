@@ -102,6 +102,7 @@ class FishingRepository {
             setRequestProperty("Accept", "application/json")
             rulesAreaId?.let { setRequestProperty("X-Fishing-Rules-Area", it) }
             setRequestProperty("X-Client-Platform", "android")
+            PrivacyPreferences.analyticsDeviceId()?.let { setRequestProperty("X-Device-Id", it) }
             setRequestProperty("Authorization", "Bearer $token")
             connectTimeout = 15_000
             readTimeout = 30_000
@@ -146,7 +147,9 @@ class FishingRepository {
     suspend fun fishRules(species: String, areaId: String): FishRulesResult = withContext(Dispatchers.IO) {
         val encodedArea = URLEncoder.encode(areaId, "UTF-8")
         val encodedSpecies = URLEncoder.encode(species, "UTF-8")
-        val connection = get("$accountBaseUrl/v1/fish/rules?area=$encodedArea&species=$encodedSpecies")
+        val connection = get("$accountBaseUrl/v1/fish/rules?area=$encodedArea&species=$encodedSpecies").apply {
+            PrivacyPreferences.analyticsDeviceId()?.let { setRequestProperty("X-Device-Id", it) }
+        }
         try {
             val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -249,6 +252,20 @@ class FishingRepository {
         AccountSessionStore.clear()
     }
 
+    /** The service keeps this session signed in and ends the account's others. Errors carry a message fit to show. */
+    suspend fun changePassword(currentPassword: String, newPassword: String) = withContext(Dispatchers.IO) {
+        val token = AccountSessionStore.token() ?: error("Sign in again to change your password.")
+        accountRequest("/v1/me/password", "POST", JSONObject().put("current_password", currentPassword).put("new_password", newPassword), token, "android")
+        Unit
+    }
+
+    /** Ends every session for the account, including this one, so the saved session is cleared afterwards. */
+    suspend fun signOutEverywhere() = withContext(Dispatchers.IO) {
+        AccountSessionStore.token()?.let { token -> accountRequest("/v1/auth/logout-all", "POST", JSONObject(), token, "android") }
+        AccountSessionStore.clearOAuthSecret()
+        AccountSessionStore.clear()
+    }
+
     suspend fun deleteAccount() = withContext(Dispatchers.IO) {
         val token = AccountSessionStore.token() ?: error("Sign in again to delete your account.")
         val response = accountRequest("/v1/me", "DELETE", JSONObject().put("confirm", true), token)
@@ -256,6 +273,7 @@ class FishingRepository {
         AccountSessionStore.clearOAuthSecret()
         AccountSessionStore.clear()
         PrivacyPreferences.setAnalyticsEnabled(false)
+        PrivacyPreferences.setFirebaseEnabled(false)
         PrivacyPreferences.clearFishPhotos()
     }
 
@@ -278,7 +296,7 @@ class FishingRepository {
 
     private fun parseAccountSnapshot(profile: JSONObject, permissions: JSONObject): AccountSnapshot {
         return AccountSnapshot(
-            AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free")),
+            AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free"), profile.optBoolean("has_password", true)),
             permissions.optJSONObject("features")?.optBoolean("fish_identity") == true,
             parseFishIdentityQuota(permissions.optJSONObject("fish_identity_quota")),
         )
@@ -288,7 +306,15 @@ class FishingRepository {
         FishIdentityQuota(it.getInt("limit"), it.getInt("used"), it.getInt("remaining"), it.getString("day"))
     }
 
-    private fun accountRequest(path: String, method: String, payload: JSONObject? = null, token: String? = null, platform: String? = null): JSONObject {
+    suspend fun uploadAnalytics(payload: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        accountRequest("/v1/analytics/batch", "POST", payload, AccountSessionStore.token(), "android")
+    }
+
+    suspend fun eraseAnalyticsDevice(deviceId: String): JSONObject = withContext(Dispatchers.IO) {
+        accountRequest("/v1/analytics/device", "DELETE", deviceId = deviceId)
+    }
+
+    private fun accountRequest(path: String, method: String, payload: JSONObject? = null, token: String? = null, platform: String? = null, deviceId: String? = null): JSONObject {
         val connection = (URL("$accountBaseUrl$path").openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 10_000
@@ -296,6 +322,8 @@ class FishingRepository {
             setRequestProperty("Accept", "application/json")
             token?.let { setRequestProperty("Authorization", "Bearer $it") }
             platform?.let { setRequestProperty("X-Client-Platform", it) }
+            // Lets the service count this device's API use; present only while optional analytics is on.
+            (deviceId ?: PrivacyPreferences.analyticsDeviceId())?.let { setRequestProperty("X-Device-Id", it) }
             if (payload != null) { doOutput = true; setRequestProperty("Content-Type", "application/json") }
         }
         try {

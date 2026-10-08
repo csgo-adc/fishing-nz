@@ -24,6 +24,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             guard oldValue != selectedTab else { return }
             let features = ["home", "map", "tide", "weather", "more"]
             guard features.indices.contains(selectedTab) else { return }
+            Analytics.track("screen_view", ["screen": .text(features[selectedTab])])
             Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
         }
     }
@@ -372,6 +373,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     func selectRulesArea(_ areaID: String) {
         guard fishingRulesAreas.contains(where: { $0.id == areaID }) else { return }
+        Analytics.track("rules_area_selected", ["area_id": .text(areaID)])
         rulesAreaSelectionIsManual = true
         selectedRulesAreaID = areaID
     }
@@ -484,6 +486,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                                                             days: days, boat: boat, preferredHours: hours, priority: priority, land: land)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
                 scoredWindows = windows
+                Analytics.track("search_run", ["mode": .text(boat ? "boat" : "land"), "radius_km": .number(radius),
+                                               "date_preset": .text(datePreset.rawValue), "result_count": .number(Double(windows.count))])
             } catch is CancellationError {
                 return
             } catch {
@@ -497,6 +501,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     override init() {
         super.init()
+        Analytics.track("app_open")
         let defaults = UserDefaults.standard
         if let stored = defaults.dictionary(forKey: "land_preferences") {
             landPreferences = LandPreferences(
@@ -637,6 +642,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         if selectedStation != nearest { selectedStation = nearest; refreshStationTide() }
     }
     func chooseStation(_ station: TideStation) {
+        Analytics.track("tide_station_selected", ["station_id": .text(station.id)])
         usesNearbyTideStation = false
         selectedStation = station
         refreshStationTide()
@@ -688,15 +694,18 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         do {
             if createAccount {
                 accountNotice = try await repository.createAccount(email: email, password: password, displayName: displayName)
+                Analytics.track("sign_up_succeeded")
                 verificationPending = true
             } else {
                 let snapshot = try await repository.registerOrLogin(email: email, password: password)
+                Analytics.track("sign_in_succeeded", ["method": .text("password")])
                 account = snapshot.user; fishIdentityQuota = snapshot.permissions?.fishIdentityQuota; hasStoredSession = true; accountNotice = "You’re signed in."; verificationPending = false
                 await refreshSignInProviders()
             }
             accountBusy = false
             return true
         } catch {
+            Analytics.track("sign_in_failed", ["method": .text(createAccount ? "sign_up" : "password"), "error_code": .text(Analytics.errorCode(error))])
             accountError = error.localizedDescription
             if let apiError = error as? AccountAPIError,
                apiError.code == "email_not_verified" || apiError.code == "email_delivery_failed" {
@@ -721,6 +730,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     func signInWithProvider(_ provider: String) async {
         guard !accountBusy else { return }
+        Analytics.track("social_sign_in_started", ["method": .text(provider)])
         accountRequestVersion += 1
         let version = accountRequestVersion
         let linking = account != nil
@@ -746,6 +756,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             }
             let snapshot = try await repository.completeSocialSignIn(code: code, secret: flow.secret)
             guard version == accountRequestVersion else { return }
+            Analytics.track("sign_in_succeeded", ["method": .text("social")])
             account = snapshot.user; fishIdentityQuota = snapshot.permissions?.fishIdentityQuota; hasStoredSession = true; verificationPending = false
             accountNotice = linking ? "Account connected. You can use it to sign in next time." : "You’re signed in."
             await refreshSignInProviders()
@@ -768,6 +779,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         accountBusy = true; accountError = nil; accountNotice = nil
         do {
             try await repository.sendFeedback(category: category, message: message, rating: rating)
+            Analytics.track("feedback_sent")
             accountNotice = "Thanks for your feedback."
             accountBusy = false
             return true
@@ -777,7 +789,59 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             return false
         }
     }
+    func changePassword(current: String, new: String) {
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                try await repository.changePassword(current: current, new: new)
+                Analytics.track("password_changed")
+                accountNotice = "Password changed. Your other devices were signed out."
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func signOutEverywhere() {
+        accountRequestVersion += 1
+        accountLoadFailed = false
+        accountLoading = false
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                try await repository.logoutEverywhere()
+                Analytics.track("signed_out_everywhere")
+                account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
+                accountNotice = "You’re signed out of every device."
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
+    func deleteAccount() {
+        guard !accountBusy else { return }
+        accountRequestVersion += 1
+        accountLoadFailed = false
+        accountLoading = false
+        accountBusy = true; accountError = nil; accountNotice = nil
+        Task {
+            do {
+                try await repository.deleteAccount()
+                // Forget everything tied to the account on this phone, and stop any fish check still in flight.
+                fishIdentifyRequestID = UUID()
+                fishRulesTask?.cancel()
+                fishRulesRequestID = UUID()
+                pendingFishPhoto = nil
+                selectedPhoto = nil; fishCheck = nil; isCheckingFish = false; self.error = nil
+                isLoadingFishRules = false; fishRulesError = nil
+                savedSpotNames = []; savedRecommendations = [:]; activeTrip = nil
+                account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
+                signInProviders = SignInProviders()
+                AnalyticsPreferences.setEnabled(false)
+                accountNotice = "Your account and associated data have been deleted."
+            } catch { accountError = error.localizedDescription }
+            accountBusy = false
+        }
+    }
     func signOut() {
+        Analytics.track("sign_out")
         accountRequestVersion += 1
         accountLoadFailed = false
         accountLoading = false
@@ -794,6 +858,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
     private func identifyPendingFish(at point: GeoPoint) { guard let photo = pendingFishPhoto else { return }; pendingFishPhoto = nil; identify(photo, at: point) }
     private func identify(_ photo: UIImage, at point: GeoPoint) {
+        Analytics.track("fish_identify_started")
         isCheckingFish = true
         fishIdentifyRequestID = UUID()
         let requestID = fishIdentifyRequestID
@@ -802,6 +867,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         Task {
             do {
                 let result = try await repository.identifyFish(image: photo, at: point, hasDeviceLocation: hasDeviceLocation, selectedRulesAreaID: requestedAreaID)
+                Analytics.track("fish_identify_succeeded", ["is_fish": .flag(result.isFish),
+                                                            "confidence_level": .text(AnalyticsPayload.confidenceLevel(percent: result.confidence))])
                 if requestID == fishIdentifyRequestID && selectedPhoto === photo {
                     fishRulesTask?.cancel()
                     fishRulesRequestID = UUID()
@@ -812,6 +879,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                     if result.isFish && result.areaID != selectedRulesAreaID { refreshFishRulesForSelection() }
                 }
             } catch {
+                Analytics.track("fish_identify_failed", ["error_code": .text(Analytics.errorCode(error))])
                 if requestID == fishIdentifyRequestID && selectedPhoto === photo {
                     if let quota = (error as? FishIdentificationError)?.quota { fishIdentityQuota = quota }
                     self.error = error.localizedDescription

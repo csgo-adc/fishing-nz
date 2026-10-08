@@ -5,6 +5,10 @@ import { changePassword, handlePasswordRoute } from "./password-reset";
 import { HOUR, MINUTE, allowAttempt, clientAddress, isRateLimited, rateKey, recordAttempt, tooManyRequests } from "./rate-limit";
 import { constantTimeEqual, hashPassword, passwordMatches, randomHex, sha256 } from "./security";
 import packageInfo from "../package.json";
+import { corsHeaders, json, readJson, readLimit, readOffset } from "./http";
+import { deleteDeviceAnalytics, ingestAnalytics } from "./analytics";
+import { handleAdminAnalytics } from "./admin-analytics";
+import { recordApiUsage } from "./usage";
 
 export interface Env extends SocialAuthEnv {
   OPENAI_API_KEY: string;
@@ -25,13 +29,19 @@ export type Account = {
   plan: "free" | "paid";
   created_at: string;
   email_verified: number;
+  // 1 when the account has a password it can sign in with; 0 for a Google or Apple account that never set one.
+  has_password: number;
 };
 
 type AccountWithCredentials = Account & { password_hash: string; password_salt: string };
 type AuthContext = { account: Account; sessionToken: string };
-type PublicAccount = Omit<Account, "email_verified"> & { email_verified: boolean };
+type PublicAccount = Omit<Account, "email_verified" | "has_password"> & { email_verified: boolean; has_password: boolean };
 const SESSION_LIFETIME_DAYS = 30;
 const LOGIN_WINDOW = 15 * MINUTE;
+// Filled by authenticate(), read after the response to attribute the call to an account.
+const authenticatedUsers = new WeakMap<Request, string>();
+// Requests whose usage must not be recorded, such as the one that just erased an account and its analytics.
+const usageNotRecorded = new WeakSet<Request>();
 
 const rulesAreas = new Map([
   ["auckland-kermadec", "Auckland / Kermadec"], ["central", "Central"],
@@ -116,8 +126,8 @@ async function login(request: Request, env: Env): Promise<Response> {
     return json({ error: "Email or password is incorrect." }, 401);
   }
   if (row.email_verified !== 1) return json({ error: "Confirm your email before signing in.", code: "email_not_verified" }, 403);
-  const { password_hash: _passwordHash, password_salt: _passwordSalt, ...account } = row;
-  return await createSessionResponse(env, account, 200);
+  const { password_hash: passwordHash, password_salt: _passwordSalt, ...account } = row;
+  return await createSessionResponse(env, { ...account, has_password: passwordHash ? 1 : 0 }, 200);
 }
 
 async function resendVerification(request: Request, env: Env): Promise<Response> {
@@ -247,6 +257,7 @@ async function me(request: Request, env: Env): Promise<Response> {
   if (request.method === "DELETE") {
     if (payload.confirm !== true) return json({ error: "Confirm permanent account deletion." }, 400);
     await deleteAccountData(env, auth.account.id);
+    usageNotRecorded.add(request);
     return json({ deleted: true });
   }
   const displayName = payload.display_name === undefined ? auth.account.display_name : payload.display_name;
@@ -374,7 +385,7 @@ async function listUsers(request: Request, env: Env): Promise<Response> {
   const [count, result] = await Promise.all([
     env.RULES_DB.prepare(`SELECT COUNT(*) AS total FROM account_users${where}`).bind(...filters).first<{ total: number }>(),
     env.RULES_DB.prepare(
-      `SELECT id, email, display_name, country_code, plan, created_at, email_verified
+      `SELECT id, email, display_name, country_code, plan, created_at, email_verified, (password_hash != '') AS has_password
        FROM account_users${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
     ).bind(...filters, limit, offset).all<Account>(),
   ]);
@@ -435,16 +446,18 @@ async function authenticate(request: Request, env: Env): Promise<AuthContext | n
   const token = match[1].toLowerCase();
   const now = new Date().toISOString();
   const row = await env.RULES_DB.prepare(
-    `SELECT u.id, u.email, u.display_name, u.country_code, u.plan, u.created_at, u.email_verified
+    `SELECT u.id, u.email, u.display_name, u.country_code, u.plan, u.created_at, u.email_verified,
+            (u.password_hash != '') AS has_password
      FROM account_sessions s JOIN account_users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now).first<Account>();
+  if (row) authenticatedUsers.set(request, row.id);
   return row ? { account: row, sessionToken: token } : null;
 }
 
 function publicAccount(account: Account): PublicAccount {
-  const { email_verified, ...details } = account;
-  return { ...details, email_verified: email_verified === 1 };
+  const { email_verified, has_password, ...details } = account;
+  return { ...details, email_verified: email_verified === 1, has_password: has_password === 1 };
 }
 
 function clientPlatform(request: Request): "web" | "ios" | "android" {
@@ -456,41 +469,9 @@ function isValidEmail(email: string): boolean {
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-async function readJson(request: Request): Promise<Record<string, unknown> | null> {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 16_384) return null;
-  try {
-    const body = await request.arrayBuffer();
-    if (body.byteLength > 16_384) return null;
-    const value = JSON.parse(new TextDecoder().decode(body)) as unknown;
-    return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
-}
-
-function readLimit(value: string | null, fallback: number, maximum: number): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
-}
-
-function readOffset(value: string | null): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? Math.min(parsed, 1_000_000) : 0;
-}
-
 function isAdmin(request: Request, env: Env): boolean {
   const supplied = request.headers.get("x-account-admin-token") || "";
   return Boolean(env.ACCOUNT_ADMIN_TOKEN && supplied && constantTimeEqual(supplied, env.ACCOUNT_ADMIN_TOKEN));
-}
-
-function corsHeaders(): HeadersInit {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
-    "access-control-allow-headers": "authorization, content-type, x-account-admin-token, x-rules-ingest-token, x-location-lat-lon, x-location-source, x-fishing-rules-area, x-client-platform",
-    "access-control-max-age": "86400",
-  };
 }
 
 type OpenAIFishIdentification = {
@@ -521,7 +502,28 @@ const openAIFishSchema = {
 };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+    const response = await handleRequest(request, env);
+    // Count the call for the signed-in account and/or consenting device after the response is on its way.
+    if (ctx) ctx.waitUntil(recordRequestUsage(request, env, response).catch((error) => console.error("Could not record API usage", String(error))));
+    return response;
+  },
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    await cleanupAccountData(env);
+    const areaIds = [...rulesAreas.keys()];
+    const day = Math.floor(controller.scheduledTime / 86_400_000);
+    const areaId = areaIds[day % areaIds.length];
+    const refreshed = await refreshRuleArea(areaId, env);
+    if (!refreshed) throw new Error(`MPI rules refresh failed for ${areaId}. See /v1/rules/status.`);
+  },
+};
+
+async function recordRequestUsage(request: Request, env: Env, response: Response): Promise<void> {
+  if (usageNotRecorded.has(request)) return;
+  await recordApiUsage(env.RULES_DB, request, authenticatedUsers.get(request) ?? null, response.status);
+}
+
+async function handleRequest(request: Request, env: Env): Promise<Response> {
     try {
     const pathname = new URL(request.url).pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
@@ -550,7 +552,16 @@ export default {
     if (pathname === "/v1/me/permissions" && request.method === "GET") return await permissions(request, env);
     if (pathname === "/v1/feedback" && request.method === "POST") return await submitFeedback(request, env);
     if (pathname === "/v1/analytics/events" && request.method === "POST") return await submitAnalyticsEvent(request, env);
+    if (pathname === "/v1/analytics/batch" && request.method === "POST") {
+      return await ingestAnalytics(request, env, (await authenticate(request, env))?.account.id ?? null);
+    }
+    if (pathname === "/v1/analytics/device" && request.method === "DELETE") return await deleteDeviceAnalytics(request, env);
     if (pathname === "/v1/admin/analytics" && request.method === "GET") return await getAccountAnalytics(request, env);
+    if (pathname.startsWith("/v1/admin/analytics/")) {
+      if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);
+      const adminAnalytics = await handleAdminAnalytics(request, env, pathname);
+      if (adminAnalytics) return adminAnalytics;
+    }
     if (pathname === "/v1/admin/users" && request.method === "GET") return await listUsers(request, env);
     if (pathname === "/v1/admin/feedback" && request.method === "GET") return await listFeedback(request, env);
     const planMatch = pathname.match(/^\/v1\/admin\/users\/([^/]+)\/plan$/);
@@ -621,16 +632,8 @@ export default {
       console.error("Worker request failed", error);
       return json({ error: "Internal Worker error." }, 500);
     }
-  },
-  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    await cleanupAccountData(env);
-    const areaIds = [...rulesAreas.keys()];
-    const day = Math.floor(controller.scheduledTime / 86_400_000);
-    const areaId = areaIds[day % areaIds.length];
-    const refreshed = await refreshRuleArea(areaId, env);
-    if (!refreshed) throw new Error(`MPI rules refresh failed for ${areaId}. See /v1/rules/status.`);
-  },
-};
+  
+}
 
 async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, apiKey: string): Promise<OpenAIFishIdentification> {
   if (!apiKey) throw new Error("Fish identification is not configured yet. Add the OpenAI API key to the Worker secrets.");
@@ -1041,11 +1044,4 @@ async function saveCrawlFailure(env: Env, areaId: string, areaName: string, atte
        error=CASE WHEN mpi_rules_crawl_status.status IN ('source_changed', 'needs_import')
          THEN mpi_rules_crawl_status.error ELSE excluded.error END`
   ).bind(areaId, areaName, attemptedAt, httpStatus, error).run();
-}
-
-function json(body: object, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...corsHeaders() },
-  });
 }

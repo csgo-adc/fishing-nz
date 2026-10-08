@@ -184,7 +184,10 @@ struct AccountProfile: Decodable, Equatable {
     let displayName: String
     let countryCode: String
     let plan: String
-    enum CodingKeys: String, CodingKey { case id, email, plan; case displayName = "display_name"; case countryCode = "country_code" }
+    // Missing from older service responses; nil is treated as "has a password".
+    let hasPasswordField: Bool?
+    var hasPassword: Bool { hasPasswordField ?? true }
+    enum CodingKeys: String, CodingKey { case id, email, plan; case displayName = "display_name"; case countryCode = "country_code"; case hasPasswordField = "has_password" }
 }
 struct AccountFeatures: Decodable { let fishIdentity: Bool; enum CodingKeys: String, CodingKey { case fishIdentity = "fish_identity" } }
 struct FishIdentityQuota: Decodable {
