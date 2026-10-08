@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.14 — 2026-10-08 (build code 15)
+
+- Tidy up the repository history. The Android APK workflow now keeps only the newest build in
+  Releases (older `android-build-*` releases and tags are removed) and keeps the latest 5 runs of
+  each workflow, deleting older finished runs. A cleanup problem never fails the build. The
+  `v1.0.0` tag is never touched.
+- Remove the one-off **Delete merged branch** workflow; the stale branch is gone.
+
 ## 1.0.13 — 2026-10-08 (build code 14)
 
 - Add a manual **Delete merged branch** workflow (Actions → Delete merged branch). It deletes

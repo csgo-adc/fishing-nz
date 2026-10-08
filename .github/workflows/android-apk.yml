@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build-apk:
@@ -97,3 +98,53 @@ jobs:
       - name: Remove temporary app configuration
         if: always()
         run: rm -f app/google-services.json secrets.properties
+
+      # Housekeeping so history does not pile up: only the newest build stays in Releases, and each
+      # workflow keeps its latest runs. A failure here never fails the build.
+      - name: Remove older builds and workflow runs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          KEEP_RUNS: '5'
+        run: |
+          set -euo pipefail
+          older='$3 + 0 < n || ($3 + 0 == n && $4 + 0 < a)'
+
+          # Builds older than this one. A release is deleted together with its tag.
+          builds=$(gh release list --limit 1000 --json tagName --jq '.[].tagName' \
+            | { grep -E '^android-build-[0-9]+-[0-9]+$' || true; } \
+            | awk -F- -v n="$RUN_NUMBER" -v a="$RUN_ATTEMPT" "$older")
+          for tag in $builds; do
+            gh release delete "$tag" --cleanup-tag --yes
+          done
+
+          # Tags left without a release.
+          tags=$(git ls-remote --tags --refs origin 'refs/tags/android-build-*' | cut -f2 | sed 's#^refs/tags/##' \
+            | { grep -E '^android-build-[0-9]+-[0-9]+$' || true; } \
+            | awk -F- -v n="$RUN_NUMBER" -v a="$RUN_ATTEMPT" "$older")
+          for tag in $tags; do
+            git push origin --delete "refs/tags/$tag"
+          done
+
+          # Finished runs beyond the newest KEEP_RUNS of each workflow, and every run of a workflow
+          # whose file no longer exists. This run is never touched.
+          active=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
+            --jq '.workflows[] | select(.state == "active") | .id' | tr '\n' ' ')
+          # Without a list of live workflows nothing can be judged to be orphaned, so stop.
+          if [ -z "${active// /}" ]; then echo '::warning::Could not list workflows; skipping run cleanup.'; exit 1; fi
+          runs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | "\(.workflow_id) \(.id) \(.status)"' \
+            | awk -v keep="$KEEP_RUNS" -v current="$GITHUB_RUN_ID" -v active=" $active" '
+                $3 != "completed" || $2 == current { next }
+                index(active, " " $1 " ") == 0 { print $2; next }
+                ++seen[$1] > keep { print $2 }')
+          for id in $runs; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id"
+          done
+
+          {
+            echo '### Housekeeping'
+            echo "Removed $(echo $builds $tags | wc -w) older build(s) and $(echo $runs | wc -w) old workflow run(s)."
+          } >> "$GITHUB_STEP_SUMMARY"
