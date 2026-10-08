@@ -1,0 +1,49 @@
+name: Delete merged branch
+
+# Manual only. Deletes a branch only when every commit on it is already in main, and never the default branch.
+# A protected branch is refused by GitHub itself.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to delete (must be fully merged into main)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    name: Delete the branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Delete the branch if it is fully merged
+        env:
+          BRANCH: ${{ inputs.branch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          case "$BRANCH" in
+            ""|-*|*..*|*" "*) echo "::error::That is not a valid branch name."; exit 1 ;;
+          esac
+          if [ "$BRANCH" = "$DEFAULT_BRANCH" ] || [ "$BRANCH" = "main" ]; then
+            echo "::error::Refusing to delete the default branch."; exit 1
+          fi
+          git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" \
+            || { echo "::error::The branch '$BRANCH' does not exist."; exit 1; }
+          if ! git merge-base --is-ancestor "origin/$BRANCH" "origin/$DEFAULT_BRANCH"; then
+            echo "::error::'$BRANCH' has commits that are not in $DEFAULT_BRANCH. Merge or review them first:"
+            git log --oneline "origin/$DEFAULT_BRANCH..origin/$BRANCH" | head -20
+            exit 1
+          fi
+          tip=$(git rev-parse "origin/$BRANCH")
+          git push origin --delete "$BRANCH"
+          {
+            echo "### Deleted \`$BRANCH\`"
+            echo "Every commit on it is already in \`$DEFAULT_BRANCH\`. It was at \`$tip\`; to recreate it: \`git branch $BRANCH $tip\`."
+          } >> "$GITHUB_STEP_SUMMARY"

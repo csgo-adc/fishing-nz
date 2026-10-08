@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.13 — 2026-10-08 (build code 14)
+
+- Add a manual **Delete merged branch** workflow (Actions → Delete merged branch). It deletes
+  a branch only when every commit on it is already in `main`, and refuses `main` and the default
+  branch. It exists because the deleting of branches is blocked from the coding sessions that
+  work on this repo; it runs on GitHub instead.
+
 ## 1.0.12 — 2026-10-08 (build code 13)
 
 - Fix a flaky API test: the sign-in timing check compared median times, which a busy CI
