@@ -16,7 +16,7 @@ export const EVENT_NAMES = new Set([
   "fish_identify_started", "fish_identify_succeeded", "fish_identify_failed",
   "rules_area_selected", "tide_station_selected", "weather_viewed", "place_conditions_opened",
   "sign_in_succeeded", "sign_in_failed", "sign_up_succeeded", "social_sign_in_started", "sign_out",
-  "password_reset_opened", "feedback_sent", "permission_result",
+  "password_reset_opened", "password_changed", "signed_out_everywhere", "account_deleted", "feedback_sent", "permission_result",
 ]);
 
 /** The only properties an event may carry. Free text, coordinates and addresses have no slot. */

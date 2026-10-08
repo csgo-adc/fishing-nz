@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.9 — 2026-10-08 (build code 10)
+
+- API: account objects (`/v1/me`, sign-in, social sign-in and the admin user list) now include
+  `has_password`, so the apps can offer "Change password" or "Add a password".
+- API: accept `password_changed`, `signed_out_everywhere` and `account_deleted` analytics events.
+- Privacy policy: anonymous usage statistics are on by default after a one-time notice and
+  can be turned off in Settings; Google Analytics stays opt-in on Android; account deletion
+  is available in the Android and iPhone apps. **Deploy this before the app updates that
+  introduce the notice.**
+
 ## 1.0.8 — 2026-10-08 (build code 9)
 
 - Add a manual **Deploy** workflow (Actions → Deploy). It checks the Cloudflare secrets, runs

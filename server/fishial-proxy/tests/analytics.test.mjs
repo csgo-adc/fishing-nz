@@ -185,6 +185,16 @@ test("anonymous devices, behaviour events and API usage with real D1", { timeout
       assert.equal((await db.prepare("SELECT user_id FROM analytics_devices WHERE device_id = ?").bind(uuid(6)).first()).user_id, null);
     });
 
+    await t.test("accepts the account-management events and the admin list reports has_password", async () => {
+      const response = await api("/v1/analytics/batch", "POST", {
+        device: device(30), events: [{ name: "password_changed" }, { name: "signed_out_everywhere" }, { name: "account_deleted" }],
+      }, { ip: "198.51.100.31" });
+      assert.deepEqual(response.data, { accepted: 3, dropped: 0 });
+      const users = await api("/v1/admin/users?search=linked", "GET", undefined, { admin: true });
+      assert.equal(users.data.users[0].email, "linked@example.com");
+      assert.equal(users.data.users[0].has_password, true);
+    });
+
     await t.test("limits uploads per device", async () => {
       const statuses = [];
       for (let attempt = 0; attempt < 62; attempt++) statuses.push((await api("/v1/analytics/batch", "POST", { device: device(7), events: [{ name: "app_open" }] }, { ip: "198.51.100.7" })).status);

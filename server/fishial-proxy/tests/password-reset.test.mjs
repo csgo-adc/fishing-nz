@@ -292,6 +292,30 @@ test("password reset, password change and abuse limits with real D1", { timeout:
       assert.equal(importRules.status, 401);
     });
 
+    await t.test("tells the apps whether an account has a password to change", async () => {
+      const ip = "198.51.100.70";
+      const email = "haspassword@example.com";
+      await register(email, ip);
+      const login = await api("/v1/auth/login", "POST", { email, password: PASSWORD }, { ip });
+      assert.equal(login.data.user.has_password, true);
+      assert.equal((await api("/v1/me", "GET", undefined, { token: login.data.token, ip })).data.user.has_password, true);
+
+      // A Google or Apple account that never chose a password.
+      const now = new Date().toISOString();
+      await db.prepare("INSERT INTO account_users (id, email, password_hash, password_salt, display_name, created_at, updated_at, email_verified) VALUES ('social-pw', 'socialpw@example.com', '', '', 'Social', ?, ?, 1)").bind(now, now).run();
+      await db.prepare("INSERT INTO account_sessions VALUES (?, 'social-pw', ?, ?)").bind(sha256("e".repeat(64)), now, new Date(Date.now() + 86_400_000).toISOString()).run();
+      assert.equal((await api("/v1/me", "GET", undefined, { token: "e".repeat(64), ip })).data.user.has_password, false);
+      assert.equal((await signIn("socialpw@example.com", ip, "anything-123")).status, 401, "cannot sign in with a password it does not have");
+
+      // The reset link is how such an account adds one.
+      assert.equal((await form("/forgot-password", { email: "socialpw@example.com" }, { ip })).status, 202);
+      const token = tokenFrom(sentTo("socialpw@example.com", "Reset")[0]);
+      assert.equal((await form("/reset-password", { token, password: "Added-pass-1", confirm: "Added-pass-1" }, { ip })).status, 200);
+      const after = await api("/v1/auth/login", "POST", { email: "socialpw@example.com", password: "Added-pass-1" }, { ip });
+      assert.equal(after.status, 200);
+      assert.equal(after.data.user.has_password, true);
+    });
+
     await t.test("daily cleanup removes spent reset links and old rate-limit counters only", async () => {
       const user = await db.prepare("SELECT id FROM account_users WHERE email = 'reset@example.com'").first();
       const now = Date.now();

@@ -29,11 +29,13 @@ export type Account = {
   plan: "free" | "paid";
   created_at: string;
   email_verified: number;
+  // 1 when the account has a password it can sign in with; 0 for a Google or Apple account that never set one.
+  has_password: number;
 };
 
 type AccountWithCredentials = Account & { password_hash: string; password_salt: string };
 type AuthContext = { account: Account; sessionToken: string };
-type PublicAccount = Omit<Account, "email_verified"> & { email_verified: boolean };
+type PublicAccount = Omit<Account, "email_verified" | "has_password"> & { email_verified: boolean; has_password: boolean };
 const SESSION_LIFETIME_DAYS = 30;
 const LOGIN_WINDOW = 15 * MINUTE;
 // Filled by authenticate(), read after the response to attribute the call to an account.
@@ -124,8 +126,8 @@ async function login(request: Request, env: Env): Promise<Response> {
     return json({ error: "Email or password is incorrect." }, 401);
   }
   if (row.email_verified !== 1) return json({ error: "Confirm your email before signing in.", code: "email_not_verified" }, 403);
-  const { password_hash: _passwordHash, password_salt: _passwordSalt, ...account } = row;
-  return await createSessionResponse(env, account, 200);
+  const { password_hash: passwordHash, password_salt: _passwordSalt, ...account } = row;
+  return await createSessionResponse(env, { ...account, has_password: passwordHash ? 1 : 0 }, 200);
 }
 
 async function resendVerification(request: Request, env: Env): Promise<Response> {
@@ -383,7 +385,7 @@ async function listUsers(request: Request, env: Env): Promise<Response> {
   const [count, result] = await Promise.all([
     env.RULES_DB.prepare(`SELECT COUNT(*) AS total FROM account_users${where}`).bind(...filters).first<{ total: number }>(),
     env.RULES_DB.prepare(
-      `SELECT id, email, display_name, country_code, plan, created_at, email_verified
+      `SELECT id, email, display_name, country_code, plan, created_at, email_verified, (password_hash != '') AS has_password
        FROM account_users${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
     ).bind(...filters, limit, offset).all<Account>(),
   ]);
@@ -444,7 +446,8 @@ async function authenticate(request: Request, env: Env): Promise<AuthContext | n
   const token = match[1].toLowerCase();
   const now = new Date().toISOString();
   const row = await env.RULES_DB.prepare(
-    `SELECT u.id, u.email, u.display_name, u.country_code, u.plan, u.created_at, u.email_verified
+    `SELECT u.id, u.email, u.display_name, u.country_code, u.plan, u.created_at, u.email_verified,
+            (u.password_hash != '') AS has_password
      FROM account_sessions s JOIN account_users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now).first<Account>();
@@ -453,8 +456,8 @@ async function authenticate(request: Request, env: Env): Promise<AuthContext | n
 }
 
 function publicAccount(account: Account): PublicAccount {
-  const { email_verified, ...details } = account;
-  return { ...details, email_verified: email_verified === 1 };
+  const { email_verified, has_password, ...details } = account;
+  return { ...details, email_verified: email_verified === 1, has_password: has_password === 1 };
 }
 
 function clientPlatform(request: Request): "web" | "ios" | "android" {
