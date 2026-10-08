@@ -102,6 +102,7 @@ class FishingRepository {
             setRequestProperty("Accept", "application/json")
             rulesAreaId?.let { setRequestProperty("X-Fishing-Rules-Area", it) }
             setRequestProperty("X-Client-Platform", "android")
+            PrivacyPreferences.analyticsDeviceId()?.let { setRequestProperty("X-Device-Id", it) }
             setRequestProperty("Authorization", "Bearer $token")
             connectTimeout = 15_000
             readTimeout = 30_000
@@ -146,7 +147,9 @@ class FishingRepository {
     suspend fun fishRules(species: String, areaId: String): FishRulesResult = withContext(Dispatchers.IO) {
         val encodedArea = URLEncoder.encode(areaId, "UTF-8")
         val encodedSpecies = URLEncoder.encode(species, "UTF-8")
-        val connection = get("$accountBaseUrl/v1/fish/rules?area=$encodedArea&species=$encodedSpecies")
+        val connection = get("$accountBaseUrl/v1/fish/rules?area=$encodedArea&species=$encodedSpecies").apply {
+            PrivacyPreferences.analyticsDeviceId()?.let { setRequestProperty("X-Device-Id", it) }
+        }
         try {
             val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -288,7 +291,15 @@ class FishingRepository {
         FishIdentityQuota(it.getInt("limit"), it.getInt("used"), it.getInt("remaining"), it.getString("day"))
     }
 
-    private fun accountRequest(path: String, method: String, payload: JSONObject? = null, token: String? = null, platform: String? = null): JSONObject {
+    suspend fun uploadAnalytics(payload: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        accountRequest("/v1/analytics/batch", "POST", payload, AccountSessionStore.token(), "android")
+    }
+
+    suspend fun eraseAnalyticsDevice(deviceId: String): JSONObject = withContext(Dispatchers.IO) {
+        accountRequest("/v1/analytics/device", "DELETE", deviceId = deviceId)
+    }
+
+    private fun accountRequest(path: String, method: String, payload: JSONObject? = null, token: String? = null, platform: String? = null, deviceId: String? = null): JSONObject {
         val connection = (URL("$accountBaseUrl$path").openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 10_000
@@ -296,6 +307,8 @@ class FishingRepository {
             setRequestProperty("Accept", "application/json")
             token?.let { setRequestProperty("Authorization", "Bearer $it") }
             platform?.let { setRequestProperty("X-Client-Platform", it) }
+            // Lets the service count this device's API use; present only while optional analytics is on.
+            (deviceId ?: PrivacyPreferences.analyticsDeviceId())?.let { setRequestProperty("X-Device-Id", it) }
             if (payload != null) { doOutput = true; setRequestProperty("Content-Type", "application/json") }
         }
         try {

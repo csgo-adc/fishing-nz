@@ -243,7 +243,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Optional usage analytics", fontWeight = FontWeight.SemiBold)
-                        Text("Share app interactions, device information, app-instance identifiers and approximate location from your IP address with Firebase, and signed-in feature usage with Fishdays - NZ. Off by default. Turning this off resets the analytics identifier.", style = MaterialTheme.typography.bodySmall)
+                        Text("Share which screens you use and how searches and fish photos go, with your device model, Android version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Firebase additionally receives app interactions, device information and approximate location from your IP address. Off by default. Turning this off erases what we stored for this identifier and resets it.", style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = analyticsEnabled, onCheckedChange = {
                         analyticsEnabled = it

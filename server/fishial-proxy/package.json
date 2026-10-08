@@ -1,6 +1,6 @@
 {
   "name": "catchcheck-fishial-proxy",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",

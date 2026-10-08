@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.6 — 2026-10-08 (build code 7)
+
+- Android: add behaviour tracking behind the existing optional analytics switch, which
+  stays off by default. When on, the app makes a random install id and sends allowlisted
+  events (app open, screen views, searches, spots opened, fish identification
+  started/succeeded/failed, rules area and tide station choices, sign-in steps,
+  feedback) with device model, Android version, app version, language and time
+  zone, whether or not the person is signed in. API requests carry the id so usage can
+  be counted. No location, photos, email or typed text is sent.
+- Android: turning analytics off, or deleting the account, discards queued events and asks
+  the server to erase the device's data.
+- Update the in-app analytics explanation and the Play Data safety notes.
+
 ## 1.0.5 — 2026-10-08 (build code 6)
 
 - Admin CMS: add a **Usage analysis** page (`/admin/analytics`) with an overview
