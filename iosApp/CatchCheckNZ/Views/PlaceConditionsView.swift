@@ -156,13 +156,14 @@ struct PlaceConditionsView: View {
             if let station {
                 let distance = placeDistanceKm(place.point, GeoPoint(latitude: station.latitude, longitude: station.longitude))
                 Text("Reference station · \(String(format: "%.1f", distance)) km away").font(.subheadline).foregroundStyle(.secondary)
-                Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                 if tideLoading { ProgressView() }
                 else if tideIssue { Text(selectedStation == nil ? "Nearby tide stations could not be loaded." : "Tide unavailable for this station and day."); Button("Retry tide") { tideRefresh += 1 } }
-                else if let tide {
-                    ForEach(tide.events) { event in
-                        HStack { Text("\(event.type == "High" ? "↗️" : "↘️") \(event.type)").frame(width: 76, alignment: .leading); Text(event.time); Spacer(); Text(event.height).fontWeight(.semibold) }.font(.subheadline)
-                    }
+                else if let tide, let day {
+                    // The same curve, readout and slider as the Tide tab, then the day's published highs and lows.
+                    TideChart(tide: tide, day: day, curveHeight: 180)
+                        .id("\(station.id)-\(day.timeIntervalSince1970)")
+                    Text("Published high and low tides").font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                    TideEventRows(events: tide.events).font(.subheadline)
                 }
                 DisclosureGroup("Tide details") {
                     VStack(alignment: .leading, spacing: 8) {

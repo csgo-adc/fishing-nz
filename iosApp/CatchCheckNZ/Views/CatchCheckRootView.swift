@@ -99,6 +99,7 @@ private struct MoreView: View {
                     .padding(.bottom, 6)
                     VStack(spacing: 10) {
                         MoreNavigationRow(title: "Settings", subtitle: "Appearance, feedback, terms and privacy", icon: "gearshape") { open(.settings) }
+                        ShareAppRow()
                     }
                 }.padding(20)
             }
@@ -122,10 +123,38 @@ private struct MoreNavigationRow: View {
     }
 }
 
+/// What the Share row on the More page sends. Until the app has an App Store page it sends text that tells people to
+/// search for it. Once the app record exists, set `appStoreURL` to its page: App Store Connect → App Information shows
+/// the Apple ID number, and the link is `https://apps.apple.com/app/id<that number>`.
+private enum AppShare {
+    static let appStoreURL: URL? = nil
+    static let subject = "Fishdays - NZ"
+    static let message = "Fishdays - NZ helps you plan fishing days around New Zealand with tides, weather, fishing windows and MPI fishing rules."
+    static let textOnly = message + " Search for “Fishdays - NZ” in the App Store."
+}
+
+private struct ShareAppRow: View {
+    var body: some View {
+        Group {
+            if let url = AppShare.appStoreURL {
+                ShareLink(item: url, subject: Text(AppShare.subject), message: Text(AppShare.message)) { label }
+            } else {
+                ShareLink(item: AppShare.textOnly, subject: Text(AppShare.subject)) { label }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var label: some View {
+        MoreNavigationLabel(title: "Share Fishdays - NZ", subtitle: "Tell a friend about the app", icon: "person.2.fill", accessory: "square.and.arrow.up")
+    }
+}
+
 private struct MoreNavigationLabel: View {
     let title: String
     let subtitle: String
     let icon: String
+    var accessory = "chevron.right"
 
     var body: some View {
         HStack(spacing: 14) {
@@ -138,7 +167,7 @@ private struct MoreNavigationLabel: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
+            Image(systemName: accessory).font(.caption.bold()).foregroundStyle(.secondary)
         }
         .padding(16)
         .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))

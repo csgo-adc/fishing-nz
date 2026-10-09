@@ -1,6 +1,6 @@
 # Map conditions and weather
 
-The Android and iOS Map tabs open **Explore conditions**. Users can search for a town, beach or named fishing area, select an existing marker, or tap an arbitrary position. The selected-place card has a primary **Check conditions** action, opening a full-screen conditions page with a fixed back control and refresh. Scrolling down cannot dismiss this page. Android uses a full-screen Compose window; iOS uses a full-screen cover. Returning to the map preserves the selected place and map view. Existing map layers, attribution, location controls and planning/detail actions remain available. Search distinguishes published tide stations, land areas and boat areas.
+The Android and iOS Map tabs open **Explore conditions**. Users can search for a town, beach or named fishing area, select an existing marker, or tap an arbitrary position. The selected-place card has a primary **Check conditions** action, opening a full-screen conditions page with a fixed back control and refresh. Scrolling down cannot dismiss this page. Android uses a full-screen Compose window; iOS uses a full-screen cover. Returning to the map preserves the selected place and map view. Existing map layers, attribution, location controls and planning/detail actions remain available. iPhone adds **+ and −** zoom buttons above the location button for one-handed zooming. Search distinguishes published tide stations, land areas and boat areas.
 
 ## Checking dates
 
@@ -33,7 +33,7 @@ Named published tide stations and previously mapped exact-name station relations
 
 A nearby station is a reference, not verified local tide timing: land barriers and different harbours matter. Tide details retain the reminder to check that the station represents the selected place. The fishing-window assessment still requires an explicitly identified station and does not use this nearest-station fallback.
 
-Tide events are loaded independently for the chosen station and date using the existing annual LINZ source. They show high/low times and heights above **Chart Datum**, with a reference-suitability reminder. The view does not substitute marine mean-sea-level data for tidal heights or infer current speed from tides. Date/station changes clear prior tide events before loading; a tide failure has its own retry.
+Tide events are loaded independently for the chosen station and date using the existing annual LINZ source. They show high/low times and heights above **Chart Datum**, with a reference-suitability reminder. On iPhone the card also draws the day's tide curve with a time and height readout and slider, the same chart as the Tide tab; Android lists the events only. The view does not substitute marine mean-sea-level data for tidal heights or infer current speed from tides. Date/station changes clear prior tide events before loading; a tide failure has its own retry.
 
 Weather and marine failures are independent. A usable source continues to supply dates and data if the other fails. Missing or invalid numeric values remain unavailable and display an em dash or **Needs more data**. Values are not filled with zeros or extended beyond their actual returned times. Provider units, array lengths and ordered timestamps are validated before accepting a source.
 

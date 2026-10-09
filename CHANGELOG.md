@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.16 — 2026-10-09 (build code 17)
+
+- iOS: the tide card on a place's conditions page now draws the day's **tide curve** with a time
+  readout and slider, the same chart as the Tide tab (the two share one view), above the day's
+  published high and low tides. It replaces the plain list of events.
+- iOS: the map has **+ and − zoom buttons** above the location button, so one thumb can zoom
+  without pinching. Quick presses add up. The map buttons now follow light and dark appearance.
+- iOS: add **Share Fishdays - NZ** to the More page. It opens the system share sheet. Until the
+  app has an App Store page it sends a short text that says to search for the app. Set
+  `AppShare.appStoreURL` to the app's App Store link once the app record exists
+  (see `docs/app-store-release.md`).
+- No change to the Android app or the service.
+
 ## 1.0.15 — 2026-10-09 (build code 16)
 
 - iOS: ask before a fish photo is sent to OpenAI. A sheet names Cloudflare and OpenAI first.

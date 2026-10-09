@@ -29,6 +29,8 @@ private enum FishingMapLayer: String, CaseIterable {
 private enum MapCameraTarget {
     case region(MKCoordinateRegion)
     case camera(MKMapCamera)
+    /// Multiplies the camera distance: 0.5 zooms in one step and 2 zooms out one step.
+    case zoom(factor: Double)
 }
 
 private struct MapCameraCommand {
@@ -100,14 +102,17 @@ struct FishingMapView: View {
                 .padding(18)
             }
             .overlay(alignment: .bottomTrailing) {
-                Button {
-                    recenterOnLocationUpdate = true
-                    if vm.hasDeviceLocation { centerOnCurrentLocation(); recenterOnLocationUpdate = false }
-                    vm.requestLocation()
-                } label: {
-                    mapControlIcon("location.fill")
+                VStack(spacing: 12) {
+                    mapZoomControl
+                    Button {
+                        recenterOnLocationUpdate = true
+                        if vm.hasDeviceLocation { centerOnCurrentLocation(); recenterOnLocationUpdate = false }
+                        vm.requestLocation()
+                    } label: {
+                        mapControlIcon("location.fill")
+                    }
+                    .accessibilityLabel("Center map on my location")
                 }
-                .accessibilityLabel("Center map on my location")
                 .padding(18)
             }
             .overlay(alignment: .bottomLeading) {
@@ -228,8 +233,27 @@ struct FishingMapView: View {
             .font(.system(size: 20, weight: .semibold))
             .foregroundStyle(CatchCheckColor.navy)
             .frame(width: 48, height: 48)
-            .background(.white, in: Circle())
+            .background(CatchCheckColor.surface, in: Circle())
             .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+    }
+
+    /// Zoom in and out with one thumb, without pinching.
+    private var mapZoomControl: some View {
+        VStack(spacing: 0) {
+            Button { sendCamera(.zoom(factor: 0.5)) } label: {
+                Image(systemName: "plus").frame(width: 48, height: 48).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Zoom in")
+            Divider().frame(width: 26)
+            Button { sendCamera(.zoom(factor: 2)) } label: {
+                Image(systemName: "minus").frame(width: 48, height: 48).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Zoom out")
+        }
+        .font(.system(size: 20, weight: .semibold))
+        .foregroundStyle(CatchCheckColor.navy)
+        .background(CatchCheckColor.surface, in: Capsule())
+        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
     }
 }
 
@@ -310,6 +334,7 @@ private struct FishingMapCanvas: UIViewRepresentable {
             switch cameraCommand.target {
             case .region(let region): map.setRegion(region, animated: cameraCommand.sequence != 0)
             case .camera(let camera): map.setCamera(camera, animated: true)
+            case .zoom(let factor): coordinator.zoom(map, by: factor)
             }
         }
     }
@@ -320,6 +345,16 @@ private struct FishingMapCanvas: UIViewRepresentable {
         var lastCameraCommand = -1
         var selectedID: String?
         var selectedPin: MKPointAnnotation?
+        /// Where the last button zoom is heading. A press made while the map is still animating builds on this instead of
+        /// the half-finished camera, so quick presses zoom several steps. Any finished camera change clears it.
+        private var zoomTarget: Double?
+        func zoom(_ map: MKMapView, by factor: Double) {
+            let camera = map.camera.copy() as! MKMapCamera
+            let target = min(max((zoomTarget ?? camera.centerCoordinateDistance) * factor, 20), 30_000_000)
+            zoomTarget = target
+            camera.centerCoordinateDistance = target
+            map.setCamera(camera, animated: true)
+        }
         @objc func tapMap(_ gesture: UITapGestureRecognizer) {
             guard gesture.state == .ended, let map = gesture.view as? MKMapView else { return }
             let position = map.convert(gesture.location(in: map), toCoordinateFrom: map)
@@ -366,6 +401,7 @@ private struct FishingMapCanvas: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            zoomTarget = nil
             parent.currentCamera = mapView.camera.copy() as? MKMapCamera
         }
     }
@@ -545,6 +581,56 @@ private struct TideDetails: View {
     let canGoBack: Bool
     let canGoForward: Bool
     let onDateSwipe: (Int) -> Void
+
+    private var isToday: Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        return calendar.isDateInToday(day)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Card(background: CatchCheckColor.seafoam) {
+                Text(isToday ? "Estimated height now" : "Estimated height around midday")
+                    .foregroundStyle(.secondary)
+                Text(tide.currentLevel)
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(CatchCheckColor.navy)
+                Text("Next \(tide.nextEvent.lowercased()) tide · \(tide.eventTime)")
+                    .font(.subheadline)
+            }
+            Card {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Tide height through the day").bold().foregroundStyle(.primary)
+                    Text("Swipe this heading for another day. Tap or drag the curve to inspect time.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 35).onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
+                    if value.translation.width < 0 && canGoForward { onDateSwipe(1) }
+                    if value.translation.width > 0 && canGoBack { onDateSwipe(-1) }
+                })
+                TideChart(tide: tide, day: day)
+            }
+            Card {
+                Text("Published high and low tides")
+                    .bold()
+                    .foregroundStyle(CatchCheckColor.navy)
+                TideEventRows(events: tide.events)
+            }
+        }
+    }
+}
+
+/// The tide height curve with its time and height readout, slider and time labels. The Tide tab and a place's
+/// conditions page both show this, so the two always look and behave the same. Give it a new `.id` when the
+/// station or day changes so the marker starts again at "now" (today) or midday.
+struct TideChart: View {
+    let tide: TideState
+    let day: Date
+    var curveHeight: CGFloat = 210
     @State private var selectedMinute: Int?
 
     private var isToday: Bool {
@@ -572,77 +658,59 @@ private struct TideDetails: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Card(background: CatchCheckColor.seafoam) {
-                Text(isToday ? "Estimated height now" : "Estimated height around midday")
-                    .foregroundStyle(.secondary)
-                Text(tide.currentLevel)
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(CatchCheckColor.navy)
-                Text("Next \(tide.nextEvent.lowercased()) tide · \(tide.eventTime)")
-                    .font(.subheadline)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(shownTime).font(.title3.bold())
+                    Text("Estimated above Chart Datum").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                if let shownHeight {
+                    Text(String(format: "%.2f m", shownHeight))
+                        .font(.title3.bold()).foregroundStyle(.primary)
+                }
             }
-            Card {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Tide height through the day").bold().foregroundStyle(.primary)
-                    Text("Swipe this heading for another day. Tap or drag the curve to inspect time.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 35).onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
-                    if value.translation.width < 0 && canGoForward { onDateSwipe(1) }
-                    if value.translation.width > 0 && canGoBack { onDateSwipe(-1) }
-                })
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(shownTime).font(.title3.bold())
-                        Text("Estimated above Chart Datum").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 8)
-                    if let shownHeight {
-                        Text(String(format: "%.2f m", shownHeight))
-                            .font(.title3.bold()).foregroundStyle(.primary)
-                    }
-                }
-                TideCurve(points: tide.points, day: day, selectedMinute: $selectedMinute)
-                    .frame(height: 210)
-                if let first = tide.points.first, let last = tide.points.last, last.minuteOfDay > first.minuteOfDay {
-                    Slider(value: Binding(get: { Double(shownMinute) }, set: { selectedMinute = Int($0.rounded()) }),
-                           in: Double(first.minuteOfDay)...Double(last.minuteOfDay), step: 1)
-                        .accessibilityLabel("Tide time")
-                        .accessibilityValue("\(shownTime), \(shownHeight.map { String(format: "%.2f metres", $0) } ?? "height unavailable")")
-                }
-                HStack {
-                    if let first = tide.points.first { Text(first.time) }
-                    Spacer()
-                    if tide.points.count > 2 { Text(tide.points[tide.points.count / 2].time) }
-                    Spacer()
-                    if let last = tide.points.last { Text(last.time) }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            TideCurve(points: tide.points, day: day, selectedMinute: $selectedMinute)
+                .frame(height: curveHeight)
+            if let first = tide.points.first, let last = tide.points.last, last.minuteOfDay > first.minuteOfDay {
+                Slider(value: Binding(get: { Double(shownMinute) }, set: { selectedMinute = Int($0.rounded()) }),
+                       in: Double(first.minuteOfDay)...Double(last.minuteOfDay), step: 1)
+                    .accessibilityLabel("Tide time")
+                    .accessibilityValue("\(shownTime), \(shownHeight.map { String(format: "%.2f metres", $0) } ?? "height unavailable")")
             }
-            Card {
-                Text("Published high and low tides")
-                    .bold()
-                    .foregroundStyle(CatchCheckColor.navy)
-                ForEach(tide.events) { event in
-                    HStack {
-                        Image(systemName: event.type == "High" ? "arrow.up" : "arrow.down")
-                            .foregroundStyle(CatchCheckColor.navy)
-                            .frame(width: 18)
-                        Text("\(event.type) tide")
-                            .bold()
-                            .foregroundStyle(CatchCheckColor.navy)
-                        Spacer()
-                        Text("\(event.time) · \(event.height)")
-                    }
+            HStack {
+                if let first = tide.points.first { Text(first.time) }
+                Spacer()
+                if tide.points.count > 2 { Text(tide.points[tide.points.count / 2].time) }
+                Spacer()
+                if let last = tide.points.last { Text(last.time) }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .onAppear { selectedMinute = shownMinute }
+    }
+}
+
+/// The day's published high and low tides, one row each.
+struct TideEventRows: View {
+    let events: [TideEvent]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(events) { event in
+                HStack {
+                    Image(systemName: event.type == "High" ? "arrow.up" : "arrow.down")
+                        .foregroundStyle(CatchCheckColor.navy)
+                        .frame(width: 18)
+                    Text("\(event.type) tide")
+                        .bold()
+                        .foregroundStyle(CatchCheckColor.navy)
+                    Spacer()
+                    Text("\(event.time) · \(event.height)")
                 }
             }
         }
-        .onAppear { selectedMinute = shownMinute }
     }
 }
 
