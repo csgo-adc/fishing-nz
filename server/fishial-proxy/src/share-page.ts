@@ -266,19 +266,26 @@ ${FOOTER}`;
   return htmlResponse(`${title} · Fishdays - NZ`, description, head, body, bodyAttributes, hash, 200);
 }
 
-export async function renderInvalidSharePage(config: ShareConfig): Promise<Response> {
+const UNAVAILABLE = {
+  damaged: { status: 404, title: "This link can't be opened", text: "It looks incomplete or damaged, which can happen when a long link is split across messages. Ask the person who sent it to share the window again." },
+  gone: { status: 404, title: "This shared window is no longer available", text: "Shared windows are kept for 60 days, or the link was typed wrongly. Ask the person who sent it to share the window again." },
+  unavailable: { status: 503, title: "Please try again in a moment", text: "We couldn't load this shared window just now. Refresh the page in a minute." },
+} as const;
+
+export async function renderInvalidSharePage(config: ShareConfig, kind: keyof typeof UNAVAILABLE = "damaged"): Promise<Response> {
   const hash = await pageScriptHash();
+  const { status, title, text } = UNAVAILABLE[kind];
   const body = `${header(false)}
 <main class="layout">
 <article class="card">
   <p class="kicker">Shared fishing window</p>
-  <h1>This link can't be opened</h1>
-  <p class="meta">It looks incomplete or damaged, which can happen when a long link is split across messages. Ask the person who sent it to share the window again.</p>
+  <h1>${title}</h1>
+  <p class="meta">${text}</p>
 </article>
 ${getTheApp(config, "Find your own fishing windows with tides, weather and MPI fishing rules around New Zealand.", false)}
 </main>
 ${FOOTER}`;
-  return htmlResponse("Link can't be opened · Fishdays - NZ", "This shared fishing window link could not be opened.", "", body, "", hash, 404);
+  return htmlResponse(`${title} · Fishdays - NZ`, "This shared fishing window could not be opened.", "", body, "", hash, status);
 }
 
 /** Chrome on Android opens the app named in the intent even when the link is not a verified App Link, or stays here. */

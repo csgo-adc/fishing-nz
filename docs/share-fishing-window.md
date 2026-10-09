@@ -11,7 +11,9 @@ What the person who receives it sees:
 | No app, on a phone | The web page: the window, **Download** buttons and a button that opens the app if it turns out to be installed. |
 | No app, on a computer | The same page in a two-column layout, with **Copy link** and the download buttons. Light and dark. |
 
-The page is `https://fishing.fishnz.space/w/<token>`, served by the API Worker (`server/fishial-proxy/src/share.ts` and `share-page.ts`). It stores nothing: the link carries the window.
+What people share is a **short link**, `https://fishing.fishnz.space/w/k3F9xQ2m`. The page behind it is served by the API Worker (`server/fishial-proxy/src/share.ts` and `share-page.ts`).
+
+How a short link is made: tapping **Share this window** sends the window to `POST /v1/share`. The Worker keeps it for **60 days** and answers with an 8-character id. The button shows "Creating link…" for a moment. If the service can't be reached (offline, timeout), the app shares a **long link** instead, `/w/<whole window>`, which is about 800 characters but needs no server storage. Both kinds open the same page and the same app screen, so sharing never fails because of the network.
 
 ## Until the apps are published
 
@@ -20,7 +22,7 @@ The page is `https://fishing.fishnz.space/w/<token>`, served by the API Worker (
 
 ## One-time setup (nothing here can be done without your accounts)
 
-All of these are values in [`server/fishial-proxy/wrangler.toml`](../server/fishial-proxy/wrangler.toml) under `[vars]`. After editing, run **Actions → Deploy** (or `npm run deploy` in `server/fishial-proxy`).
+Deploying the Worker (Actions → Deploy) also applies the database migration that short links need. Everything else is a value in [`server/fishial-proxy/wrangler.toml`](../server/fishial-proxy/wrangler.toml) under `[vars]`. After editing, run **Actions → Deploy** (or `npm run deploy` in `server/fishial-proxy`).
 
 | Variable | Set it to | Effect |
 | --- | --- | --- |
@@ -71,16 +73,28 @@ Without step 2, links from Play-installed copies open in the browser (Android 12
 | `t` | When it was shared, epoch seconds (optional) | |
 | `c` | Conditions, each `[title, value, emoji, label]` | 8 rows; 24 / 120 / 8 / 40 characters; value may have up to 3 lines |
 
-A real window with six conditions makes a link of about 800 characters. Text outside the limits is cut with "…", and anything malformed is refused: the page shows a friendly "this link can't be opened" (HTTP 404) and the apps ignore it.
+The JSON above, base64url-encoded, is the **token**. It is what the app posts to the service, and it is also the long link's path. A real window with six conditions makes a token of about 750 characters. Text outside the limits is cut with "…", and anything malformed is refused: the page shows a friendly "this link can't be opened" (HTTP 404) and the apps tell the person.
+
+### The short-link service
+
+| Call | Does |
+| --- | --- |
+| `POST /v1/share` with `{"token": "<token>"}` | Validates the window, stores it, answers `201 {"id", "url", "expires_at"}`. `400 invalid_window`, `413 too_large`, `429 rate_limited`. No sign-in needed. |
+| `GET /v1/share/<id>` | `200 {"token"}`, or `404 not_found` when the id is unknown or expired. The apps call it when opened with a short link. |
+| `GET /w/<id>` | The web page. An unknown or expired id gets a friendly 404 page, "no longer available". |
+
+- **Ids** are 8 characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz` (no 0 O 1 I l), chosen at random. That is about 1.3 × 10^14 possibilities, so a link can't be guessed. No real token is 8 characters, so `/w/<x>` is unambiguous.
+- **Storage** is the `shared_windows` table (migration `0011_shared_windows.sql`): the id, the token, and two timestamps. It holds no account, device or address. The daily cleanup deletes rows past `expires_at`.
+- **Limits** per network address are 30 new links an hour, and 3000 an hour overall. The counters are the existing one-way-hashed `rate_limit_counters`. A request body over 8 KB is refused.
 
 The same fixed link (the "golden token") is decoded by the Worker tests, the Android unit tests and the iPhone regression checks, so the three can't drift apart without a test failing. The code is [`SharedWindowLink.kt`](../app/src/main/java/nz/fishingnz/app/data/SharedWindowLink.kt), [`SharedWindow.swift`](../iosApp/CatchCheckNZ/Models/SharedWindow.swift) and [`share.ts`](../server/fishial-proxy/src/share.ts). Change the format in all three together and bump `v` if old links must stop working.
 
 ## Design notes and trade-offs
 
 - **A snapshot, not live.** The page and the apps show the forecast as it was when shared, and say so. The apps' windows come from an engine that exists once in Kotlin and once in Swift; the page deliberately does not re-run it. People who want today's forecast open the app and search.
-- **Nothing stored.** No database, no account, no tracking on the page, and no third-party requests (the page loads nothing from other sites; map buttons are plain links). So the privacy policy and the store privacy answers do not change.
+- **What is stored.** Only for short links: the window itself (place, times, forecast summary) for 60 days, with no account, device or address. The privacy policy says so (section "Sharing a fishing window"). The page has no tracking and loads nothing from other sites; map buttons are plain links. Confirm that Play's Data safety form and Apple's App Privacy answers need no new category for "a forecast summary the app sends so a link can work, not linked to the person"; I believe they don't, but those answers are yours to give.
 - **Forged links.** Anyone can make a link, so the Worker treats it as untrusted: strict limits, control and bidirectional characters stripped, everything HTML-escaped, `noindex`, and a Content Security Policy that allows only the page's one inline script, by hash. A forged link can show a few lines of plain text on our domain, never a link, form or script.
-- **Long links.** About 800 characters is fine for chat apps but not pretty. If that matters, the next step is short links (`/w/k3F9xQ2m`) backed by a small D1 table with an expiry. That adds a migration, a retention rule and a privacy-policy line, so it was left out.
+- **Long links remain** as the offline fallback and so links made before short links existed keep working.
 - **Not done:** Safari's Smart App Banner (needs the App Store ID) and a QR code on the desktop page. Both are small additions once the App Store page exists.
 - The page's icon and link-preview image are the store artwork, embedded in [`share-icon.ts`](../server/fishial-proxy/src/share-icon.ts) so the Worker needs no static hosting. After changing `assets/branding/fishing-days-google-play-512.png`, replace the string in that module with `base64 -i assets/branding/fishing-days-google-play-512.png | tr -d '\n'`.
 

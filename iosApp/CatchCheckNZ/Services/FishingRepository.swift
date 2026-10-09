@@ -606,3 +606,11 @@ enum AnalyticsUploader {
         _ = try? await URLSession.shared.data(for: request)
     }
 }
+
+extension ShareLinkService {
+    /// The service the app uses: the same API base as everything else, and the analytics device id only while analytics is on.
+    static let live = ShareLinkService(backend: APIShareBackend(
+        baseURL: ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+        deviceID: { AnalyticsPreferences.deviceID() }))
+}

@@ -27,14 +27,22 @@ object SharedWindowLink {
     private const val EARLIEST = 1_704_067_200L // 2024-01-01
     private const val LATEST = 4_102_444_800L // 2100-01-01
     private val token = Regex("[A-Za-z0-9_-]{1,4096}")
+    // Eight characters from an alphabet without the look-alikes 0 O 1 I l. No real token is this short.
+    private val shortId = Regex("[2-9A-HJ-NP-Za-km-z]{8}")
     // Control characters, line or paragraph separators and bidirectional overrides have no place in a place name.
     private val bidiAndInvisible = intArrayOf(0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0xFEFF)
         .joinToString("") { String(Character.toChars(it)) }
     private val unsafe = Regex("[\\p{Cc}\\p{Zl}\\p{Zp}$bidiAndInvisible]")
 
-    /** The link for [window], or null when it has no start time to share. */
-    fun url(window: Recommendation, nowEpochSeconds: Long = Instant.now().epochSecond): String? =
+    /** The long link, which holds the whole window in the address, or null when it has no start time to share. */
+    fun longUrl(window: Recommendation, nowEpochSeconds: Long = Instant.now().epochSecond): String? =
         encode(window, nowEpochSeconds)?.let { "$ORIGIN/w/$it" }
+
+    /** The short link the service made for a window, `https://fishing.fishnz.space/w/k3F9xQ2m`. */
+    fun shortUrl(id: String): String = "$ORIGIN/w/$id"
+
+    /** True for the service's short ids, which have to be looked up, and false for a token that holds the window itself. */
+    fun isShortId(token: String): Boolean = shortId.matches(token)
 
     /** The text the share sheet sends: where and when, how it looks, and the link. */
     fun text(window: Recommendation, url: String): String =
@@ -72,8 +80,8 @@ object SharedWindowLink {
         return text.substring(prefix.length).substringBefore('?').substringBefore('#').trimEnd('/').takeIf { token.matches(it) }
     }
 
-    /** A window read from a link the app was opened with, or null when it is not a valid shared window. */
-    fun parse(link: String?): Recommendation? = tokenFrom(link)?.let(::decode)
+    /** A window read from a long link, or null for anything else. A short link needs [ShareService.resolve]. */
+    fun parse(link: String?): Recommendation? = tokenFrom(link)?.takeIf { !isShortId(it) }?.let(::decode)
 
     fun decode(token: String): Recommendation? = try {
         val json = JSONObject(String(Base64.getUrlDecoder().decode(token), Charsets.UTF_8))

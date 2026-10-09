@@ -1,12 +1,18 @@
 import type { Env } from "./index";
+import { json, readJson } from "./http";
+import { allowAttempt, clientAddress, HOUR, rateKey, tooManyRequests } from "./rate-limit";
 import { SHARE_ICON_PNG_BASE64 } from "./share-icon";
 import { renderInvalidSharePage, renderSharePage, type ShareConfig } from "./share-page";
 
 /**
- * Shared fishing windows. A link is `https://fishing.fishnz.space/w/<token>` where the token is the unpadded base64url of a
- * small JSON snapshot written by the Android and iPhone apps (see docs/share-fishing-window.md). The Worker stores nothing:
- * it validates the snapshot and draws it. Every field is length-limited and plain text, so a forged link can show only a
- * few lines of text, never markup, links or forms.
+ * Shared fishing windows. A window is a small JSON snapshot written by the Android and iPhone apps and encoded as an
+ * unpadded base64url token (see docs/share-fishing-window.md). It reaches people two ways:
+ *   - short link `/w/<8-character id>`: the app posts the token to POST /v1/share, the Worker keeps it for 60 days and
+ *     returns the id. This is what people share.
+ *   - long link `/w/<token>`: the whole window is in the address, so it needs no storage. The apps use it when the
+ *     Worker can't be reached, and links made before short links existed keep working.
+ * Either way the Worker validates the snapshot and draws it. Every field is length-limited and plain text, so a forged
+ * link can show only a few lines of text, never markup, links or forms.
  */
 
 export type MoodPair = { emoji: string; label: string };
@@ -33,6 +39,14 @@ const EARLIEST = Date.UTC(2024, 0, 1) / 1000;
 const LATEST = Date.UTC(2100, 0, 1) / 1000;
 const MAX_WINDOW_SECONDS = 24 * 3600;
 const WINDOW_ROUTE = /^\/w\/([^/]+)\/?$/;
+const SHARE_API_ROUTE = /^\/v1\/share(?:\/([^/]+))?\/?$/;
+// 57 characters without the look-alikes 0 O 1 I l, so an id read aloud or typed from a screenshot survives.
+const SHORT_ID_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const SHORT_ID = /^[2-9A-HJ-NP-Za-km-z]{8}$/;
+const SHARE_LIFETIME_DAYS = 60;
+const MAX_SHARE_BODY_BYTES = 8192;
+const SHARES_PER_ADDRESS_PER_HOUR = 30;
+const SHARES_PER_HOUR_OVERALL = 3000;
 
 // Control characters, line/paragraph separators and bidirectional overrides never belong in a place name.
 const BIDI_AND_INVISIBLE = String.fromCharCode(0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff);
@@ -151,8 +165,63 @@ function icon(): Response {
   });
 }
 
+function randomShareId(): string {
+  // Rejection sampling keeps every character equally likely.
+  const limit = 256 - (256 % SHORT_ID_ALPHABET.length);
+  let id = "";
+  while (id.length < 8) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(16))) {
+      if (byte < limit && id.length < 8) id += SHORT_ID_ALPHABET[byte % SHORT_ID_ALPHABET.length];
+    }
+  }
+  return id;
+}
+
+async function createShare(request: Request, env: Env, config: ShareConfig): Promise<Response> {
+  if (Number(request.headers.get("content-length") || 0) > MAX_SHARE_BODY_BYTES) return json({ error: "That window is too large to share.", code: "too_large" }, 413);
+  // Counted before anything else, so invalid requests use up the allowance too.
+  const allowed = await allowAttempt(env.RULES_DB, { key: await rateKey("share", clientAddress(request)), limit: SHARES_PER_ADDRESS_PER_HOUR }, HOUR)
+    && await allowAttempt(env.RULES_DB, { key: "share:all", limit: SHARES_PER_HOUR_OVERALL }, HOUR);
+  if (!allowed) return tooManyRequests("Too many windows shared just now. Try again later.", HOUR);
+  const body = await readJson(request, MAX_SHARE_BODY_BYTES);
+  const token = typeof body?.token === "string" ? body.token : "";
+  if (!decodeSharedWindow(token)) return json({ error: "This window can't be shared.", code: "invalid_window" }, 400);
+  const now = Date.now();
+  const expiresAt = new Date(now + SHARE_LIFETIME_DAYS * 86_400_000).toISOString();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const id = randomShareId();
+    try {
+      await env.RULES_DB.prepare("INSERT INTO shared_windows (id, token, created_at, expires_at) VALUES (?, ?, ?, ?)")
+        .bind(id, token, new Date(now).toISOString(), expiresAt).run();
+      return json({ id, url: `${config.origin}/w/${id}`, expires_at: expiresAt }, 201);
+    } catch (error) {
+      if (!String(error).includes("UNIQUE")) throw error;
+    }
+  }
+  return json({ error: "Could not make a link just now. Try again.", code: "unavailable" }, 503);
+}
+
+async function storedToken(env: Env, id: string): Promise<string | null> {
+  const row = await env.RULES_DB.prepare("SELECT token FROM shared_windows WHERE id = ? AND expires_at > ?")
+    .bind(id, new Date().toISOString()).first<{ token: string }>();
+  return row?.token ?? null;
+}
+
+async function handleShareApi(request: Request, env: Env, id: string | undefined): Promise<Response> {
+  if (id === undefined) {
+    if (request.method !== "POST") return json({ error: "Use POST to share a window." }, 405);
+    return createShare(request, env, shareConfig(env, request));
+  }
+  if (request.method !== "GET") return json({ error: "Use GET to read a shared window." }, 405);
+  const token = SHORT_ID.test(id) ? await storedToken(env, id) : null;
+  if (!token) return json({ error: "This shared window is no longer available.", code: "not_found" }, 404);
+  return json({ token });
+}
+
 export async function handleShareRoute(request: Request, env: Env): Promise<Response | null> {
   const pathname = new URL(request.url).pathname;
+  const api = pathname.match(SHARE_API_ROUTE);
+  if (api) return handleShareApi(request, env, api[1]);
   const match = pathname.match(WINDOW_ROUTE);
   const known = match || pathname === "/w" || pathname === "/w/" || pathname === "/share/icon.png"
     || pathname === "/.well-known/apple-app-site-association" || pathname === "/.well-known/assetlinks.json";
@@ -162,7 +231,16 @@ export async function handleShareRoute(request: Request, env: Env): Promise<Resp
   if (pathname === "/.well-known/apple-app-site-association") return appleSiteAssociation(env);
   if (pathname === "/.well-known/assetlinks.json") return androidAssetLinks(env);
   const config = shareConfig(env, request);
-  const shared = match ? decodeSharedWindow(match[1]) : null;
-  if (!match || !shared) return renderInvalidSharePage(config);
-  return renderSharePage(shared, match[1], config);
+  if (!match) return renderInvalidSharePage(config, "damaged");
+  if (SHORT_ID.test(match[1])) {
+    let token: string | null;
+    try { token = await storedToken(env, match[1]); } catch (error) {
+      console.error("Could not read a shared window", String(error));
+      return renderInvalidSharePage(config, "unavailable");
+    }
+    const stored = token ? decodeSharedWindow(token) : null;
+    return stored ? renderSharePage(stored, match[1], config) : renderInvalidSharePage(config, "gone");
+  }
+  const shared = decodeSharedWindow(match[1]);
+  return shared ? renderSharePage(shared, match[1], config) : renderInvalidSharePage(config, "damaged");
 }

@@ -56,6 +56,9 @@ struct CatchCheckRootView: View {
         .preferredColorScheme(preferredAppearance)
         .fullScreenCover(isPresented: $vm.showingResults) { ResultsView() }
         .sheet(item: $vm.selectedSpot) { SpotDetailView(spot: $0) }
+        .alert("Shared window", isPresented: Binding(get: { vm.sharedWindowNotice != nil }, set: { if !$0 { vm.sharedWindowNotice = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(vm.sharedWindowNotice ?? "") }
         .sheet(item: $moreDestination) { destination in
             switch destination {
             case .trips: TripsView()
@@ -1260,11 +1263,36 @@ private struct SearchStationPicker: View {
     }
 }
 
+/// What the share sheet sends for a fishing window.
+struct ShareContent: Identifiable {
+    let id = UUID()
+    let subject: String
+    let text: String
+}
+
+/// The system share sheet, shown once the link is ready. `ShareLink` cannot wait for a network call.
+private struct ActivityView: UIViewControllerRepresentable {
+    let content: ShareContent
+
+    private final class Item: NSObject, UIActivityItemSource, Sendable {
+        let content: ShareContent
+        init(_ content: ShareContent) { self.content = content }
+        func activityViewControllerPlaceholderItem(_ controller: UIActivityViewController) -> Any { content.text }
+        func activityViewController(_ controller: UIActivityViewController, itemForActivityType type: UIActivity.ActivityType?) -> Any? { content.text }
+        func activityViewController(_ controller: UIActivityViewController, subjectForActivityType type: UIActivity.ActivityType?) -> String { content.subject }
+    }
+
+    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: [Item(content)], applicationActivities: nil) }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
 struct SpotDetailView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var addToCalendar = false
     @State private var showingCalendarEditor = false
+    @State private var preparingShare = false
+    @State private var shareContent: ShareContent?
     let spot: Recommendation
     var body: some View {
         NavigationStack {
@@ -1312,10 +1340,18 @@ struct SpotDetailView: View {
                     } else {
                         Card { Text("Search from Home to compare forecast conditions and find a planning window for this spot.").foregroundStyle(.secondary) }
                     }
-                    if let link = SharedWindowLink.url(for: spot) {
-                        ShareLink(item: SharedWindowLink.text(for: spot, url: link), subject: Text("Fishing window · \(spot.name)")) {
-                            Label("Share this window", systemImage: "square.and.arrow.up")
-                        }.buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    if SharedWindowLink.canShare(spot) {
+                        Button {
+                            preparingShare = true
+                            Task {
+                                // A short link when the service answers, the long link otherwise, so sharing works offline.
+                                let link = await ShareLinkService.live.link(for: spot)
+                                preparingShare = false
+                                if let link { shareContent = ShareContent(subject: "Fishing window · \(spot.name)", text: SharedWindowLink.text(for: spot, url: link)) }
+                            }
+                        } label: {
+                            Label(preparingShare ? "Creating link…" : "Share this window", systemImage: "square.and.arrow.up")
+                        }.buttonStyle(.bordered).frame(maxWidth: .infinity).disabled(preparingShare)
                     }
                     Button(vm.savedSpotNames.contains(spot.id) ? "Remove saved spot" : "Save spot") { vm.toggleSaved(spot) }.buttonStyle(.bordered).frame(maxWidth: .infinity)
                     Toggle("Add this trip to my calendar", isOn: $addToCalendar)
@@ -1332,6 +1368,7 @@ struct SpotDetailView: View {
             .navigationTitle("Spot details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { vm.selectedSpot = nil; dismiss() } } }
+            .sheet(item: $shareContent) { ActivityView(content: $0).presentationDetents([.medium, .large]) }
             .sheet(isPresented: $showingCalendarEditor, onDismiss: {
                 vm.startTrip(spot)
                 dismiss()

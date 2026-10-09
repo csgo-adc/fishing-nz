@@ -79,6 +79,8 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import nz.fishingnz.app.data.ShareService
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -969,6 +971,8 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
     val appState = vm.state.value
     val reasonPeers = appState.recommendationSearch?.items?.takeIf { spot in it } ?: appState.savedRecommendations
     var addToCalendar by rememberSaveable(recommendationKey(spot)) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var sharing by remember { mutableStateOf(false) }
     Surface(modifier = Modifier.fillMaxSize(), color = Cream) {
         Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }
@@ -1012,11 +1016,18 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             }
             if (spot.sourceNote.isNotBlank() && spot.assessment == null) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             if (canShareWindow(spot)) OutlinedButton(onClick = {
-                if (!shareWindow(context, spot)) android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
-            }, modifier = Modifier.fillMaxWidth()) {
+                sharing = true
+                scope.launch {
+                    // A short link when the service answers, the long link otherwise, so sharing works offline.
+                    val link = ShareService.live.linkFor(spot)
+                    sharing = false
+                    if (link == null || !shareWindow(context, spot, link))
+                        android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }, enabled = !sharing, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Share this window")
+                Text(if (sharing) "Creating link…" else "Share this window")
             }
             OutlinedButton(onClick = { vm.toggleSaved(spot) }, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Remove saved spot" else "Save spot") }
             Row(verticalAlignment = Alignment.CenterVertically) {

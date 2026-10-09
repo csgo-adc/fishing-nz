@@ -9,6 +9,8 @@ enum SharedWindowLink {
     static let appScheme = "nz.fishingnz.catchcheck"
 
     private static let version = 1
+    // Eight characters from an alphabet without the look-alikes 0 O 1 I l. No real token is this short.
+    private static let shortIDAlphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
     private static let maxRows = 8
     private static let maxWindowSeconds = 24 * 3600
     private static let earliest = 1_704_067_200 // 2024-01-01
@@ -30,9 +32,23 @@ enum SharedWindowLink {
         var t: Int?
     }
 
-    /// The link for `window`, or nil when it has no start and end time to share.
-    static func url(for window: Recommendation, now: Date = .now) -> URL? {
+    /// True when `window` has the start and end time a link needs; a spot saved from the map has neither.
+    static func canShare(_ window: Recommendation) -> Bool {
+        guard let start = window.startsAt, let end = window.endsAt else { return false }
+        return end > start
+    }
+
+    /// The long link, which holds the whole window in the address, or nil when it has no start and end time to share.
+    static func longURL(for window: Recommendation, now: Date = .now) -> URL? {
         encode(window, now: now).flatMap { URL(string: "\(origin)/w/\($0)") }
+    }
+
+    /// The short link the service made for a window, `https://fishing.fishnz.space/w/k3F9xQ2m`.
+    static func shortURL(id: String) -> String { "\(origin)/w/\(id)" }
+
+    /// True for the service's short ids, which have to be looked up, and false for a token that holds the window itself.
+    static func isShortID(_ token: String) -> Bool {
+        token.count == 8 && token.allSatisfy { shortIDAlphabet.contains($0) }
     }
 
     /// The text the share sheet sends: where and when, how it looks, and the link.
@@ -85,9 +101,9 @@ enum SharedWindowLink {
         return candidate
     }
 
-    /// A window read from a link the app was opened with, or nil when it is not a valid shared window.
+    /// A window read from a long link, or nil for anything else. A short link needs `ShareLinkService.window(forToken:)`.
     static func window(from url: URL) -> Recommendation? {
-        token(from: url).flatMap(decode)
+        token(from: url).flatMap { isShortID($0) ? nil : decode($0) }
     }
 
     static func decode(_ token: String) -> Recommendation? {

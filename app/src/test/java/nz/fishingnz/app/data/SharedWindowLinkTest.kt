@@ -57,7 +57,7 @@ class SharedWindowLinkTest {
 
     @Test fun aWindowSurvivesBeingSharedAndOpened() {
         val original = window()
-        val link = SharedWindowLink.url(original, nowEpochSeconds = start - 86_400)!!
+        val link = SharedWindowLink.longUrl(original, nowEpochSeconds = start - 86_400)!!
         assertTrue(link, link.startsWith("https://fishing.fishnz.space/w/"))
         val token = link.substringAfter("/w/")
         assertTrue("only URL-safe characters, no padding: $token", token.matches(Regex("[A-Za-z0-9_-]+")))
@@ -84,13 +84,13 @@ class SharedWindowLinkTest {
         val rows = listOf("Wind", "Rain", "Feels like", "Tide", "Offshore waves", "Daylight").map {
             ConditionItem(it, "14 km/h · gust 22 · SW and a few more words", WindowMood("🌤️", "Mostly dry"))
         }
-        val link = SharedWindowLink.url(window(rows))!!
+        val link = SharedWindowLink.longUrl(window(rows))!!
         assertTrue("${link.length} characters", link.length < 1_000)
     }
 
     @Test fun aWindowWithoutAStartTimeCannotBeShared() {
-        assertNull(SharedWindowLink.url(window().copy(startsAtEpochSeconds = 0)))
-        assertNull(SharedWindowLink.url(window().copy(durationHours = 0)))
+        assertNull(SharedWindowLink.longUrl(window().copy(startsAtEpochSeconds = 0)))
+        assertNull(SharedWindowLink.longUrl(window().copy(durationHours = 0)))
     }
 
     @Test fun onlyOurSharedWindowAddressesAreRecognised() {
@@ -99,11 +99,23 @@ class SharedWindowLinkTest {
         assertEquals(token, SharedWindowLink.tokenFrom("https://fishing.fishnz.space/w/$token/"))
         assertEquals(token, SharedWindowLink.tokenFrom("https://fishing.fishnz.space/w/$token?utm_source=chat#top"))
         assertEquals(token, SharedWindowLink.tokenFrom("HTTPS://FISHING.FISHNZ.SPACE/w/$token"))
+        assertEquals("k3F9xQ2m", SharedWindowLink.tokenFrom("https://fishing.fishnz.space/w/k3F9xQ2m"))
         listOf(
             null, "", "https://fishing.fishnz.space/privacy", "https://fishing.fishnz.space/w/", "https://evil.example/w/$token",
             "https://fishing.fishnz.space.evil.example/w/$token", "http://fishing.fishnz.space/w/$token",
             "nz.fishingnz.app://auth/callback?code=1", "https://fishing.fishnz.space/w/bad token", "https://fishing.fishnz.space/w/${"a".repeat(5000)}"
         ).forEach { assertNull(it, SharedWindowLink.tokenFrom(it)) }
+    }
+
+    @Test fun shortIdsAreToldApartFromWindowsInTheAddress() {
+        listOf("k3F9xQ2m", "23456789", "ZZzzZZzz").forEach { assertTrue(it, SharedWindowLink.isShortId(it)) }
+        // Wrong length, or a look-alike character (0 O 1 I l) the service never uses, or a real window token.
+        listOf("k3F9xQ2", "k3F9xQ2mm", "k3F9xQ20", "k3F9xQ2l", "k3F9xQ2I", "k3F9xQ2O", "k3F9xQ21", "", goldenToken)
+            .forEach { assertFalse(it, SharedWindowLink.isShortId(it)) }
+        assertEquals("https://fishing.fishnz.space/w/k3F9xQ2m", SharedWindowLink.shortUrl("k3F9xQ2m"))
+        // A short link cannot be read without asking the service, so the offline reader declines it.
+        assertNull(SharedWindowLink.parse("https://fishing.fishnz.space/w/k3F9xQ2m"))
+        assertNotNull(SharedWindowLink.parse("https://fishing.fishnz.space/w/$goldenToken"))
     }
 
     @Test fun damagedOrForgedLinksAreRefused() {

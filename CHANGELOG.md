@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.19 — 2026-10-09 (build code 20)
+
+- **Short share links.** Sharing a fishing window now sends a link like
+  `https://fishing.fishnz.space/w/k3F9xQ2m` instead of one about 800 characters long.
+  - Tapping **Share this window** asks the service for a short link ("Creating link…" for a moment).
+    If the service can't be reached, the app shares the long link as before, so sharing still works
+    offline. Long links made in 1.0.18 keep working.
+  - Opening a short link in the app fetches the window; if it has expired or the phone is offline, a
+    short message says so. The web page shows "no longer available" for an unknown or expired link.
+  - The service keeps a shared window for **60 days**, with no account, device or address. New
+    endpoints are `POST /v1/share` (30 a hour per network address) and `GET /v1/share/<id>`, and a
+    daily cleanup deletes expired rows. The privacy policy has a new "Sharing a fishing window"
+    section. New database migration `0011_shared_windows.sql`.
+- New checks: 10 more Worker tests (a real local D1), 7 more Android unit tests and 30 more iPhone
+  checks.
+- **Deploy the API (Actions → Deploy) before the apps depend on this**: short links need the new
+  endpoints and migration. Until then the apps fall back to long links.
+
 ## 1.0.18 — 2026-10-09 (build code 19)
 
 - **Share a fishing window** on Android and iPhone. A new **Share this window** button on a window's

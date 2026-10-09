@@ -310,6 +310,16 @@ class FishingRepository {
         accountRequest("/v1/analytics/batch", "POST", payload, AccountSessionStore.token(), "android")
     }
 
+    /** Ask the service for a short link to a shared window; the reply holds `id`. */
+    suspend fun createShare(token: String): JSONObject = withContext(Dispatchers.IO) {
+        accountRequest("/v1/share", "POST", JSONObject().put("token", token), platform = "android")
+    }
+
+    /** The token behind a short link; the reply holds `token`. */
+    suspend fun readShare(id: String): JSONObject = withContext(Dispatchers.IO) {
+        accountRequest("/v1/share/$id", "GET", platform = "android")
+    }
+
     suspend fun eraseAnalyticsDevice(deviceId: String): JSONObject = withContext(Dispatchers.IO) {
         accountRequest("/v1/analytics/device", "DELETE", deviceId = deviceId)
     }

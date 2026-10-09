@@ -18,6 +18,7 @@ import nz.fishingnz.app.data.SignInProviders
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.data.SearchPreferencesStore
 import nz.fishingnz.app.data.SharedWindowLink
+import nz.fishingnz.app.data.ShareService
 import nz.fishingnz.app.model.*
 import java.time.LocalDate
 import java.time.DayOfWeek
@@ -64,7 +65,8 @@ data class FishingUiState(
     val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountLoading: Boolean = true,
     val hasStoredSession: Boolean = false,
     val signInProviders: SignInProviders = SignInProviders(),
-    val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false
+    val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false,
+    val sharedWindowNotice: String? = null
 )
 
 class FishingViewModel(private val repository: FishingRepository = FishingRepository()) : ViewModel() {
@@ -324,12 +326,20 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         Analytics.track("spot_opened", "spot_id" to recommendationKey(value), "mode" to if (value.boat) "boat" else "land")
         _state.value = _state.value.copy(selectedSpot = value)
     }
-    /** Shows the window in a shared link the app was opened with. Anything else, including a damaged link, is ignored. */
+    /** Shows the window in a shared link the app was opened with. Other addresses are ignored. */
     fun openSharedWindow(uri: Uri?) {
-        val window = SharedWindowLink.parse(uri?.toString()) ?: return
-        _state.value = _state.value.copy(showResults = false)
-        openSpot(window)
+        val token = SharedWindowLink.tokenFrom(uri?.toString()) ?: return
+        viewModelScope.launch {
+            val window = ShareService.live.resolve(token)
+            if (window == null) {
+                _state.value = _state.value.copy(sharedWindowNotice = "This shared window couldn't be opened. The link may have expired or be damaged, or you may be offline.")
+            } else {
+                _state.value = _state.value.copy(showResults = false)
+                openSpot(window)
+            }
+        }
     }
+    fun dismissSharedWindowNotice() { _state.value = _state.value.copy(sharedWindowNotice = null) }
     fun closeSpot() { _state.value = _state.value.copy(selectedSpot = null) }
     fun startTrip() { _state.value.selectedSpot?.let { _state.value = _state.value.copy(activeTrip = it, selectedSpot = null) } }
     fun endTrip() { _state.value = _state.value.copy(activeTrip = null) }

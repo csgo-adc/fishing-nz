@@ -118,6 +118,11 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
             if (keep) Analytics.track("app_open")
             analyticsNotice = false
         })
+        state.sharedWindowNotice?.let { notice ->
+            AlertDialog(onDismissRequest = vm::dismissSharedWindowNotice,
+                confirmButton = { TextButton(onClick = vm::dismissSharedWindowNotice) { Text("OK") } },
+                title = { Text("Shared window") }, text = { Text(notice) })
+        }
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
         Scaffold(containerColor = palette.background, bottomBar = {
             if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {

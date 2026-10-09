@@ -21,7 +21,9 @@ A reset link lasts 1 hour, works once, ends every session and also confirms the 
 
 | Route | Purpose |
 | --- | --- |
-| `GET /w/<token>` | Web page for a window shared from the Android or iPhone app: phone and desktop layout, link-preview tags, download buttons, "Open in app". It stores nothing; the token is the window. An invalid token gets a friendly 404 page. |
+| `POST /v1/share` | Keep a shared window for 60 days and return a short id: `{"token"}` in, `{"id","url","expires_at"}` out. No sign-in. 30 an hour per network address. |
+| `GET /v1/share/<id>` | The window behind a short id, for the apps. `404` when unknown or expired. |
+| `GET /w/<id or token>` | Web page for a window shared from the Android or iPhone app: phone and desktop layout, link-preview tags, download buttons, "Open in app". `<id>` is a stored short link and `<token>` holds the whole window, so it needs no storage. A bad or expired link gets a friendly 404 page. |
 | `GET /.well-known/apple-app-site-association`, `/.well-known/assetlinks.json` | Let iPhones and Android open `/w/*` links in the app. Built from `APPLE_TEAM_ID` and `ANDROID_CERT_SHA256`. |
 | `GET /share/icon.png` | Page icon and link-preview image |
 

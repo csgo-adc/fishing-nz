@@ -10,11 +10,10 @@ import nz.fishingnz.app.model.Recommendation
 internal fun canShareWindow(window: Recommendation) = window.startsAtEpochSeconds > 0 && window.durationHours > 0
 
 /**
- * Opens the share sheet with where and when, and a link. In the app it opens this window; anywhere else it opens a web page
- * that shows it and offers the app. Returns false when there is nothing to share or no app can share text.
+ * Opens the share sheet with where and when, and [url] (see ShareService.linkFor). In the app the link opens this window;
+ * anywhere else it opens a web page that shows it and offers the app. Returns false when no app can share text.
  */
-internal fun shareWindow(context: Context, window: Recommendation): Boolean {
-    val url = SharedWindowLink.url(window) ?: return false
+internal fun shareWindow(context: Context, window: Recommendation, url: String): Boolean {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, "Fishing window · ${window.name}")

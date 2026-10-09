@@ -113,6 +113,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var savedRecommendations: [String: Recommendation] = [:]
     @Published var activeTrip: Recommendation?
     @Published var selectedSpot: Recommendation?
+    @Published var sharedWindowNotice: String?
     @Published var showingResults = false
     @Published var scoredWindows: [ScoredFishingWindow] = []
     @Published var isLoadingRecommendations = false
@@ -663,11 +664,17 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         if savedSpotNames.contains(spot.id) { savedSpotNames.remove(spot.id); savedRecommendations.removeValue(forKey: spot.id) }
         else { savedSpotNames.insert(spot.id); savedRecommendations[spot.id] = spot }
     }
-    /// Shows the window in a shared link the app was opened with. Anything else, including a damaged link, is ignored.
+    /// Shows the window in a shared link the app was opened with. Other addresses are ignored.
     func openSharedWindow(_ url: URL) {
-        guard let window = SharedWindowLink.window(from: url) else { return }
-        showingResults = false
-        selectedSpot = window
+        guard let token = SharedWindowLink.token(from: url) else { return }
+        Task {
+            if let window = await ShareLinkService.live.window(forToken: token) {
+                showingResults = false
+                selectedSpot = window
+            } else {
+                sharedWindowNotice = "This shared window couldn't be opened. The link may have expired or be damaged, or you may be offline."
+            }
+        }
     }
 
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }
