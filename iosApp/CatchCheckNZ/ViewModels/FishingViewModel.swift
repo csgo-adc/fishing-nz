@@ -255,7 +255,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 alternative: window.alternative,
                 dataComplete: window.dataComplete,
                 tidePreferenceFit: window.tidePreferenceFit,
-                assessment: window.assessment
+                assessment: window.assessment,
+                coordinate: window.coordinate
             )
         }
     }
@@ -662,6 +663,13 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         if savedSpotNames.contains(spot.id) { savedSpotNames.remove(spot.id); savedRecommendations.removeValue(forKey: spot.id) }
         else { savedSpotNames.insert(spot.id); savedRecommendations[spot.id] = spot }
     }
+    /// Shows the window in a shared link the app was opened with. Anything else, including a damaged link, is ignored.
+    func openSharedWindow(_ url: URL) {
+        guard let window = SharedWindowLink.window(from: url) else { return }
+        showingResults = false
+        selectedSpot = window
+    }
+
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }
     func refreshAccount() {
         let version = accountRequestVersion

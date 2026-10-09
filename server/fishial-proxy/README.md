@@ -17,6 +17,16 @@ The live backend for the Android, iOS and admin web apps, served at `https://fis
 
 A reset link lasts 1 hour, works once, ends every session and also confirms the email address. It works for Google and Apple accounts that want to add a password. A "password was changed" notice goes to the account email after a reset or change.
 
+## Shared fishing windows
+
+| Route | Purpose |
+| --- | --- |
+| `GET /w/<token>` | Web page for a window shared from the Android or iPhone app: phone and desktop layout, link-preview tags, download buttons, "Open in app". It stores nothing; the token is the window. An invalid token gets a friendly 404 page. |
+| `GET /.well-known/apple-app-site-association`, `/.well-known/assetlinks.json` | Let iPhones and Android open `/w/*` links in the app. Built from `APPLE_TEAM_ID` and `ANDROID_CERT_SHA256`. |
+| `GET /share/icon.png` | Page icon and link-preview image |
+
+`IOS_DOWNLOAD_URL` and `ANDROID_DOWNLOAD_URL` are the store buttons and stay `#` until the apps are published. The format, limits and setup steps are in [share-fishing-window.md](../../docs/share-fishing-window.md).
+
 ## Abuse limits
 
 Counters live in `rate_limit_counters` as fixed windows. Keys are one-way hashes, and the daily cleanup deletes counters older than a day. A limited request returns `429` with `code: "rate_limited"` and a `Retry-After` header.

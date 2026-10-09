@@ -75,7 +75,10 @@ data class Recommendation(
     val dataComplete: Boolean = true,
     val daylightFraction: Double = 1.0,
     val tidePreferenceFit: Double = 0.0,
-    val assessment: WindowAssessment? = null
+    val assessment: WindowAssessment? = null,
+    // The named area's marker, so a shared window can link to a map. NaN when unknown.
+    val latitude: Double = Double.NaN,
+    val longitude: Double = Double.NaN
 )
 /** Subjective planning reactions, never a catch probability or a safety clearance. */
 data class WindowMood(val emoji: String, val label: String)

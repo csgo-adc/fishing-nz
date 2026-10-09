@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.18 — 2026-10-09 (build code 19)
+
+- **Share a fishing window** on Android and iPhone. A new **Share this window** button on a window's
+  detail screen opens the share sheet with the place, time and outlook and a link, so it can go to
+  WeChat, WhatsApp, Instagram, Facebook, Messages and so on.
+  - The link is `https://fishing.fishnz.space/w/<token>`. The token is the window itself (place, time,
+    outlook and conditions), so nothing is stored on the server and no account is needed.
+  - Friends with the app open the window inside it, with a "Shared with you · forecast may have
+    changed" note. The link is an App Link on Android and a Universal Link on iPhone (both need the
+    setup below to open the app directly), with the app's own `nz.fishingnz.catchcheck://w/…` address
+    as an iPhone fallback. A damaged link is ignored.
+  - Everyone else gets a web page for phone and desktop (light and dark): the window, conditions,
+    map links, an "Open in app" button, **Copy link**, and download buttons. Opened inside WeChat,
+    Instagram or Facebook's browser it explains how to open the real browser. The page is served by
+    the API Worker, allows only its own script, and is marked `noindex`.
+  - The **Download for iPhone / Android** buttons are `#` for now ("link coming soon"). Set
+    `IOS_DOWNLOAD_URL` and `ANDROID_DOWNLOAD_URL` in `server/fishial-proxy/wrangler.toml` once the apps
+    are published.
+  - To make links open the app directly, set `APPLE_TEAM_ID` (paid Apple team) and add Play's app
+    signing certificate to `ANDROID_CERT_SHA256`; until then links open the web page. Steps in
+    [docs/share-fishing-window.md](docs/share-fishing-window.md).
+  - iOS: the Release configuration gets `CatchCheckNZRelease.entitlements` (Associated Domains). Debug is
+    unchanged, because a free Personal Team cannot sign that capability.
+- Each fishing window now carries its area's map position (a new coordinate on the window model in
+  both apps), so a shared window can link to a map.
+- New checks: 12 Worker tests, 8 Android unit tests and 45 iPhone regression checks
+  (`tools/test_shared_window_swift.sh`). A fixed sample link is read by all three, so the format
+  cannot drift between them.
+- The API Worker needs a deploy for the page and the `.well-known` files. No database change.
+
 ## 1.0.17 — 2026-10-09 (build code 18)
 
 - Android: bring the three iPhone features from 1.0.16 to Android.

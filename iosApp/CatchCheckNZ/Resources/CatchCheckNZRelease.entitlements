@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Release only: the same as CatchCheckNZ.entitlements plus Associated Domains, so shared-window links open the app. -->
+	<!-- A free Personal Team cannot sign Associated Domains, so Debug keeps the plain file until the paid team is selected. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:fishing.fishnz.space</string>
+	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
+	</array>
+</dict>
+</plist>

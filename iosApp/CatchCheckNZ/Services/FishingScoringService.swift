@@ -28,6 +28,7 @@ struct ScoredFishingWindow: Identifiable, Sendable {
     var daylightFraction: Double = 0
     var tidePreferenceFit: Double = 0
     var assessment: WindowAssessment? = nil
+    var coordinate: GeoPoint? = nil
 }
 
 struct PreferredFishingHours: Sendable {
@@ -522,7 +523,7 @@ struct FishingScoringService: Sendable {
                      distanceKm: distanceKm, reasons: [briefReason], warnings: warnings,
                      summary: briefReason, conditions: conditions,
                      sourceNote: sourceNote, rankingValue: comfort, dataComplete: complete,
-                     daylightFraction: daylight, tidePreferenceFit: tideFacts.fit, assessment: assessment)
+                     daylightFraction: daylight, tidePreferenceFit: tideFacts.fit, assessment: assessment, coordinate: spot.coordinate)
     }
 
     static func tideContext(start: Date, end: Date, tides: [LINZTidePrediction], station: TideStation?) -> (description: String, fit: Double, complete: Bool) {
@@ -897,7 +898,7 @@ enum LandAssessment {
                      score: 100-grade*25, start: start, end: end, distanceKm: distance, reasons: [reason], warnings: details,
                      summary: reason, conditions: rows.map { "\($0.title): \($0.value) · \($0.mood.emoji) \($0.mood.label)" },
                      sourceNote: sourceNote, rankingValue: Double(3-grade), dataComplete: complete,
-                     daylightFraction: daylight ?? 0, tidePreferenceFit: tideFacts.fit, assessment: assessment)
+                     daylightFraction: daylight ?? 0, tidePreferenceFit: tideFacts.fit, assessment: assessment, coordinate: spot.coordinate)
     }
 }
 private func validTimes(_ values: [Int]) -> Bool { !values.isEmpty && zip(values, values.dropFirst()).allSatisfy { $1 > $0 } }

@@ -1312,6 +1312,11 @@ struct SpotDetailView: View {
                     } else {
                         Card { Text("Search from Home to compare forecast conditions and find a planning window for this spot.").foregroundStyle(.secondary) }
                     }
+                    if let link = SharedWindowLink.url(for: spot) {
+                        ShareLink(item: SharedWindowLink.text(for: spot, url: link), subject: Text("Fishing window · \(spot.name)")) {
+                            Label("Share this window", systemImage: "square.and.arrow.up")
+                        }.buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    }
                     Button(vm.savedSpotNames.contains(spot.id) ? "Remove saved spot" : "Save spot") { vm.toggleSaved(spot) }.buttonStyle(.bordered).frame(maxWidth: .infinity)
                     Toggle("Add this trip to my calendar", isOn: $addToCalendar)
                     if addToCalendar && spot.startsAt == nil {

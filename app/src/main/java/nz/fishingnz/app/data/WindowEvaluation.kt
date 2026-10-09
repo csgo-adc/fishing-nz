@@ -215,7 +215,8 @@ internal object WindowEvaluation {
             distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = 2,
             summary = briefReason, conditions = conditions, sourceNote = sourceNote,
             rankingValue = comfort, dataComplete = complete,
-            daylightFraction = daylight, tidePreferenceFit = tideFit, assessment = assessment
+            daylightFraction = daylight, tidePreferenceFit = tideFit, assessment = assessment,
+            latitude = spot.latitude, longitude = spot.longitude
         )
     }
 

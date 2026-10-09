@@ -1,5 +1,6 @@
 import { handleSocialAuth, type SocialAuthEnv } from "./social-auth";
 import { handlePrivacyRoute, deleteAccountData, cleanupAccountData } from "./privacy";
+import { handleShareRoute } from "./share";
 import { identificationDay, identificationQuota, reserveIdentification, releaseIdentification } from "./identification-quota";
 import { changePassword, handlePasswordRoute } from "./password-reset";
 import { HOUR, MINUTE, allowAttempt, clientAddress, isRateLimited, rateKey, recordAttempt, tooManyRequests } from "./rate-limit";
@@ -19,6 +20,11 @@ export interface Env extends SocialAuthEnv {
   ACCOUNT_EMAIL_FROM?: string;
   PUBLIC_DEVELOPER_NAME?: string;
   PUBLIC_SUPPORT_EMAIL?: string;
+  // Shared-window page and app links. Store pages stay "#" until the apps are published; see docs/share-fishing-window.md.
+  IOS_DOWNLOAD_URL?: string;
+  ANDROID_DOWNLOAD_URL?: string;
+  APPLE_TEAM_ID?: string;
+  ANDROID_CERT_SHA256?: string;
 }
 
 export type Account = {
@@ -530,6 +536,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (pathname === "/__health") return json({ ok: true, version: packageInfo.version });
     const privacyResponse = await handlePrivacyRoute(request, env);
     if (privacyResponse) return privacyResponse;
+    const shareResponse = await handleShareRoute(request, env);
+    if (shareResponse) return shareResponse;
     const passwordResponse = await handlePasswordRoute(request, env);
     if (passwordResponse) return passwordResponse;
     if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/")) {

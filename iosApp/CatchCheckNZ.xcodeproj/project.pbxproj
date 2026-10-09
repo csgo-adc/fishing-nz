@@ -20,6 +20,7 @@
 		AA000011 /* PlaceConditionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100013 /* PlaceConditionsService.swift */; };
 		AA000012 /* PlaceConditionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100014 /* PlaceConditionsView.swift */; };
 		AA000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100015 /* Assets.xcassets */; };
+		AA000014 /* SharedWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100016 /* SharedWindow.swift */; };
 		AA000099 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA100099 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -39,6 +40,7 @@
 		AA100013 /* PlaceConditionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceConditionsService.swift; sourceTree = "<group>"; };
 		AA100014 /* PlaceConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceConditionsView.swift; sourceTree = "<group>"; };
 		AA100015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA100016 /* SharedWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedWindow.swift; sourceTree = "<group>"; };
 		AA100099 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -94,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				AA100002 /* FishingModels.swift */,
+				AA100016 /* SharedWindow.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -221,6 +224,7 @@
 				AA000010 /* WeatherView.swift in Sources */,
 				AA000011 /* PlaceConditionsService.swift in Sources */,
 				AA000012 /* PlaceConditionsView.swift in Sources */,
+				AA000014 /* SharedWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -256,11 +260,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZ.entitlements;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 19;
 				DEVELOPMENT_TEAM = 93N35X579F;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.17;
+				MARKETING_VERSION = 1.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -276,12 +280,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZ.entitlements;
-				CURRENT_PROJECT_VERSION = 18;
+				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZRelease.entitlements;
+				CURRENT_PROJECT_VERSION = 19;
 				DEVELOPMENT_TEAM = 93N35X579F;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.17;
+				MARKETING_VERSION = 1.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

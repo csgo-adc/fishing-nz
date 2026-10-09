@@ -39,6 +39,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nz.fishingnz.app" android:host="auth" android:path="/callback" />
             </intent-filter>
+            <!-- Shared fishing windows. autoVerify needs https://fishing.fishnz.space/.well-known/assetlinks.json to list this app's signing keys. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="fishing.fishnz.space" android:pathPrefix="/w/" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.17 (build code 18)**. The original code is preserved
+Current project version: **1.0.18 (build code 19)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -16,6 +16,8 @@ Start with your current location or choose a town. Pick land or boat fishing, ho
 The app compares named fishing areas and suggests two-hour windows. Each suggestion shows a short outlook label, straight-line distance, a suggested time, reasons for the suggestion, and any weather or sea-condition warnings.
 
 Suggestions normally fit between **7:00 AM and 9:00 PM**. Choose your own hours, including overnight, or select **Anytime** if you are happy to start early.
+
+**Share a window.** Open a window and tap **Share this window** to send a link to WeChat, WhatsApp, Instagram, Facebook, Messages or anyone else. Friends with the app open it there; everyone else gets a web page that works on phones and computers, shows the window and offers the app. [How sharing works and what to set up](docs/share-fishing-window.md).
 
 ## See the tides
 

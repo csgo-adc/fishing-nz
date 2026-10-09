@@ -83,6 +83,8 @@ struct Recommendation: Identifiable, Equatable {
     var dataComplete: Bool = true
     var tidePreferenceFit: Double = 0
     var assessment: WindowAssessment? = nil
+    /// The named area's marker, so a shared window can link to a map.
+    var coordinate: GeoPoint? = nil
     var id: String { "\(boat ? "boat" : "land"):\(name)" }
     var windowID: String { "\(id):\(startsAt?.timeIntervalSince1970 ?? 0)" }
     var windowMood: WindowMood {

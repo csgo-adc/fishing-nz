@@ -17,6 +17,7 @@ import nz.fishingnz.app.data.AnalyticsPayload
 import nz.fishingnz.app.data.SignInProviders
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.data.SearchPreferencesStore
+import nz.fishingnz.app.data.SharedWindowLink
 import nz.fishingnz.app.model.*
 import java.time.LocalDate
 import java.time.DayOfWeek
@@ -322,6 +323,12 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun openSpot(value: Recommendation) {
         Analytics.track("spot_opened", "spot_id" to recommendationKey(value), "mode" to if (value.boat) "boat" else "land")
         _state.value = _state.value.copy(selectedSpot = value)
+    }
+    /** Shows the window in a shared link the app was opened with. Anything else, including a damaged link, is ignored. */
+    fun openSharedWindow(uri: Uri?) {
+        val window = SharedWindowLink.parse(uri?.toString()) ?: return
+        _state.value = _state.value.copy(showResults = false)
+        openSpot(window)
     }
     fun closeSpot() { _state.value = _state.value.copy(selectedSpot = null) }
     fun startTrip() { _state.value.selectedSpot?.let { _state.value = _state.value.copy(activeTrip = it, selectedSpot = null) } }

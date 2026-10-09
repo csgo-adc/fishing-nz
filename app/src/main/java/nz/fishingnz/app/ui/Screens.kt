@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -1010,6 +1011,13 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 }
             }
             if (spot.sourceNote.isNotBlank() && spot.assessment == null) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            if (canShareWindow(spot)) OutlinedButton(onClick = {
+                if (!shareWindow(context, spot)) android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Share this window")
+            }
             OutlinedButton(onClick = { vm.toggleSaved(spot) }, modifier = Modifier.fillMaxWidth()) { Text(if (saved) "Remove saved spot" else "Save spot") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = addToCalendar, onCheckedChange = { addToCalendar = it })

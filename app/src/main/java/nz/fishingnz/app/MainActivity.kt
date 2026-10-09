@@ -23,6 +23,8 @@ class MainActivity : ComponentActivity() {
         if (PrivacyPreferences.firebaseEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
         Analytics.track("app_open")
         fishingViewModel.completeSocialSignIn(intent.data)
+        // Only on a fresh start: after a rotation the same intent is delivered again and must not reopen the window.
+        if (savedInstanceState == null) fishingViewModel.openSharedWindow(intent.data)
         setContent { CatchCheckApp(fishingViewModel) }
     }
 
@@ -35,5 +37,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         fishingViewModel.completeSocialSignIn(intent.data)
+        fishingViewModel.openSharedWindow(intent.data)
     }
 }

@@ -173,6 +173,7 @@ internal object LandAssessment {
             warnings = details, distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = 2,
             summary = reason, conditions = rows.map { "${it.title}: ${it.value} · ${it.mood.emoji} ${it.mood.label}" },
             sourceNote = sourceNote, rankingValue = (3 - grade).toDouble(), dataComplete = complete,
-            daylightFraction = daylight ?: 0.0, tidePreferenceFit = fit, assessment = assessment)
+            daylightFraction = daylight ?: 0.0, tidePreferenceFit = fit, assessment = assessment,
+            latitude = spot.latitude, longitude = spot.longitude)
     }
 }

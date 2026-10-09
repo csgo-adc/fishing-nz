@@ -32,6 +32,7 @@ Do them in this order.
 5. **Keep a working reviewer account.** Fish identification needs sign-in, so App Review needs credentials ([2.1(a)](https://developer.apple.com/app-store/review/guidelines/)). Reuse the email-verified Play reviewer account or make another. Do not commit the password. The five-per-day identification limit applies to it, so test with other accounts.
 6. **Provide a support URL and a review phone number.** Until a dedicated support page exists, `https://fishing.fishnz.space/privacy` lists the publisher contact. App Review Information also needs a phone number.
 7. **Decide the three open questions** in the next section.
+8. **Turn on shared-window links.** Copy the paid team's 10-character Team ID (developer.apple.com → Membership details), set `APPLE_TEAM_ID` in `server/fishial-proxy/wrangler.toml`, and deploy the API. Once the app has a store page, set `IOS_DOWNLOAD_URL` the same way so the web page's iPhone button becomes a real link. The Release build already carries the Associated Domains entitlement. See [share-fishing-window.md](share-fishing-window.md).
 
 ## Decisions
 
