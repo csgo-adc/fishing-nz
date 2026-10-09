@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.17 — 2026-10-09 (build code 18)
+
+- Android: bring the three iPhone features from 1.0.16 to Android.
+  - The tide card on a place's conditions page now draws the day's **tide curve** with a time and
+    height readout and slider, the same chart as the Tide tab (they share one composable), above the
+    day's published highs and lows. It replaces the plain list of events.
+  - The map has **+ and − zoom buttons** above the location button, so one thumb can zoom without
+    pinching. Quick presses add up, and a button dims at the minimum or maximum zoom. The buttons
+    move up with the location button when a place card is open.
+  - The More page has **Share Fishdays - NZ**. It opens the Android share sheet with a short
+    invitation and the app's Google Play link, which opens for the public once the app is published to
+    production.
+- iOS: keep the "Heights above Chart Datum" label beside the published highs and lows on the place
+  page's tide card. 1.0.16 dropped it, but `docs/place-conditions.md` promises it stays visible.
+- No change to the service.
+
 ## 1.0.16 — 2026-10-09 (build code 17)
 
 - iOS: the tide card on a place's conditions page now draws the day's **tide curve** with a time

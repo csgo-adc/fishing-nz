@@ -1475,7 +1475,8 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
     }
 }
 
-@Composable private fun TideCurve(points: List<TidePoint>, date: java.time.LocalDate) {
+/** Readout, curve, slider and time labels for one day's tide. Shared by the Tide tab and a place's conditions page. */
+@Composable internal fun TideCurve(points: List<TidePoint>, date: java.time.LocalDate) {
     if (points.size < 2) return
     val scheme = MaterialTheme.colorScheme
     val curveColor = scheme.primary

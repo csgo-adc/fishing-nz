@@ -151,13 +151,20 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                     else {
                                         val distance = placeDistanceKm(place.point, GeoPoint(station!!.latitude, station!!.longitude))
                                         Text("Reference station · ${PlaceConditionRows.number(distance, 1)} km away", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text("Heights above Chart Datum", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         if (tideLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
                                         else if (tideIssue) { Text(if (selectedStation == null) "Nearby tide stations could not be loaded." else "Tide unavailable for this station and day."); TextButton(onClick = { tideRefresh++ }) { Text("Retry tide") } }
-                                        else tide?.events?.forEach { event -> Row(Modifier.fillMaxWidth()) {
-                                            Text("${if (event.type == "High") "↗️" else "↘️"} ${event.type}", Modifier.width(76.dp))
-                                            Text(event.time, Modifier.weight(1f)); Text(event.height, fontWeight = FontWeight.SemiBold)
-                                        } }
+                                        else tide?.let { state ->
+                                            // The same curve, readout and slider as the Tide tab, then the day's published highs and lows.
+                                            TideCurve(state.points, day)
+                                            if (state.points.firstOrNull()?.minuteOfDay != 0 || state.points.lastOrNull()?.minuteOfDay != 1440)
+                                                Text("Curve is limited where an adjacent day's table is unavailable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("Published high and low tides", color = Navy, fontWeight = FontWeight.Bold)
+                                            Text("Heights above Chart Datum", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            state.events.forEach { event -> Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), Arrangement.SpaceBetween) {
+                                                Text(event.type, color = Navy, fontWeight = FontWeight.SemiBold)
+                                                Text("${event.time} · ${event.height}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            } }
+                                        }
                                         TextButton(onClick = { tideDetails = !tideDetails }, contentPadding = PaddingValues(0.dp)) {
                                             Text("Tide details")
                                             Icon(if (tideDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (tideDetails) "Hide tide details" else "Show tide details")

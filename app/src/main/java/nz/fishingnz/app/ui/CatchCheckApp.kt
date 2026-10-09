@@ -1,6 +1,9 @@
 package nz.fishingnz.app.ui
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -24,12 +27,14 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Waves
@@ -50,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import nz.fishingnz.app.model.recommendationKey
 import nz.fishingnz.app.viewmodel.FishingViewModel
 import nz.fishingnz.app.data.Analytics
+import nz.fishingnz.app.data.AppShare
 import nz.fishingnz.app.data.PrivacyLinks
 import nz.fishingnz.app.data.PrivacyPreferences
 
@@ -171,6 +177,7 @@ private fun MoreDetail(title: String, back: () -> Unit, modifier: Modifier, cont
 
 @Composable
 private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> Unit) {
+    val context = LocalContext.current
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Spacer(Modifier.height(2.dp))
         Text("More", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -187,8 +194,21 @@ private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> U
         Spacer(Modifier.height(2.dp))
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             MoreItem(Icons.Default.Settings, "Settings", "Appearance, feedback, terms and privacy") { onNavigate(7) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.Group, "Share Fishdays - NZ", "Tell a friend about the app", trailingIcon = Icons.Default.Share) { shareApp(context) }
         }
     }
+}
+
+/** Opens the system share sheet with a short invitation and the app's Google Play link. */
+private fun shareApp(context: Context) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, AppShare.SUBJECT)
+        putExtra(Intent.EXTRA_TEXT, AppShare.text())
+    }
+    try { context.startActivity(Intent.createChooser(send, AppShare.SUBJECT)) }
+    catch (_: ActivityNotFoundException) { /* No app can share text on this device. */ }
 }
 
 @Composable
@@ -276,13 +296,14 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
 }
 
 @Composable
-private fun MoreItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String, onClick: () -> Unit) {
+private fun MoreItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String,
+                     trailingIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.ChevronRight, onClick: () -> Unit) {
     Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(0.dp)) {
         ListItem(
             headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
             supportingContent = { Text(detail) },
             leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
+            trailingContent = { Icon(trailingIcon, contentDescription = null) }
         )
     }
 }

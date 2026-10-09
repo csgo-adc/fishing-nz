@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Layers
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import nz.fishingnz.app.data.ConditionPlace
 import nz.fishingnz.app.data.recommendationTideStation
@@ -133,6 +135,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var mapError by remember { mutableStateOf(false) }
     var locationNotice by remember { mutableStateOf<String?>(null) }
     var zoom by remember { mutableDoubleStateOf(5.0) }
+    // Where the last button zoom is heading, so quick presses add up instead of starting from a half-finished zoom.
+    var zoomTarget by remember { mutableStateOf<Double?>(null) }
     var bearing by remember { mutableDoubleStateOf(0.0) }
     var styleRevision by remember { mutableIntStateOf(0) }
     BackHandler(enabled = showMapStyles || showList || selectedPlace != null) {
@@ -155,7 +159,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             getMapAsync { map ->
                 map.uiSettings.isCompassEnabled = false
                 map.uiSettings.isAttributionEnabled = true
-                map.addOnCameraIdleListener { zoom = map.cameraPosition.zoom }
+                map.addOnCameraIdleListener { zoom = map.cameraPosition.zoom; zoomTarget = null }
                 map.addOnMapClickListener { point ->
                     selectedPlace = ConditionPlace("Dropped pin", GeoPoint(point.latitude, point.longitude), "Selected on map", boat = filter == "Boat")
                     navigationError = false
@@ -266,6 +270,12 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         if (fine || coarse) locate()
         else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
+    fun zoomBy(step: Double) {
+        val map = nativeMap.value ?: return
+        val target = ((zoomTarget ?: map.cameraPosition.zoom) + step).coerceIn(map.minZoomLevel, map.maxZoomLevel)
+        zoomTarget = target
+        map.animateCamera(CameraUpdateFactory.zoomTo(target))
+    }
     fun selectBaseMap(option: BaseMap) {
         showMapStyles = false
         if (baseMap == option) return
@@ -313,15 +323,23 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     MapCompass(bearing)
                 }
             }
-            FloatingActionButton(onClick = ::requestLocation,
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = when {
-                        selectedPlace != null -> maxOf(selectedCardHeight, 196.dp) + 24.dp
-                        locationNotice != null -> 84.dp
-                        else -> 20.dp
-                    }).size(48.dp),
-                shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
-                Icon(Icons.Default.NearMe, contentDescription = "Center map on my location")
+            // Zoom and location buttons sit together at the bottom right, where a thumb reaches them.
+            Column(Modifier.align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = when {
+                    selectedPlace != null -> maxOf(selectedCardHeight, 196.dp) + 24.dp
+                    locationNotice != null -> 84.dp
+                    else -> 20.dp
+                }),
+                horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val map = nativeMap.value
+                MapZoomControl(
+                    canZoomIn = map != null && zoom < map.maxZoomLevel - 0.05,
+                    canZoomOut = map != null && zoom > map.minZoomLevel + 0.05,
+                    onZoomIn = { zoomBy(1.0) }, onZoomOut = { zoomBy(-1.0) })
+                FloatingActionButton(onClick = ::requestLocation, modifier = Modifier.size(48.dp),
+                    shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
+                    Icon(Icons.Default.NearMe, contentDescription = "Center map on my location")
+                }
             }
             if (!mapLoaded && !mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -479,6 +497,18 @@ private fun AttributionLink(label: String, url: String) {
     Text(label,
         Modifier.clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
         color = Color(0xFF154E8A), style = MaterialTheme.typography.labelSmall)
+}
+
+/** Zoom in and out with one thumb, without pinching. */
+@Composable
+private fun MapZoomControl(canZoomIn: Boolean, canZoomOut: Boolean, onZoomIn: () -> Unit, onZoomOut: () -> Unit) {
+    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, contentColor = Navy, shadowElevation = 6.dp) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(onClick = onZoomIn, enabled = canZoomIn, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Add, "Zoom in") }
+            HorizontalDivider(Modifier.width(26.dp))
+            IconButton(onClick = onZoomOut, enabled = canZoomOut, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Remove, "Zoom out") }
+        }
+    }
 }
 
 @Composable

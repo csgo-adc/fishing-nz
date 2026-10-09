@@ -163,6 +163,7 @@ struct PlaceConditionsView: View {
                     TideChart(tide: tide, day: day, curveHeight: 180)
                         .id("\(station.id)-\(day.timeIntervalSince1970)")
                     Text("Published high and low tides").font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                    Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                     TideEventRows(events: tide.events).font(.subheadline)
                 }
                 DisclosureGroup("Tide details") {
