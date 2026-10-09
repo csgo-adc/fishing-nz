@@ -8,10 +8,10 @@ AUTH_BASE_URL = "https://fishing.fishnz.space"
 PUBLIC_DEVELOPER_NAME = "Tristan"
 PUBLIC_SUPPORT_EMAIL = "tc199558@gmail.com"
 # Shared fishing windows (docs/share-fishing-window.md). Store pages stay "#" until the apps are published.
-IOS_DOWNLOAD_URL = "#"
+IOS_DOWNLOAD_URL = "https://apps.apple.com/app/id6820858116"
 ANDROID_DOWNLOAD_URL = "#"
 # 10-character Apple Developer Team ID of the paid membership. Empty keeps iPhone links opening in the browser.
-APPLE_TEAM_ID = ""
+APPLE_TEAM_ID = "8T7835869S"
 # Comma-separated SHA-256 signing-certificate fingerprints. The first is the Play upload key; add the Play App Signing
 # key from Play Console > Test and release > App signing so Play-installed copies open shared links directly.
 ANDROID_CERT_SHA256 = "37:B7:79:41:88:76:24:F6:05:43:A0:84:48:40:1E:AF:87:26:74:53:5C:D0:99:C4:81:36:96:52:3F:74:59:F6"

@@ -6,7 +6,7 @@ For simulator builds, keep Xcode's default ad hoc signing enabled. Do not pass `
 
 The app is a native SwiftUI counterpart to the Android app. It uses MapKit and Core Location, including MapKit tile overlays for LINZ aerial imagery and topographic basemaps. It also uses the system photo picker and camera, and Open-Meteo's public weather/marine APIs. Fish identification calls the shared Fishdays - NZ API (OpenAI behind Cloudflare) only after the person agrees on a consent sheet; its result is a suggestion, not an official rules decision.
 
-Before distribution, join the paid Apple Developer Program, select that team in Xcode's Signing & Capabilities panel, and change the bundle identifier if `nz.fishingnz.catchcheck` is not available to that team. [App Store release checklist](../docs/app-store-release.md).
+The project now uses paid Apple Developer team `8T7835869S` and registered bundle identifier `nz.fishingnz.catchcheck`. Version 1.0.20 (build 21) was uploaded to App Store Connect on 9 October 2026. The first release targets iPhone. [App Store release checklist and submission status](../docs/app-store-release.md).
 
 ## Shared fishing windows
 

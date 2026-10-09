@@ -130,7 +130,7 @@ private struct MoreNavigationRow: View {
 /// search for it. Once the app record exists, set `appStoreURL` to its page: App Store Connect → App Information shows
 /// the Apple ID number, and the link is `https://apps.apple.com/app/id<that number>`.
 private enum AppShare {
-    static let appStoreURL: URL? = nil
+    static let appStoreURL: URL? = URL(string: "https://apps.apple.com/app/id6820858116")
     static let subject = "Fishdays - NZ"
     static let message = "Fishdays - NZ helps you plan fishing days around New Zealand with tides, weather, fishing windows and MPI fishing rules."
     static let textOnly = message + " Search for “Fishdays - NZ” in the App Store."

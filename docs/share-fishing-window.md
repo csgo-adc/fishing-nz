@@ -18,7 +18,7 @@ How a short link is made: tapping **Share this window** sends the window to `POS
 ## Until the apps are published
 
 - The **Download for iPhone / Android** buttons show `href="#"`, are greyed and say "link coming soon". Set the two real links (below) and they become normal buttons.
-- iPhone and Android links fall back to the web page everywhere, because the app-opening setup needs a paid Apple Developer Team ID and Google's Play signing certificate.
+- iPhone team `8T7835869S` and App Store ID `6820858116` are configured as of 1.0.20; deploy the API and install the App Store/TestFlight build to verify Universal Links. Android still needs Google's Play app-signing certificate.
 
 ## One-time setup (nothing here can be done without your accounts)
 

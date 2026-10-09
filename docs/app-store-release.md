@@ -4,7 +4,15 @@ Reviewed 9 October 2026 against the iPhone app, the shared API and Apple's curre
 
 ## Current status
 
-The iPhone code is ready for review submission, but **nothing has been uploaded and no App Store Connect record exists**: this Mac's Xcode only knows two free *Personal Teams* (`93N35X579F` and `8T7835869S`), which cannot use App Store Connect or TestFlight. Everything under “Only you can do these” is blocked on that.
+**Version 1.0.20 (build 21) was uploaded successfully on 9 October 2026** using Xcode's cloud-managed Apple Distribution certificate for paid team `8T7835869S`. Apple reported “Upload succeeded” and “Uploaded package is processing”. App Store Connect app: [Fishdays - NZ — 6820858116](https://appstoreconnect.apple.com/apps/6820858116/distribution). **It has not been submitted to App Review or published.**
+
+The first release targets iPhone only. The app's Share row and the API's iPhone download URL now use `https://apps.apple.com/app/id6820858116` (public availability starts after release). `APPLE_TEAM_ID` is configured for Universal Links; deploy the API to activate it.
+
+Saved in App Store Connect: app name, English (U.K.), bundle ID, SKU, subtitle, Sports/Weather categories and third-party content rights. The age questionnaire calculated 4+ and its Save action was submitted; verify the persisted rating after signing back in. Version 1.0.20 listing text was entered, but saving review information failed because the phone number was missing. Preserve the original version tab's unsaved changes. A privacy policy URL save attempt encountered an expired browser session, so verify and finish App Privacy after sign-in.
+
+**Remaining:** verify processed build and select it; save review contact details and authorized reviewer credentials; upload screenshots; finish App Privacy, free pricing and New Zealand availability; then Add for Review and Submit to App Review. The Mac locked during preparation and App Store Connect requires sign-in again. No reviewer password or phone number was transmitted in this attempt.
+
+Three real signed-out iPhone 17 Pro Max screenshots (1320×2868) are in [`assets/app-store`](../assets/app-store): home, fishing windows and tides. The simulator displayed live Auckland forecasts and LINZ tide predictions. Release archive, simulator build, 75 shared-window checks, 101 fishing-window checks, 37 place-condition checks, 83 API tests and TypeScript checking passed. Distribution signing logs confirm both Associated Domains and the app's Keychain access group survived re-signing.
 
 | Requirement | Status |
 | --- | --- |
@@ -20,24 +28,19 @@ The iPhone code is ready for review submission, but **nothing has been uploaded 
 | Permissions | Location (when in use), camera and write-only calendar, each with a purpose string. Gallery uses the system photo picker, so there is no photo-library permission. No tracking, no advertising ID, no background modes. |
 | Government-information disclaimer | Present in the app and the listing copy below. |
 
-## Only you can do these
+## Account setup and remaining submission steps
 
-Do them in this order.
+Paid Apple Developer membership and Xcode account access are confirmed. Team `8T7835869S` now owns the registered App ID and App Store record. The project selects this team for Debug and Release; the previous free team is no longer selected. The App Store URL is already set in the app.
 
-1. **Join the paid Apple Developer Program** at <https://developer.apple.com/programs/enroll/> (99 USD per membership year, shown in local currency). Enroll as an *individual* with your legal name: Apple shows that legal name as the seller on the App Store, whereas the Play listing shows “Tristan”. A company name needs an organisation enrolment. Two-factor authentication must be on.
-   *If you already pay for a membership under a different Apple Account, sign that account in to Xcode instead (Xcode → Settings → Accounts).*
-2. **Sign in to Xcode with that account**, then open the project, select the **CatchCheckNZ** target → Signing & Capabilities → Team, and choose the paid team. This replaces `DEVELOPMENT_TEAM = 93N35X579F` (a free team) in `project.pbxproj`.
-3. **Check the bundle ID.** If Xcode says `nz.fishingnz.catchcheck` is “not available”, the free Personal Team probably still holds it (it registers one when an app is run on a real iPhone). Either release it from that team in Certificates, Identifiers & Profiles, or pick a new ID and change `PRODUCT_BUNDLE_IDENTIFIER` (two places in `project.pbxproj`). The URL scheme `nz.fishingnz.catchcheck` and the server's allow-list can stay as they are.
-4. **Create the app** in [App Store Connect](https://appstoreconnect.apple.com) → Apps → + → New App: platform iOS, name `Fishdays - NZ`, primary language English (U.K.), the bundle ID above, and a SKU such as `fishdays-nz-ios` (neither can be changed later). **Then copy the app's Apple ID** (the number App Store Connect shows under App Information) and set `AppShare.appStoreURL` in `CatchCheckRootView.swift` to `https://apps.apple.com/app/id<that number>` before archiving, so the Share row on the More page sends a real link. Until it is set, Share sends a text that tells people to search the App Store; the link works once the app is live.
 5. **Keep a working reviewer account.** Fish identification needs sign-in, so App Review needs credentials ([2.1(a)](https://developer.apple.com/app-store/review/guidelines/)). Reuse the email-verified Play reviewer account or make another. Do not commit the password. The five-per-day identification limit applies to it, so test with other accounts.
 6. **Provide a support URL and a review phone number.** Until a dedicated support page exists, `https://fishing.fishnz.space/privacy` lists the publisher contact. App Review Information also needs a phone number.
 7. **Decide the three open questions** in the next section.
 8. **Turn on shared-window links.** Copy the paid team's 10-character Team ID (developer.apple.com → Membership details), set `APPLE_TEAM_ID` in `server/fishial-proxy/wrangler.toml`, and deploy the API. Once the app has a store page, set `IOS_DOWNLOAD_URL` the same way so the web page's iPhone button becomes a real link. The Release build already carries the Associated Domains entitlement. See [share-fishing-window.md](share-fishing-window.md).
 
-## Decisions
+## Release choices
 
 - **Sign in with Apple.** Fastest route: do nothing; the iPhone app is exempt from 4.8 while it offers only its own email and password accounts. Accounts created with Google on Android can still sign in on iPhone after using *Forgot password* once to set a password. To offer Google and Apple on iPhone, follow the Apple section of [account-sign-in.md](account-sign-in.md) (Services ID, key, four Worker secrets) **and first** make account deletion revoke the user's Apple tokens ([required by Apple](https://developer.apple.com/support/offering-account-deletion-in-your-app/); the Worker does not store or revoke them yet). Once `/v1/auth/providers` reports `apple: true`, the buttons appear without an app change.
-- **iPad.** The project builds for iPhone and iPad. It runs on iPad with the phone layout stretched across the screen: usable, not tailored. Shipping iPad needs at least one **13-inch iPad screenshot** (2064×2752) and a pass through every screen on iPad. Shipping iPhone-only means setting `TARGETED_DEVICE_FAMILY = 1` (two places in `project.pbxproj`), and is the lower-risk first release.
+- **iPad.** Version 1.0.20 targets iPhone only (`TARGETED_DEVICE_FAMILY = 1`). Add iPad support with a layout review and iPad screenshots in a later version.
 - **Where to sell it.** The Play closed test targets New Zealand only. Choosing only New Zealand in Pricing and Availability keeps the two stores aligned and avoids the EU [trader-status declaration](https://developer.apple.com/news/upcoming-requirements/) that is required for EU storefronts. Price: Free.
 
 ## Build, check and upload
@@ -51,7 +54,7 @@ xcodebuild -project iosApp/CatchCheckNZ.xcodeproj -scheme CatchCheckNZ -configur
   -allowProvisioningUpdates archive
 ```
 
-Then open Xcode → Window → Organizer → Archives → select the archive → **Distribute App → App Store Connect → Upload**, and let Xcode manage signing. The build appears in App Store Connect after processing (usually minutes). `build/` is Git-ignored. Verified here: the unsigned Release device build, its `Info.plist` (version, build, encryption flag) and the packaged privacy manifest. **Not verified:** signing, archive validation and upload, because they need the paid team.
+Then open Xcode → Window → Organizer → Archives → select the archive → **Distribute App → App Store Connect → Upload**, and let Xcode manage signing. The build appears in App Store Connect after processing (usually minutes). `build/` is Git-ignored. Verified here: the unsigned Release device build, its `Info.plist` (version, build, encryption flag) and the packaged privacy manifest. Version 1.0.20 signing and upload are verified. This team had no registered devices, so the successful path was an unsigned device archive, temporary ad hoc signing with expanded Release entitlements, then `xcodebuild -exportArchive` with automatic App Store Connect signing and upload. The final uploaded package is signed by Apple's cloud-managed distribution certificate. Preserve the Associated Domains and Keychain entitlements when using this path.
 
 Use **TestFlight** first: internal testers (people in your App Store Connect team) can install the build as soon as it is processed with no review, and there is no minimum tester count or waiting period like Play's 12 testers for 14 days.
 

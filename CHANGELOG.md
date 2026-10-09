@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.20 — 2026-10-09 (build code 21)
+
+- Configure iOS signing for paid team `8T7835869S`, target iPhone for the first release, and add the assigned App Store link to app sharing and the API download page.
+- Upload version 1.0.20 (build 21) to App Store Connect with Associated Domains and Keychain entitlements preserved. Add three iPhone screenshots and record the remaining review-submission steps.
+
 ## 1.0.19 — 2026-10-09 (build code 20)
 
 - **Short share links.** Sharing a fishing window now sends a link like
