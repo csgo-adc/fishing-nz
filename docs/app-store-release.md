@@ -4,13 +4,13 @@ Reviewed 9 October 2026 against the iPhone app, the shared API and Apple's curre
 
 ## Current status
 
-**Version 1.0.20 (build 21) was uploaded successfully on 9 October 2026** using Xcode's cloud-managed Apple Distribution certificate for paid team `8T7835869S`. Apple reported “Upload succeeded” and “Uploaded package is processing”. App Store Connect app: [Fishdays - NZ — 6820858116](https://appstoreconnect.apple.com/apps/6820858116/distribution). **It has not been submitted to App Review or published.**
+Submitted version **1.0.20 (build 21)** was rejected on 10 October 2026 under **Guideline 2.1 — Information Needed — New App Submission**. Apple requests a physical-device recording, purpose/audience, feature setup, external services, regional differences and any relevant third-party authorization documents. Expanded Notes were saved in App Store Connect on 10 October. No reply or resubmission has been sent yet.
+
+The required recording and physical-device QA remain pending because the developer currently has no iPhone. Follow [the recording checklist](app-review-recording.md) using a borrowed iPhone or a tester. Repository version **1.0.21 (build 22)** corrects the service privacy policy; the submitted binary remains 1.0.20 (21). A policy-text change alone does not require replacing that binary.
 
 The first release targets iPhone only. The app's Share row and the API's iPhone download URL now use `https://apps.apple.com/app/id6820858116` (public availability starts after release). `APPLE_TEAM_ID` is configured for Universal Links; deploy the API to activate it.
 
-Saved in App Store Connect: app name, English (U.K.), bundle ID, SKU, subtitle, Sports/Weather categories and third-party content rights. The age questionnaire calculated 4+ and its Save action was submitted; verify the persisted rating after signing back in. Version 1.0.20 listing text was entered, but saving review information failed because the phone number was missing. Preserve the original version tab's unsaved changes. A privacy policy URL save attempt encountered an expired browser session, so verify and finish App Privacy after sign-in.
-
-**Remaining:** verify processed build and select it; save review contact details and authorized reviewer credentials; upload screenshots; finish App Privacy, free pricing and New Zealand availability; then Add for Review and Submit to App Review. The Mac locked during preparation and App Store Connect requires sign-in again. No reviewer password or phone number was transmitted in this attempt.
+The version page currently has listing text, build 21, reviewer sign-in credentials, contact details and manual release selected. Credentials are not copied into this repository. App Privacy, availability, credential validity and physical-device behavior must be verified before resubmission. Third-party rights documentation must only be supplied if actually held; do not assert clearance from attribution alone.
 
 Three real signed-out iPhone 17 Pro Max screenshots (1320×2868) are in [`assets/app-store`](../assets/app-store): home, fishing windows and tides. The simulator displayed live Auckland forecasts and LINZ tide predictions. Release archive, simulator build, 75 shared-window checks, 101 fishing-window checks, 37 place-condition checks, 83 API tests and TypeScript checking passed. Distribution signing logs confirm both Associated Domains and the app's Keychain access group survived re-signing.
 

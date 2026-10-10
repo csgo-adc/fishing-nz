@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.21 — 2026-10-10 (build code 22)
+
+- Correct the public privacy policy to cover iPhone maps, photo consent and Keychain storage.
+- Record the Guideline 2.1 information request and prepare a physical-iPhone QA and recording checklist.
+
 ## 1.0.20 — 2026-10-09 (build code 21)
 
 - Configure iOS signing for paid team `8T7835869S`, target iPhone for the first release, and add the assigned App Store link to app sharing and the API download page.
