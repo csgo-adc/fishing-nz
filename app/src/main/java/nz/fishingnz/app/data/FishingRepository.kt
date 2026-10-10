@@ -284,9 +284,12 @@ class FishingRepository {
         accountSnapshot(token)
     }
 
-    suspend fun sendFeedback(category: String, message: String, rating: Int) = withContext(Dispatchers.IO) {
+    /** [rating] is optional; the service stores no rating when it is null. */
+    suspend fun sendFeedback(category: String, message: String, rating: Int?) = withContext(Dispatchers.IO) {
         val token = AccountSessionStore.token() ?: error("Sign in to send feedback.")
-        accountRequest("/v1/feedback", "POST", JSONObject().put("category", category).put("message", message.trim()).put("rating", rating), token, "android")
+        val body = JSONObject().put("category", category).put("message", message.trim())
+        if (rating != null) body.put("rating", rating)
+        accountRequest("/v1/feedback", "POST", body, token, "android")
     }
 
     private fun accountSnapshot(token: String): AccountSnapshot {

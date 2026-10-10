@@ -824,7 +824,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             accountBusy = false
         }
     }
-    func sendFeedback(category: String, message: String, rating: Int) async -> Bool {
+    func sendFeedback(category: String, message: String, rating: Int?) async -> Bool {
         accountBusy = true; accountError = nil; accountNotice = nil
         do {
             try await repository.sendFeedback(category: category, message: message, rating: rating)

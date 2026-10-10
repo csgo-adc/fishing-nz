@@ -42,8 +42,6 @@ struct CatchCheckRootView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @AppStorage("catchcheckAppearance") private var appearance = "light"
     @State private var moreDestination: MoreDestination?
-    // Shown once, until answered. Nothing is collected before then.
-    @State private var showAnalyticsNotice = AnalyticsPreferences.needsNotice
 
     private var preferredAppearance: ColorScheme? {
         switch appearance {
@@ -77,15 +75,6 @@ struct CatchCheckRootView: View {
             }
         }
         .task { vm.requestLocation() }
-        .alert("Help improve Fishdays - NZ", isPresented: $showAnalyticsNotice) {
-            Button("Keep sharing") {
-                AnalyticsPreferences.setEnabled(true)
-                Analytics.track("app_open")
-            }
-            Button("Turn off", role: .cancel) { AnalyticsPreferences.setEnabled(false) }
-        } message: {
-            Text("We count which screens are used and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone. It works whether or not you are signed in. It never includes your location, photos, email or anything you type. You can change this at any time in More → Settings → Terms & privacy.")
-        }
     }
 }
 
@@ -271,7 +260,7 @@ private struct TermsPrivacyView: View {
                     Toggle(isOn: $analyticsOn) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Anonymous usage statistics").fontWeight(.semibold)
-                            Text("On by default after a first notice. Shares which screens you use and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Turning this off erases what we stored for this identifier and resets it.")
+                            Text("On by default. Shares which screens you use and how searches and fish photos go, with your device model, iOS version, app version, language and a random identifier made on this phone, whether or not you are signed in. Fishdays - NZ also counts your API requests against that identifier. No location, photos, email or typed text is included. Turning this off erases what we stored for this identifier and resets it.")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
@@ -299,70 +288,146 @@ private struct TermsPrivacyView: View {
 
 private struct FeedbackView: View {
     @EnvironmentObject private var vm: FishingViewModel
-    @State private var category = "general"
+    @State private var category = "bug"
     @State private var message = ""
-    @State private var rating = 5
+    @State private var rating: Int?
     @State private var showingAccount = false
     @State private var didSubmit = false
+    @State private var sent = false
+
+    private struct Topic: Identifiable {
+        let id: String
+        let title: String
+        let icon: String
+        let hint: String
+    }
+    private let topics = [
+        Topic(id: "bug", title: "Report a problem", icon: "ladybug", hint: "What happened, and what were you doing?"),
+        Topic(id: "idea", title: "Suggest an idea", icon: "lightbulb", hint: "What would make the app better for you?"),
+        Topic(id: "general", title: "Something else", icon: "bubble.left", hint: "Write your message")
+    ]
+    private var hint: String { topics.first { $0.id == category }?.hint ?? "" }
+    private var canSend: Bool { !vm.accountBusy && message.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Feedback").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                Text("Report a problem or tell us what would improve your fishing trips.")
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Report a problem or suggest an idea.").foregroundStyle(.secondary)
                 if vm.account == nil {
                     Card {
                         Text("Sign in to send feedback").font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
-                        Text("Feedback is linked to your Fishdays - NZ account so we can review it.")
+                        Text("Feedback is linked to your account so we can reply and follow up.")
                             .foregroundStyle(.secondary)
                         if vm.accountLoading {
                             ProgressView("Checking your account…")
                         } else {
-                            Button("Go to account") { showingAccount = true }
-                                .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+                            Button { showingAccount = true } label: { Text("Go to account").frame(maxWidth: .infinity) }
+                                .buttonStyle(.borderedProminent).controlSize(.large).tint(CatchCheckColor.accent)
                         }
                     }
                 } else {
-                    if vm.accountNotice == "Thanks for your feedback." {
-                        Label("Thanks for your feedback.", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(CatchCheckColor.navy)
+                    if sent {
+                        Label("Thanks, your feedback was sent.", systemImage: "checkmark.circle.fill")
+                            .font(.headline).foregroundStyle(CatchCheckColor.navy)
                             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                             .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 14))
                     }
-                    if didSubmit, let error = vm.accountError {
+                    if didSubmit, !sent, !vm.accountBusy, let error = vm.accountError {
                         Label(error, systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(.red)
                             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
                     }
-                    Card {
-                        Picker("Type", selection: $category) {
-                            Text("General").tag("general")
-                            Text("Report a problem").tag("bug")
-                            Text("Idea").tag("idea")
-                        }.pickerStyle(.menu)
-                        TextField("Tell us what you think", text: $message, axis: .vertical)
-                            .lineLimit(4...8).textFieldStyle(.roundedBorder)
-                            .onChange(of: message) { _, value in message = String(value.prefix(4000)) }
-                        Picker("Rating", selection: $rating) {
-                            ForEach(1...5, id: \.self) { Text("\($0) out of 5").tag($0) }
-                        }.pickerStyle(.segmented)
-                        Button {
-                            let submittedMessage = message
-                            didSubmit = true
-                            Task { @MainActor in
-                                if await vm.sendFeedback(category: category, message: submittedMessage, rating: rating), message == submittedMessage {
-                                    message = ""
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("What's it about?").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                        ForEach(topics) { topic in
+                            let selected = topic.id == category
+                            Button { category = topic.id; sent = false } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: topic.icon).font(.title3).frame(width: 26)
+                                        .foregroundStyle(selected ? CatchCheckColor.accent : Color.secondary)
+                                    Text(topic.title).font(selected ? .body.weight(.semibold) : .body).foregroundStyle(CatchCheckColor.navy)
+                                    Spacer()
+                                    if selected { Image(systemName: "checkmark").font(.body.bold()).foregroundStyle(CatchCheckColor.accent) }
                                 }
+                                .padding(.horizontal, 14).padding(.vertical, 14)
+                                .background(selected ? CatchCheckColor.seafoam : CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(selected ? CatchCheckColor.accent : CatchCheckColor.outline, lineWidth: selected ? 2 : 1))
+                                .contentShape(Rectangle())
                             }
-                        } label: {
-                            Label(vm.accountBusy ? "Sending…" : "Send feedback", systemImage: "paperplane.fill")
-                                .frame(maxWidth: .infinity)
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selected ? [.isSelected] : [])
                         }
-                        .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
-                        .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || vm.accountBusy)
                     }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Your message").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                        ZStack(alignment: .topLeading) {
+                            TextEditor(text: $message)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 160)
+                                .padding(8)
+                                .onChange(of: message) { _, value in
+                                    if value.count > 4000 { message = String(value.prefix(4000)) }
+                                    // New typing hides the "sent" note; clearing the box after sending does not.
+                                    if !value.isEmpty { sent = false }
+                                }
+                                .accessibilityLabel("Your message")
+                            if message.isEmpty {
+                                Text(hint).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.vertical, 16)
+                                    .allowsHitTesting(false).accessibilityHidden(true)
+                            }
+                        }
+                        .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(CatchCheckColor.outline, lineWidth: 1))
+                        HStack {
+                            if !message.isEmpty && message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 {
+                                Text("Write at least 3 characters.")
+                            }
+                            Spacer()
+                            Text("\(message.count) / 4000")
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("How's the app working for you?").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                            Text("Optional").font(.caption).foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 6) {
+                            ForEach(1...5, id: \.self) { value in
+                                let filled = (rating ?? 0) >= value
+                                Button { rating = rating == value ? nil : value; sent = false } label: {
+                                    Image(systemName: filled ? "star.fill" : "star")
+                                        .font(.system(size: 30))
+                                        .foregroundStyle(filled ? Color(red: 0.88, green: 0.63, blue: 0) : Color.secondary)
+                                        .frame(width: 48, height: 48)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(value) out of 5")
+                                .accessibilityAddTraits(rating == value ? [.isSelected] : [])
+                                .accessibilityHint(rating == value ? "Tap again to clear the rating" : "")
+                            }
+                        }
+                    }
+                    Button {
+                        let submittedMessage = message
+                        didSubmit = true
+                        sent = false
+                        Task { @MainActor in
+                            if await vm.sendFeedback(category: category, message: submittedMessage, rating: rating) {
+                                if message == submittedMessage { message = ""; rating = nil }
+                                sent = true
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if vm.accountBusy { ProgressView().tint(.white) } else { Image(systemName: "paperplane.fill") }
+                            Text(vm.accountBusy ? "Sending…" : "Send feedback")
+                        }
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.large).tint(CatchCheckColor.accent)
+                    .disabled(!canSend)
                 }
             }.padding(20).padding(.bottom, 24)
         }
@@ -1620,11 +1685,12 @@ private struct WindowTimeHeader: View {
         let mood = spot.windowMood
         let colors = toneColors(WindowHighlights.tone(mood.label))
         HStack(alignment: .top, spacing: 8) {
+            // The date and time are what a person plans around, so they take the accent colour.
             VStack(alignment: .leading, spacing: 1) {
-                Text(when.day).font(.subheadline).foregroundStyle(.secondary)
-                Text(when.hours).font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                Label(when.day, systemImage: "calendar").font(.subheadline.weight(.semibold))
+                Text(when.hours).font(.title3.bold()).lineLimit(1).minimumScaleFactor(0.8)
             }
+            .foregroundStyle(CatchCheckColor.accent)
             Spacer(minLength: 0)
             Text("\(mood.emoji) \(mood.label)")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(colors.text).lineLimit(1)

@@ -111,7 +111,7 @@ Use **TestFlight** first: internal testers (people in your App Store Connect tea
 | User content → Photos or videos (fish photo to OpenAI via Cloudflare) | Yes | App functionality |
 | User content → Customer support (feedback) | Yes | App functionality |
 
-Usage statistics are on by default after a one-time notice (1.0.11), which is why Device ID and Product interaction are declared. Re-check these answers whenever providers or analytics behaviour change.
+Usage statistics are on by default (a one-time notice from 1.0.11 was removed in 1.0.26; the Settings switch still turns them off), which is why Device ID and Product interaction are declared. Re-check these answers whenever providers or analytics behaviour change.
 
 **App Review notes** (put the demo credentials in the Sign-in information fields, not here)
 

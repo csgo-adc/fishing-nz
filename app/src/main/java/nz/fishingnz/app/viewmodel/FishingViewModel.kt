@@ -656,7 +656,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             }
         }
     }
-    fun sendFeedback(category: String, message: String, rating: Int) {
+    fun sendFeedback(category: String, message: String, rating: Int?) {
         _state.value = _state.value.copy(accountBusy = true, accountError = null, accountNotice = null)
         viewModelScope.launch { runCatching { repository.sendFeedback(category, message, rating) }
             .onSuccess {

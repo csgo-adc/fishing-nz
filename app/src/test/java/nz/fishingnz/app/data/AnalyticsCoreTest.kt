@@ -95,16 +95,14 @@ class AnalyticsCoreTest {
     }
 
     @Test
-    fun beforeTheNoticeIsAnsweredNothingIsCollectedAndTheNoticeIsDue() {
-        val state = AnalyticsConsent.resolve(null)
-        assertTrue(state.needsNotice)
-        assertEquals(false, state.enabled)
+    fun onByDefaultWithoutANotice() {
+        assertTrue(AnalyticsConsent.enabled(null))
     }
 
     @Test
-    fun keepSharingEnablesAndTurnOffDisablesWithoutAskingAgain() {
-        assertEquals(AnalyticsConsentState(needsNotice = false, enabled = true), AnalyticsConsent.resolve(true))
-        assertEquals(AnalyticsConsentState(needsNotice = false, enabled = false), AnalyticsConsent.resolve(false))
+    fun theSwitchDecidesOnceUsed() {
+        assertTrue(AnalyticsConsent.enabled(true))
+        assertEquals(false, AnalyticsConsent.enabled(false))
     }
 
     @Test
@@ -114,9 +112,9 @@ class AnalyticsCoreTest {
     }
 
     @Test
-    fun aPersonWhoNeverChoseStaysUndecidedAfterTheUpgrade() {
+    fun aPersonWhoNeverChoseIsOnByDefaultAfterTheUpgrade() {
         assertEquals(null, AnalyticsConsent.migratedChoice(usageStats = null, oldSwitch = null))
-        assertTrue(AnalyticsConsent.resolve(AnalyticsConsent.migratedChoice(null, null)).needsNotice)
+        assertTrue(AnalyticsConsent.enabled(AnalyticsConsent.migratedChoice(null, null)))
     }
 
     @Test

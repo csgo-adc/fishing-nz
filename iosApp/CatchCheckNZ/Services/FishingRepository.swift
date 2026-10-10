@@ -112,9 +112,12 @@ struct FishingRepository {
         throw AccountAPIError(message: "Please sign in again.", status: 401, code: nil)
     }
 
-    func sendFeedback(category: String, message: String, rating: Int) async throws {
+    /// `rating` is optional; the service stores no rating when it is nil.
+    func sendFeedback(category: String, message: String, rating: Int?) async throws {
         guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to send feedback.", status: 401, code: nil) }
-        let _: EmptyResponse = try await accountRequest("/v1/feedback", method: "POST", body: ["category": category, "message": message, "rating": rating], token: token, platform: "ios")
+        var body: [String: Any] = ["category": category, "message": message]
+        if let rating { body["rating"] = rating }
+        let _: EmptyResponse = try await accountRequest("/v1/feedback", method: "POST", body: body, token: token, platform: "ios")
     }
 
     func signOut() async {
@@ -429,14 +432,11 @@ enum AnalyticsPreferences {
     private static let deviceIDKey = "analytics_device_id"
     private static let queue = DispatchQueue(label: "nz.fishingnz.analytics.preferences")
 
-    /// The person's answer to the one-time notice or the Settings switch. Nil until they have answered.
+    /// The Settings switch (or the answer to the notice versions before 1.0.26 showed). Nil until it has been used.
     static var choice: Bool? { UserDefaults.standard.object(forKey: enabledKey) as? Bool }
 
-    /// True while the one-time notice has not been answered.
-    static var needsNotice: Bool { choice == nil }
-
-    /// Our own anonymous usage statistics are on by default, but nothing is collected before the notice is answered.
-    static var isEnabled: Bool { choice ?? false }
+    /// Our own anonymous usage statistics: on by default, with no first-launch notice; the Settings switch turns them off.
+    static var isEnabled: Bool { choice ?? true }
 
     /// The random id that tells our analytics one install from another. It is made when analytics is first used, is never
     /// an advertising or hardware id, and is returned only while analytics is on.

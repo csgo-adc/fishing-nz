@@ -8,7 +8,7 @@ import com.google.firebase.FirebaseApp
 object PrivacyPreferences {
     private const val FILE = "privacy"
     private const val DEVICE_ID_KEY = "analytics_device_id"
-    // Our own anonymous usage statistics. Absent until the one-time notice is answered or the switch is used.
+    // Our own anonymous usage statistics. Absent (on) until the switch is used.
     private const val USAGE_KEY = "usage_stats"
     // Google Analytics (Firebase). Opt-in: off unless the person switches it on. This is the key the old single switch used.
     private const val FIREBASE_KEY = "analytics_enabled"
@@ -43,11 +43,8 @@ object PrivacyPreferences {
     private fun usageChoice(): Boolean? =
         preferences()?.takeIf { it.contains(USAGE_KEY) }?.getBoolean(USAGE_KEY, false)
 
-    /** True while the one-time notice about our usage statistics has not been answered. */
-    fun analyticsNoticeNeeded(): Boolean = AnalyticsConsent.resolve(usageChoice()).needsNotice
-
-    /** Our own usage statistics: on by default, but only once the notice has been answered. */
-    fun analyticsEnabled(): Boolean = AnalyticsConsent.resolve(usageChoice()).enabled
+    /** Our own usage statistics: on unless the person has turned them off. */
+    fun analyticsEnabled(): Boolean = AnalyticsConsent.enabled(usageChoice())
 
     /** Google Analytics (Firebase) stays opt-in. */
     fun firebaseEnabled(): Boolean = preferences()?.getBoolean(FIREBASE_KEY, false) ?: false

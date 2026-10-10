@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.26 — 2026-10-11 (build code 27)
+
+- **Date and time stand out** on fishing window cards and window pages: they use the accent blue
+  with a calendar icon. Android and iPhone.
+- **No first-launch analytics pop-up.** Anonymous usage statistics are on by default and can be
+  turned off in More → Settings → Terms & privacy. An earlier "Turn off" choice is kept. The privacy
+  policy now says this (deploy the API to publish it).
+- **Feedback page redesigned** on Android and iPhone:
+  - The topic is three full-width choices: report a problem, suggest an idea, or something else.
+  - The message box is larger, with a hint for the chosen topic and a character count.
+  - The rating is now optional stars (tap a star again to clear it); it was required and defaulted
+    to 5.
+  - A full-width send button, with a clear "Thanks, your feedback was sent" note afterwards.
+
 ## 1.0.25 — 2026-10-11 (build code 26)
 
 - **Fishing window cards highlight what matters** on Android and iPhone:

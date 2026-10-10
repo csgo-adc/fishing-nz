@@ -32,6 +32,16 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -557,47 +567,93 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
     }
 }
 
+private data class FeedbackTopic(val value: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val hint: String)
+
+private val feedbackTopics = listOf(
+    FeedbackTopic("bug", "Report a problem", Icons.Default.BugReport, "What happened, and what were you doing?"),
+    FeedbackTopic("idea", "Suggest an idea", Icons.Default.Lightbulb, "What would make the app better for you?"),
+    FeedbackTopic("general", "Something else", Icons.Default.ChatBubbleOutline, "Write your message"))
+
 @Composable fun FeedbackScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
-    var category by rememberSaveable { mutableStateOf("general") }
+    var category by rememberSaveable { mutableStateOf("bug") }
     var message by rememberSaveable { mutableStateOf("") }
-    var rating by rememberSaveable { mutableIntStateOf(5) }
+    var rating by rememberSaveable { mutableStateOf<Int?>(null) }
     var submittedFeedback by remember { mutableStateOf<String?>(null) }
-    var categoryExpanded by remember { mutableStateOf(false) }
+    var sent by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(s.accountBusy, s.accountNotice, s.accountError) {
         if (!s.accountBusy && submittedFeedback != null) {
-            if (s.accountNotice == "Thanks for your feedback." && message == submittedFeedback) message = ""
+            if (s.accountNotice == "Thanks for your feedback.") {
+                sent = true
+                if (message == submittedFeedback) { message = ""; rating = null }
+            }
             submittedFeedback = null
         }
     }
-    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Feedback", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Text("Report a problem or tell us what would improve your fishing trips.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val topic = feedbackTopics.first { it.value == category }
+    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Report a problem or suggest an idea.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (s.account == null) {
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Sign in to send feedback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Feedback is linked to your Fishdays - NZ account so we can review it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = { vm.selectTab(5) }) { Text("Go to account") }
+                    Text("Sign in to send feedback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Feedback is linked to your account so we can reply and follow up.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = { vm.selectTab(5) }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) { Text("Go to account") }
                 }
             }
-        } else {
-            s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
-            s.accountError?.let { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer) } }
-            Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box {
-                        OutlinedButton(onClick = { categoryExpanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Type: ${category.replaceFirstChar { it.uppercase() }}") }
-                        DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
-                            listOf("general" to "General", "bug" to "Report a problem", "idea" to "Idea").forEach { (value, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { category = value; categoryExpanded = false }) }
-                        }
-                    }
-                    OutlinedTextField(message, { message = it.take(4000) }, label = { Text("Message") }, minLines = 4, modifier = Modifier.fillMaxWidth())
-                    Text("Rating", color = Navy, fontWeight = FontWeight.SemiBold)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { (1..5).forEach { value -> FilterChip(selected = rating == value, onClick = { rating = value }, label = { Text(value.toString()) }) } }
-                    Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = { submittedFeedback = message; vm.sendFeedback(category, message, rating) }, modifier = Modifier.fillMaxWidth()) { Text(if (s.accountBusy) "Please wait…" else "Send feedback") }
+            return@Column
+        }
+        if (sent) Row(Modifier.fillMaxWidth().background(Seafoam, RoundedCornerShape(14.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(10.dp))
+            Text("Thanks, your feedback was sent.", color = Navy, fontWeight = FontWeight.SemiBold)
+        }
+        if (!s.accountBusy && submittedFeedback == null && !sent) s.accountError?.let {
+            Text(it, Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(14.dp)).padding(14.dp),
+                color = MaterialTheme.colorScheme.onErrorContainer)
+        }
+        Text("What's it about?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            feedbackTopics.forEach { option ->
+                val selected = option.value == category
+                Row(Modifier.fillMaxWidth()
+                    .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+                    .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                    .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton) { category = option.value; sent = false }
+                    .padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(option.icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(12.dp))
+                    Text(option.title, Modifier.weight(1f), color = Navy, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                    if (selected) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
+        Text("Your message", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        OutlinedTextField(message, { message = it.take(4000); sent = false }, modifier = Modifier.fillMaxWidth(), minLines = 6,
+            placeholder = { Text(topic.hint) }, shape = RoundedCornerShape(14.dp),
+            supportingText = { Text("${message.length} / 4000", Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.End) })
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("How's the app working for you?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.width(6.dp))
+            Text("Optional", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            (1..5).forEach { value ->
+                val filled = (rating ?: 0) >= value
+                IconButton(onClick = { rating = if (rating == value) null else value; sent = false }, modifier = Modifier.size(48.dp)) {
+                    Icon(if (filled) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = if (rating == value) "$value out of 5, selected. Tap to clear" else "$value out of 5",
+                        tint = if (filled) Color(0xFFE0A100) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(34.dp))
+                }
+            }
+        }
+        Button(enabled = !s.accountBusy && message.trim().length >= 3, onClick = {
+            submittedFeedback = message; sent = false
+            vm.sendFeedback(category, message, rating)
+        }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(14.dp)) {
+            if (s.accountBusy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary); Spacer(Modifier.width(10.dp)) }
+            else { Icon(Icons.AutoMirrored.Filled.Send, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
+            Text(if (s.accountBusy) "Sending…" else "Send feedback")
+        }
+        if (message.isNotEmpty() && message.trim().length < 3) Text("Write at least 3 characters.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }
 
