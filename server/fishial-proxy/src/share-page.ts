@@ -1,5 +1,6 @@
 import { escapeHtml } from "./privacy";
 import type { SharedWindow } from "./share";
+import { keyTiles, outlookTone, watchOuts } from "./window-highlights";
 
 export type ShareConfig = {
   /** Public origin of the API, e.g. https://fishing.fishnz.space. Links into the apps always use it. */
@@ -74,8 +75,8 @@ function pageScriptHash(): Promise<string> {
 }
 
 const STYLE = `
-:root{color-scheme:light dark;--bg:#f6f8fc;--surface:#fff;--text:#172235;--muted:#536179;--line:#dde4f0;--primary:#315de0;--on-primary:#fff;--soft:#e5ecff;--on-soft:#17367f;--note:#fff6e8;--on-note:#6b3f00;--shadow:0 1px 2px rgba(23,34,53,.06),0 8px 24px rgba(23,34,53,.06)}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1523;--surface:#162235;--text:#eaf1fc;--muted:#a9b6cc;--line:#2a3a55;--primary:#afc5ff;--on-primary:#122d73;--soft:#263c69;--on-soft:#dce6ff;--note:#3a2c12;--on-note:#ffd9a0;--shadow:none}}
+:root{color-scheme:light dark;--bg:#f6f8fc;--surface:#fff;--text:#172235;--muted:#536179;--line:#dde4f0;--primary:#315de0;--on-primary:#fff;--soft:#e5ecff;--on-soft:#17367f;--note:#fff6e8;--on-note:#6b3f00;--shadow:0 1px 2px rgba(23,34,53,.06),0 8px 24px rgba(23,34,53,.06);--good:#e3f4e5;--on-good:#1e6b34;--caution:#fcefd8;--on-caution:#8a5300;--poor:#fbe4e1;--on-poor:#9b2c1f;--tile:#edf1f8;--on-tile:#536179}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1523;--surface:#162235;--text:#eaf1fc;--muted:#a9b6cc;--line:#2a3a55;--primary:#afc5ff;--on-primary:#122d73;--soft:#263c69;--on-soft:#dce6ff;--note:#3a2c12;--on-note:#ffd9a0;--shadow:none;--good:#1f3a26;--on-good:#a8e0b4;--caution:#3d2e12;--on-caution:#f5c77a;--poor:#3f1d19;--on-poor:#f3a99f;--tile:#223049;--on-tile:#b4c1d5}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
@@ -90,15 +91,23 @@ h1{margin:0;font-size:clamp(28px,6vw,40px);line-height:1.15;overflow-wrap:anywhe
 h2{margin:0 0 10px;font-size:18px;line-height:1.3}
 .meta{margin:6px 0 0;color:var(--muted)}
 .chip{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:999px;background:var(--soft);color:var(--on-soft);font-size:13px;font-weight:600;vertical-align:1px}
-.when{margin:20px 0 0;padding:16px 18px;border-radius:16px;background:var(--soft);color:var(--on-soft)}
-.when .day{font-size:15px;font-weight:600}
-.when .hours{font-size:clamp(26px,5.5vw,34px);font-weight:800;line-height:1.2;margin:2px 0}
-.when .zone{font-size:13px;opacity:.85}
+.when{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 12px;margin:20px 0 0}
+.when>div{min-width:0}
+.when .day{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:var(--primary)}
+.when .day svg{width:18px;height:18px;flex:none}
+.when .hours{font-size:clamp(22px,6.4vw,34px);font-weight:800;line-height:1.2;margin:2px 0;color:var(--primary);white-space:nowrap}
+.when .zone{font-size:13px;color:var(--muted)}
+.badge{flex:none;padding:5px 12px;border-radius:999px;font-size:15px;font-weight:700;white-space:nowrap;background:var(--tile);color:var(--on-tile)}
+.badge.good{background:var(--good);color:var(--on-good)}.badge.caution{background:var(--caution);color:var(--on-caution)}.badge.poor{background:var(--poor);color:var(--on-poor)}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0 0}
+.tile{padding:10px;border-radius:14px;background:var(--tile);color:var(--on-tile)}
+.tile .l{font-size:13px}.tile .v{font-size:clamp(16px,4.6vw,20px);font-weight:700;line-height:1.25;color:var(--text);white-space:nowrap}.tile .d{font-size:12px}
+.tile.concern{background:var(--caution);color:var(--on-caution)}.tile.concern .v{color:var(--on-caution)}
+.watch{margin:12px 0 0;padding:12px 14px;border-radius:14px;background:var(--caution);color:var(--on-caution)}
+.watch p{margin:0;display:flex;gap:8px;align-items:baseline}.watch p+p{margin-top:4px}
+.forecast-note{margin:12px 0 0}
 .passed{display:inline-block;margin-top:10px;padding:2px 10px;border-radius:999px;background:var(--note);color:var(--on-note);font-size:13px;font-weight:600}
-.outlook{display:flex;align-items:center;gap:14px;margin:18px 0 0}
-.outlook .emoji{font-size:38px;line-height:1}
-.outlook .label{font-size:20px;font-weight:700;line-height:1.2}
-.outlook .sub,.small{color:var(--muted);font-size:14px}
+.small{color:var(--muted);font-size:14px}
 section{margin-top:24px}
 .why{margin:0;padding:14px 16px;border-radius:14px;background:var(--soft);color:var(--on-soft)}
 .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
@@ -127,6 +136,7 @@ html[data-platform=ios] #store-android,html[data-platform=android] #store-ios{or
 #not-installed{margin:10px 0 0;font-size:14px;color:var(--muted)}
 footer{max-width:1040px;margin:0 auto;padding:8px 16px 40px;color:var(--muted);font-size:13px}
 footer p{margin:0 0 8px}
+@media (max-width:420px){.card{padding:18px}}
 @media (min-width:880px){
   .top{padding:20px 16px}
   .layout{grid-template-columns:minmax(0,1fr) 340px;align-items:start;gap:24px}
@@ -136,6 +146,8 @@ footer p{margin:0 0 8px}
 @media print{.get,.top-open,#hint{display:none!important}body{background:#fff}.card{box-shadow:none}}
 `;
 
+const CALENDAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>`;
+
 function formatClock(seconds: number): string {
   return clock.format(new Date(seconds * 1000)).replace(/\s/g, " ");
 }
@@ -144,13 +156,13 @@ function when(shared: SharedWindow) {
   const startDate = new Date(shared.start * 1000);
   const endDate = new Date(shared.end * 1000);
   const sameDay = calendarDay.format(startDate) === calendarDay.format(endDate);
-  const range = sameDay
-    ? `${formatClock(shared.start)} – ${formatClock(shared.end)}`
-    : `${formatClock(shared.start)} – ${shortDay.format(endDate)}, ${formatClock(shared.end)}`;
   const brief = sameDay
     ? `${shortDay.format(startDate)}, ${formatClock(shared.start)}–${formatClock(shared.end)}`
     : `${shortDay.format(startDate)}, ${formatClock(shared.start)} – ${shortDay.format(endDate)}, ${formatClock(shared.end)}`;
-  return { day: longDay.format(startDate), range, brief };
+  const compact = sameDay
+    ? `${formatClock(shared.start)}–${formatClock(shared.end)}`
+    : `${formatClock(shared.start)}–${shortDay.format(endDate)} ${formatClock(shared.end)}`;
+  return { day: shortDay.format(startDate), range: compact, brief };
 }
 
 function storeButton(id: string, label: string, store: string, href: string): string {
@@ -242,6 +254,11 @@ export async function renderSharePage(shared: SharedWindow, token: string, confi
       links.map(([label, href]) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`).join("")
     }</div><p class="small">Area marker only. Check access, closures and fishing rules.</p></section>`;
   })() : "";
+  const tiles = keyTiles(shared).length ? `<div class="tiles">${keyTiles(shared).map((tile) =>
+    `<div class="tile${tile.concern ? " concern" : ""}"><div class="l">${escapeHtml(tile.label)}</div><div class="v">${escapeHtml(tile.value)}</div>${
+      tile.detail ? `<div class="d">${escapeHtml(tile.detail)}</div>` : ""}</div>`).join("")}</div>` : "";
+  const watch = watchOuts(shared).length ? `<div class="watch" role="note">${watchOuts(shared).map((line) =>
+    `<p><span aria-hidden="true">⚠</span><span>${escapeHtml(line)}</span></p>`).join("")}</div>` : "";
   const snapshot = shared.sharedAt
     ? `Forecast snapshot from ${longDay.format(new Date(shared.sharedAt * 1000))}. Forecasts change, so open the app for the latest.`
     : "Forecast snapshot. Forecasts change, so open the app for the latest.";
@@ -251,8 +268,11 @@ export async function renderSharePage(shared: SharedWindow, token: string, confi
   <p class="kicker">Shared fishing window</p>
   <h1>${escapeHtml(shared.name)}</h1>
   <p class="meta">${escapeHtml(shared.area)}<span class="chip">${mode} fishing</span></p>
-  <div class="when"><div class="day">${escapeHtml(time.day)}</div><div class="hours">${escapeHtml(time.range)}</div><div class="zone">New Zealand time</div>${passed ? `<span class="passed">This window has passed</span>` : ""}</div>
-  ${shared.outlook ? `<div class="outlook"><span class="emoji" aria-hidden="true">${escapeHtml(shared.outlook.emoji)}</span><div><div class="label">${escapeHtml(shared.outlook.label)}</div><div class="sub">Window outlook${shared.confidence ? ` · ${escapeHtml(shared.confidence.emoji)} ${escapeHtml(shared.confidence.label)}` : ""}</div></div></div>` : ""}
+  <div class="when"><div><div class="day">${CALENDAR_ICON}${escapeHtml(time.day)}</div><div class="hours">${escapeHtml(time.range)}</div><div class="zone">New Zealand time</div>${passed ? `<span class="passed">This window has passed</span>` : ""}</div>${
+    shared.outlook ? `<span class="badge ${outlookTone(shared.outlook.label)}" aria-label="Window outlook: ${escapeHtml(shared.outlook.label)}">${escapeHtml(shared.outlook.emoji)} ${escapeHtml(shared.outlook.label)}</span>` : ""}</div>
+  ${tiles}
+  ${watch}
+  ${shared.confidence ? `<p class="small forecast-note">${escapeHtml(shared.confidence.emoji)} ${escapeHtml(shared.confidence.label)} · local checks needed</p>` : ""}
   ${shared.reason ? `<section aria-labelledby="why"><h2 id="why">Why this window</h2><p class="why">${escapeHtml(shared.reason)}</p></section>` : ""}
   ${conditions}
   ${place}

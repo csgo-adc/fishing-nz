@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.27 — 2026-10-11 (build code 28)
+
+- **The shared-window web page uses the app's layout.**
+  - The date and time are blue with a calendar icon, in the app's short form ("Wed 14 Oct",
+    "10:00 AM–12:00 PM"), next to a coloured outlook badge.
+  - Three key-number tiles follow (wind, tide and rain on land; waves, wind and tide on a boat). A
+    tile turns amber when that condition is the problem.
+  - An amber box lists what needs attention, followed by the forecast note.
+  - The full conditions, map links and notes stay below.
+  - On phones the badge moves under the time, so the page never scrolls sideways.
+  - The rules match the apps (`window-highlights.ts`). Deploy the API to publish it.
+
 ## 1.0.26 — 2026-10-11 (build code 27)
 
 - **Date and time stand out** on fishing window cards and window pages: they use the accent blue

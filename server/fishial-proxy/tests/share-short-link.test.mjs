@@ -40,7 +40,7 @@ test("short links for shared windows, with real D1", { timeout: 60_000 }, async 
       const page = await call(`/w/${made.id}`);
       assert.equal(page.status, 200);
       const html = await page.text();
-      for (const text of ["Takapuna Beach", "Sunday 11 October", "6:00 PM – 8:00 PM", "Okay", "Next high 7:12 PM · 2.4 m CD<br>Auckland (Waitematā)"]) assert.ok(html.includes(text), text);
+      for (const text of ["Takapuna Beach", "Sun 11 Oct", "6:00 PM–8:00 PM", "Okay", "Next high 7:12 PM · 2.4 m CD<br>Auckland (Waitematā)"]) assert.ok(html.includes(text), text);
       assert.ok(html.includes(`<link rel="canonical" href="https://fishing.test/w/${made.id}">`));
       assert.ok(html.includes(`data-open-ios="nz.fishingnz.catchcheck://w/${made.id}"`));
       assert.ok(html.includes(`intent://fishing.test/w/${made.id}#Intent;scheme=https;package=nz.fishingnz.app`));
