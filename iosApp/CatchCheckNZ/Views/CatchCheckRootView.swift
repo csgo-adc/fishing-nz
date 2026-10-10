@@ -837,8 +837,12 @@ struct AccountView: View {
                                 .background(.white.opacity(0.12), in: Circle())
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("FISHDAYS · NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.92))
-                                Text(vm.account?.displayName.isEmpty == false ? vm.account!.displayName : "Account")
-                                    .font(.title2.bold()).foregroundStyle(.white)
+                                // The navigation bar already says Account, so the header names the person, or stays untitled when signed out.
+                                if let account = vm.account {
+                                    Text(account.displayName.isEmpty ? account.email : account.displayName)
+                                        .font(.title2.bold()).foregroundStyle(.white)
+                                        .lineLimit(1).truncationMode(.middle)
+                                }
                             }
                             Spacer(minLength: 0)
                         }

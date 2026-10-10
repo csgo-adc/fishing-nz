@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.24 — 2026-10-11 (build code 25)
+
+- The account screen no longer says "Account" twice. Signed in, its header shows your name (or your
+  email if you have no name); signed out, it shows only the sign-in line. Android and iPhone.
+
 ## 1.0.23 — 2026-10-11 (build code 24)
 
 Plainer wording on Android, iPhone and the shared-window web page. Required notices (privacy,

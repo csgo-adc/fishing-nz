@@ -78,8 +78,11 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("FISHDAYS · NZ", color = Color(0xFFBFE6DF), style = MaterialTheme.typography.labelMedium)
-                    Text(s.account?.user?.displayName?.takeIf { it.isNotBlank() } ?: "Account",
-                        color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    // The top bar already says Account, so the header names the person, or stays untitled when signed out.
+                    s.account?.user?.let { user -> user.displayName.takeIf { it.isNotBlank() } ?: user.email }?.let { title ->
+                        Text(title, color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
                 }
             }
             if (s.account == null) Text("Sign in to identify fish and manage your profile.",
