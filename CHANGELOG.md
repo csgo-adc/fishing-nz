@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.22 — 2026-10-11 (build code 23)
+
+Android and iPhone now offer the same features.
+
+- **iPhone gains:**
+  - **Search from a town.** The search location list has a Towns section with the same 26 towns as
+    Android, searched within your radius. It is remembered across launches.
+  - **Report this AI result** after a fish identification. It is sent as feedback with the suggested
+    species and your message, never the photo.
+  - **Map:** a **List** of every fishing area, nearby pins merged into a numbered marker, a spot
+    count, and **Find a fishing window nearby** on a selected place (replacing "Spot details").
+  - Results say when forecasts failed for nearby spots, and the camera shows Android's fish outline
+    with "Hold the fish vertically — head up".
+  - Show/hide buttons on password fields, plus screen-view analytics for Trips, Rules, Account,
+    Settings, Feedback, Terms & privacy and Appearance, and a `spot_opened` event.
+  - Signing out of all devices also restores the photo-upload prompt.
+- **Android gains:**
+  - **Don't ask me again** on the photo-upload consent, with **Ask me before sending photos again**
+    in Terms & privacy. Signing out or deleting the account restores the prompt.
+  - **Try again** when tide predictions fail to load, with a plain message for connection failures.
+  - Results name the nearby areas that had no window that fits.
+- The privacy policy covers the photo-consent option in both apps and AI-result reports. Deploy the
+  API (Actions → Deploy) to publish it.
+
 ## 1.0.21 — 2026-10-10 (build code 22)
 
 - Correct the public privacy policy to cover iPhone maps, photo consent and Keychain storage.

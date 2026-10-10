@@ -274,6 +274,7 @@ class FishingRepository {
         AccountSessionStore.clear()
         PrivacyPreferences.setAnalyticsEnabled(false)
         PrivacyPreferences.setFirebaseEnabled(false)
+        PrivacyPreferences.setPhotoConsentRemembered(false)
         PrivacyPreferences.clearFishPhotos()
     }
 

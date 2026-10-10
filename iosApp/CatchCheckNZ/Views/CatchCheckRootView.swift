@@ -178,6 +178,7 @@ private struct MoreNavigationLabel: View {
 }
 
 private struct SettingsView: View {
+    @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -200,11 +201,13 @@ private struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .onAppear { vm.trackScreen("settings") }
         }
     }
 }
 
 private struct AppearanceView: View {
+    @EnvironmentObject private var vm: FishingViewModel
     @AppStorage("catchcheckAppearance") private var appearance = "light"
 
     var body: some View {
@@ -225,10 +228,12 @@ private struct AppearanceView: View {
         .background(CatchCheckColor.cream)
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { vm.trackScreen("appearance") }
     }
 }
 
 private struct TermsPrivacyView: View {
+    @EnvironmentObject private var vm: FishingViewModel
     @State private var analyticsOn = AnalyticsPreferences.isEnabled
     @State private var photoConsentRemembered = PhotoUploadConsent.isRemembered
 
@@ -281,6 +286,7 @@ private struct TermsPrivacyView: View {
         .background(CatchCheckColor.cream)
         .navigationTitle("Terms & privacy")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { vm.trackScreen("terms_privacy") }
     }
 }
 
@@ -357,6 +363,7 @@ private struct FeedbackView: View {
         .background(CatchCheckColor.cream)
         .navigationTitle("Feedback")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { vm.trackScreen("feedback") }
         .sheet(isPresented: $showingAccount) { AccountView() }
     }
 }
@@ -521,7 +528,7 @@ private struct PlanningSheet: View {
                         Text("Search from").font(.headline).foregroundStyle(CatchCheckColor.navy)
                         SearchPlaceMenu()
                         Text(vm.selectedSearchStationID == nil
-                             ? "Choose your current location to search for fishing windows within a radius, or select one tide location."
+                             ? "Search within a radius of your current location or a town, or select one tide location."
                              : "Fishing windows are calculated at this tide location. The search radius does not apply.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
@@ -586,6 +593,50 @@ private struct PhotoUploadConsentSheet: View {
     }
 }
 
+/// Flags a wrong, offensive or unsafe identification. It is sent as feedback with the suggested species, never the photo.
+private struct AIResultReportSheet: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+    let species: String
+    @State private var message = ""
+    @State private var submitted = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("What went wrong?", text: $message, axis: .vertical)
+                        .lineLimit(3...8)
+                        .onChange(of: message) { _, value in if value.count > 3000 { message = String(value.prefix(3000)) } }
+                } header: {
+                    Text("Tell us if this result is incorrect, offensive or unsafe.")
+                } footer: {
+                    Text("The report includes the suggested species and your message, and is linked to your account. Your photo is not included.")
+                }
+                if submitted, let error = vm.accountError {
+                    Text(error).font(.footnote).foregroundStyle(.red)
+                }
+            }
+            .navigationTitle("Report an AI result")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(vm.accountBusy) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(vm.accountBusy ? "Sending…" : "Send report") {
+                        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+                        submitted = true
+                        Task { @MainActor in
+                            if await vm.sendFeedback(category: "bug", message: "AI result report: \(species)\n\(text)", rating: 1) { dismiss() }
+                        }
+                    }
+                    .disabled(vm.accountBusy || message.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+                }
+            }
+        }
+        .interactiveDismissDisabled(vm.accountBusy)
+    }
+}
+
 private struct CheckboxToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
@@ -610,6 +661,7 @@ private struct FishIdentifierView: View {
     @Binding var photoItem: PhotosPickerItem?
     @Binding var showCamera: Bool
     @State private var showingPhotoConsent = false
+    @State private var showingAIReport = false
     let openAccount: () -> Void
     var body: some View {
         let galleryLabel = vm.selectedPhoto == nil ? "Choose photo" : "Gallery"
@@ -631,7 +683,13 @@ private struct FishIdentifierView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(CatchCheckColor.outline, lineWidth: 1))
             }
-            if let result = vm.fishCheck { FishCheckCard(result: result) }
+            if let result = vm.fishCheck {
+                FishCheckCard(result: result)
+                if vm.account != nil {
+                    Button("Report this AI result") { showingAIReport = true }
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
             if vm.isCheckingFish { ProgressView("Checking the photo…").tint(CatchCheckColor.orange) }
             if let error = vm.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack(spacing: 10) {
@@ -705,6 +763,10 @@ private struct FishIdentifierView: View {
             }
             Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.").font(.caption).foregroundStyle(.secondary)
         }
+        .sheet(isPresented: $showingAIReport) {
+            AIResultReportSheet(species: vm.fishCheck?.commonName ?? "")
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $showingPhotoConsent) {
             PhotoUploadConsentSheet { rememberChoice in
                 if rememberChoice { PhotoUploadConsent.isRemembered = true }
@@ -752,6 +814,7 @@ struct AccountView: View {
     @State private var confirmPassword = ""
     @State private var displayName = ""
     @State private var countryCode = "NZ"
+    @State private var passwordVisible = false
 
     private var passwordsMatch: Bool { !confirmPassword.isEmpty && password == confirmPassword }
     private var forgotPasswordURL: URL? {
@@ -892,7 +955,7 @@ struct AccountView: View {
                                 Text("Create account").tag(true)
                             }
                             .pickerStyle(.segmented)
-                            .onChange(of: createAccount) { _, _ in password = ""; confirmPassword = "" }
+                            .onChange(of: createAccount) { _, _ in password = ""; confirmPassword = ""; passwordVisible = false }
                             VStack(spacing: 12) {
                                 if createAccount {
                                     AccountInput(icon: "person") { TextField("Name (optional)", text: $displayName).textContentType(.name) }
@@ -902,12 +965,12 @@ struct AccountView: View {
                                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                                 }
                                 AccountInput(icon: "lock") {
-                                    SecureField(createAccount ? "Password · 8+ characters" : "Password", text: $password)
-                                        .textContentType(createAccount ? .newPassword : .password)
+                                    PasswordField(title: createAccount ? "Password · 8+ characters" : "Password", text: $password,
+                                                  contentType: createAccount ? .newPassword : .password, revealed: $passwordVisible)
                                 }
                                 if createAccount {
                                     AccountInput(icon: passwordsMatch ? "checkmark.lock" : "lock.rotation") {
-                                        SecureField("Confirm password", text: $confirmPassword).textContentType(.newPassword)
+                                        PasswordField(title: "Confirm password", text: $confirmPassword, contentType: .newPassword, revealed: $passwordVisible)
                                     }
                                     if !confirmPassword.isEmpty {
                                         Label(passwordsMatch ? "Passwords match" : "Passwords don’t match",
@@ -969,6 +1032,7 @@ struct AccountView: View {
             .background(CatchCheckColor.cream)
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { vm.trackScreen("account") }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $showChangePassword) { ChangePasswordSheet().environmentObject(vm) }
             .task {
@@ -1028,6 +1092,7 @@ private struct ChangePasswordSheet: View {
     @State private var currentPassword = ""
     @State private var newPassword = ""
     @State private var repeatedPassword = ""
+    @State private var passwordsVisible = false
 
     private var problem: String? {
         if !newPassword.isEmpty && (newPassword.utf16.count < 8 || newPassword.utf16.count > 128) { return "Use 8 to 128 characters for the new password." }
@@ -1044,9 +1109,9 @@ private struct ChangePasswordSheet: View {
         NavigationStack {
             Form {
                 Section(footer: Text("You stay signed in on this phone. Every other device is signed out.")) {
-                    SecureField("Current password", text: $currentPassword).textContentType(.password)
-                    SecureField("New password · 8+ characters", text: $newPassword).textContentType(.newPassword)
-                    SecureField("Repeat new password", text: $repeatedPassword).textContentType(.newPassword)
+                    PasswordField(title: "Current password", text: $currentPassword, contentType: .password, revealed: $passwordsVisible)
+                    PasswordField(title: "New password · 8+ characters", text: $newPassword, contentType: .newPassword, revealed: $passwordsVisible)
+                    PasswordField(title: "Repeat new password", text: $repeatedPassword, contentType: .newPassword, revealed: $passwordsVisible)
                 }
                 if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
             }
@@ -1061,6 +1126,32 @@ private struct ChangePasswordSheet: View {
                     }.disabled(!canSubmit)
                 }
             }
+        }
+    }
+}
+
+/// A password field with a show/hide button, like Android's sign-in fields. Fields that share `revealed` show and hide together.
+private struct PasswordField: View {
+    let title: String
+    @Binding var text: String
+    let contentType: UITextContentType
+    @Binding var revealed: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Group {
+                if revealed {
+                    TextField(title, text: $text).textInputAutocapitalization(.never).autocorrectionDisabled()
+                } else {
+                    SecureField(title, text: $text)
+                }
+            }
+            .textContentType(contentType)
+            Button { revealed.toggle() } label: {
+                Image(systemName: revealed ? "eye.slash" : "eye").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(revealed ? "Hide password" : "Show password")
         }
     }
 }
@@ -1106,7 +1197,7 @@ struct ResultsView: View {
                     } else if let locationError = vm.recommendationLocationError {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(locationError).foregroundStyle(.red)
-                            Text("Choose a tide location in your fishing plan on Home, then search again.")
+                            Text("Choose a town or tide location in your fishing plan on Home, then search again.")
                                 .foregroundStyle(.secondary)
                         }.padding(.vertical, 14)
                     } else if vm.isLoadingRecommendations {
@@ -1145,6 +1236,7 @@ struct ResultsView: View {
                         }
                         ForEach(vm.recommendations, id: \.windowID) { spot in
                             RecommendationCard(spot: spot, showWhy: shouldShowWindowReason(spot, among: vm.recommendations)) {
+                                vm.trackSpotOpened(spot)
                                 vm.showingResults = false; vm.selectedSpot = spot
                             }
                                 .listRowInsets(EdgeInsets())
@@ -1153,6 +1245,10 @@ struct ResultsView: View {
                             Text("No planning window available at: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
+                    }
+                    if !vm.failedSpotNames.isEmpty && !vm.isLoadingRecommendations && vm.recommendationError == nil {
+                        Text("Forecasts failed for \(vm.failedSpotNames.count) nearby spot(s); no planning windows are shown for those spots.")
+                            .font(.footnote).foregroundStyle(CatchCheckColor.orange)
                     }
                 } footer: {
                     VStack(alignment: .leading, spacing: 6) {
@@ -1181,7 +1277,7 @@ private struct SearchPlaceMenu: View {
         Button { showingPicker = true } label: {
             if compact {
                 HStack(spacing: 6) {
-                    Text(vm.hasDeviceLocation || vm.selectedSearchStationID != nil
+                    Text(vm.hasDeviceLocation || !vm.searchesFromDeviceLocation
                          ? "From \(vm.homeCityLabel)" : vm.homeCityLabel)
                         .font(.subheadline.weight(.semibold))
                     Spacer()
@@ -1220,6 +1316,12 @@ private struct SearchStationPicker: View {
         return sorted.filter { $0.name.localizedStandardContains(query) || $0.region.localizedStandardContains(query) }
     }
 
+    private var matchingTowns: [SearchOrigin] {
+        let sorted = searchOrigins.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        guard !query.isEmpty else { return sorted }
+        return sorted.filter { $0.name.localizedStandardContains(query) }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -1231,11 +1333,31 @@ private struct SearchStationPicker: View {
                         HStack {
                             Label(vm.hasDeviceLocation ? "Current location · \(vm.devicePlaceName ?? "near me")" : "Use current location", systemImage: "location.fill")
                             Spacer()
-                            if vm.selectedSearchStationID == nil { Image(systemName: "checkmark") }
+                            if vm.searchesFromDeviceLocation { Image(systemName: "checkmark") }
                         }
                     }
                 } footer: {
-                    Text("A tide station provides the centre for your fishing window search. You can change it any time.")
+                    Text("Search within your radius of your current location or a town, or choose one tide location. You can change it any time.")
+                }
+                if !matchingTowns.isEmpty {
+                    Section {
+                        ForEach(matchingTowns) { town in
+                            Button {
+                                vm.selectSearchOrigin(town)
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(town.name)
+                                    Spacer()
+                                    if vm.selectedSearchOrigin == town { Image(systemName: "checkmark") }
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Towns")
+                    } footer: {
+                        Text("Fishing windows are found within your search radius of the town.")
+                    }
                 }
                 Section("Tide locations") {
                     ForEach(matchingStations) { station in
@@ -1255,7 +1377,7 @@ private struct SearchStationPicker: View {
                     }
                 }
             }
-            .searchable(text: $query, prompt: "Search tide locations")
+            .searchable(text: $query, prompt: "Search towns or tide locations")
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Search location")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
@@ -1724,7 +1846,78 @@ struct CameraPicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     @Environment(\.dismiss) private var dismiss
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
-    func makeUIViewController(context: Context) -> UIImagePickerController { let picker = UIImagePickerController(); picker.sourceType = .camera; picker.delegate = context.coordinator; picker.cameraCaptureMode = .photo; return picker }
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController(); picker.sourceType = .camera; picker.delegate = context.coordinator; picker.cameraCaptureMode = .photo
+        picker.cameraOverlayView = FishCameraGuideView()
+        return picker
+    }
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate { let parent: CameraPicker; init(parent: CameraPicker) { self.parent = parent }; func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) { parent.image = info[.originalImage] as? UIImage; parent.dismiss() }; func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() } }
+}
+
+/// The fish outline and "head up" hint over the camera, the same guide Android's camera shows. It ignores touches, so the
+/// system shutter and controls underneath keep working.
+private final class FishCameraGuideView: UIView {
+    private let hint = UILabel()
+
+    init() {
+        super.init(frame: .zero)
+        isUserInteractionEnabled = false
+        isOpaque = false
+        backgroundColor = .clear
+        contentMode = .redraw
+        autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hint.text = "Hold the fish vertically — head up"
+        hint.textColor = .white
+        hint.font = .preferredFont(forTextStyle: .headline)
+        hint.adjustsFontForContentSizeCategory = true
+        hint.textAlignment = .center
+        hint.numberOfLines = 0
+        hint.layer.shadowColor = UIColor.black.cgColor
+        hint.layer.shadowOpacity = 0.8
+        hint.layer.shadowRadius = 3
+        hint.layer.shadowOffset = .zero
+        addSubview(hint)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        if let superview { frame = superview.bounds }
+    }
+
+    private var guideTop: CGFloat { bounds.height * 0.2 }
+    private var guideBottom: CGFloat { bounds.height * 0.72 }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let width = bounds.width - 48
+        let height = hint.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        hint.frame = CGRect(x: 24, y: max(safeAreaInsets.top + 52, guideTop - height - 12), width: width, height: height)
+        setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        let w = bounds.width, top = guideTop, bottom = guideBottom, h = bottom - top, centerX = w / 2
+        UIColor.white.withAlphaComponent(0.9).setStroke()
+        let body = UIBezierPath()
+        body.move(to: CGPoint(x: centerX, y: top + h * 0.12))
+        body.addCurve(to: CGPoint(x: centerX, y: bottom - h * 0.12),
+                      controlPoint1: CGPoint(x: w * 0.28, y: top + h * 0.2), controlPoint2: CGPoint(x: w * 0.28, y: bottom - h * 0.2))
+        body.addCurve(to: CGPoint(x: centerX, y: top + h * 0.12),
+                      controlPoint1: CGPoint(x: w * 0.72, y: bottom - h * 0.2), controlPoint2: CGPoint(x: w * 0.72, y: top + h * 0.2))
+        body.close()
+        body.lineWidth = 4
+        body.stroke()
+        let tail = UIBezierPath()
+        tail.move(to: CGPoint(x: centerX, y: bottom - h * 0.09))
+        tail.addLine(to: CGPoint(x: w * 0.36, y: bottom))
+        tail.addLine(to: CGPoint(x: w * 0.64, y: bottom))
+        tail.close()
+        tail.lineWidth = 4
+        tail.stroke()
+        UIColor.white.withAlphaComponent(0.9).setFill()
+        UIBezierPath(ovalIn: CGRect(x: centerX - 5, y: top + h * 0.2 - 5, width: 10, height: 10)).fill()
+    }
 }

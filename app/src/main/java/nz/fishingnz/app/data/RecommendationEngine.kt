@@ -57,13 +57,18 @@ class RecommendationEngine {
         val succeeded = outcomes.mapNotNull { it.getOrNull() }
         if (succeeded.isEmpty()) error("Weather forecasts are unavailable for nearby spots. Please try again later.")
         if (succeeded.none { it.usableWeather }) error("No usable hourly weather forecast was available for the selected days.")
+        val spotsWithoutWindows = if (specificStation != null) emptyList() else nearby.zip(outcomes)
+            .filter { (_, outcome) -> outcome.getOrNull()?.windows?.isEmpty() == true }
+            .sortedBy { (candidate, _) -> candidate.second }
+            .map { (candidate, _) -> candidate.first.name }
+            .distinct()
         RecommendationSearch(
             succeeded.flatMap { it.windows }.map {
                 if (specificStation == null) it else it.copy(distance = "Selected tide location · access not verified")
             }.let {
                 if (specificStation != null) it.sortedBy { item -> item.startsAtEpochSeconds }
                 else it.sortedWith(windowOrder.thenBy { item -> item.distanceKm }.thenBy { item -> item.name })
-            }, nearby.size, outcomes.count { it.isFailure }
+            }, nearby.size, outcomes.count { it.isFailure }, spotsWithoutWindows = spotsWithoutWindows
         )
     }
 

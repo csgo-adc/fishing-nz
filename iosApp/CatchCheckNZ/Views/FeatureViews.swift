@@ -54,6 +54,7 @@ struct FishingMapView: View {
     @State private var selectedPlace: ConditionPlace?
     @State private var conditionsPlace: ConditionPlace?
     @State private var showPlaceSearch = false
+    @State private var showSpotList = false
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
@@ -62,6 +63,8 @@ struct FishingMapView: View {
                     Text("Explore conditions").font(.title.bold()).foregroundStyle(CatchCheckColor.navy)
                     Spacer()
                     Button { showPlaceSearch = true } label: { Image(systemName: "magnifyingglass").font(.title3) }.accessibilityLabel("Search places")
+                    Button { showSpotList = true } label: { Label("List", systemImage: "list.bullet") }
+                        .accessibilityLabel("List fishing areas")
                 }
                 Text("Search a place or tap anywhere on the map").font(.subheadline).foregroundStyle(.secondary)
                 Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented)
@@ -69,6 +72,13 @@ struct FishingMapView: View {
             FishingMapCanvas(layer: layer, spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
                              currentCamera: $currentCamera, onSpotSelected: { selectedPlace = ConditionPlace($0) },
                              onPointSelected: { selectedPlace = ConditionPlace(name: "Dropped pin", point: $0, region: "Selected on map", boat: filter == "Boat") })
+            .overlay(alignment: .topLeading) {
+                Text("\(visibleSpots.count) spots")
+                    .font(.caption.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(CatchCheckColor.surface.opacity(0.94), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+            }
             .overlay(alignment: .topTrailing) {
                 VStack(spacing: 12) {
                     Menu {
@@ -156,6 +166,14 @@ struct FishingMapView: View {
             }
             .onChange(of: filter) { _, _ in selectedPlace = nil }
             .fullScreenCover(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
+            .sheet(isPresented: $showSpotList) {
+                FishingSpotList(spots: visibleSpots) { spot in
+                    selectedPlace = ConditionPlace(spot)
+                    showSpotList = false
+                    sendCamera(.region(MKCoordinateRegion(center: .init(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude),
+                                                          span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
+                }
+            }
             .sheet(isPresented: $showPlaceSearch) {
                 MapPlaceSearchView { place in
                     selectedPlace = place
@@ -184,21 +202,20 @@ struct FishingMapView: View {
                 Button { conditionsPlace = place } label: {
                     Label("Check conditions", systemImage: "cloud.sun.fill").frame(maxWidth: .infinity)
                 }.buttonStyle(.borderedProminent)
-                HStack(spacing: 10) {
-                    Button {
-                        openSpotInMaps(spot)
-                    } label: {
-                        Label(spot.boat ? "View in Maps" : "Directions", systemImage: "map")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    Button("Spot details") {
-                        vm.selectedSpot = vm.recommendations.first(where: { $0.name == spot.name && $0.boat == spot.boat })
-                            ?? Recommendation(name: spot.name, area: spot.area, rating: 0, time: "", distance: "Search Home for a live forecast", reasons: [], boat: spot.boat)
-                    }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    openSpotInMaps(spot)
+                } label: {
+                    Label(spot.boat ? "View position in Maps" : "Directions in Maps", systemImage: "map")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
+                Button("Find a fishing window nearby") {
+                    vm.isBoatFishing = spot.boat
+                    vm.selectSearchOrigin(SearchOrigin(name: spot.name, point: spot.coordinate))
+                    vm.showRecommendations()
+                }
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
             }
             .padding(16)
             .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -381,6 +398,21 @@ private struct FishingMapCanvas: UIViewRepresentable {
             if let pin = annotation as? MKPointAnnotation, pin === selectedPin {
                 let marker = mapView.dequeueReusableAnnotationView(withIdentifier: "SelectedPlace") as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: pin, reuseIdentifier: "SelectedPlace")
                 marker.annotation = pin; marker.markerTintColor = UIColor(CatchCheckColor.accent); marker.glyphImage = UIImage(systemName: "mappin"); marker.canShowCallout = false
+                marker.displayPriority = .required
+                return marker
+            }
+            // Spots close together on screen merge into one marker showing how many there are, as on Android.
+            if let cluster = annotation as? MKClusterAnnotation {
+                let marker = mapView.dequeueReusableAnnotationView(withIdentifier: "SpotCluster") as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: cluster, reuseIdentifier: "SpotCluster")
+                marker.annotation = cluster
+                marker.markerTintColor = UIColor(red: 0x12 / 255, green: 0x3B / 255, blue: 0x43 / 255, alpha: 1)
+                marker.glyphImage = nil
+                marker.glyphText = "\(cluster.memberAnnotations.count)"
+                marker.titleVisibility = .hidden
+                marker.subtitleVisibility = .hidden
+                marker.canShowCallout = false
+                marker.accessibilityLabel = "\(cluster.memberAnnotations.count) fishing spots"
                 return marker
             }
             guard let spotAnnotation = annotation as? FishingSpotMapAnnotation else { return nil }
@@ -391,10 +423,16 @@ private struct FishingMapCanvas: UIViewRepresentable {
             marker.markerTintColor = UIColor(CatchCheckColor.orange)
             marker.glyphImage = UIImage(systemName: spotAnnotation.spot.boat ? "ferry.fill" : "mappin.circle.fill")
             marker.canShowCallout = false
+            marker.clusteringIdentifier = "fishing-spots"
             return marker
         }
 
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            if let cluster = view.annotation as? MKClusterAnnotation {
+                mapView.deselectAnnotation(cluster, animated: false)
+                mapView.showAnnotations(cluster.memberAnnotations, animated: true)
+                return
+            }
             guard let spotAnnotation = view.annotation as? FishingSpotMapAnnotation else { return }
             parent.onSpotSelected(spotAnnotation.spot)
             mapView.deselectAnnotation(spotAnnotation, animated: false)
@@ -403,6 +441,43 @@ private struct FishingMapCanvas: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             zoomTarget = nil
             parent.currentCamera = mapView.camera.copy() as? MKMapCamera
+        }
+    }
+}
+
+/// Every fishing area for the current filter, for browsing without the map.
+private struct FishingSpotList: View {
+    @Environment(\.dismiss) private var dismiss
+    let spots: [FishingSpot]
+    let choose: (FishingSpot) -> Void
+    @State private var query = ""
+
+    private var matching: [FishingSpot] {
+        let sorted = spots.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        guard !query.isEmpty else { return sorted }
+        return sorted.filter { $0.name.localizedStandardContains(query) || $0.area.localizedStandardContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(matching, id: \.id) { spot in
+                        Button { choose(spot) } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(spot.name).foregroundStyle(CatchCheckColor.navy)
+                                Text("\(spot.area) · \(spot.boat ? "Boat" : "Land") fishing").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Tap an area to see it on the map.")
+                }
+            }
+            .searchable(text: $query, prompt: "Search fishing areas")
+            .navigationTitle("Fishing areas")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }
 }
@@ -850,13 +925,14 @@ struct TripsView: View {
                     if saved.isEmpty {
                         Text("Save a recommended spot to see it here.").foregroundStyle(.secondary)
                     } else {
-                        ForEach(saved) { spot in RecommendationCard(spot: spot) { selectedSavedSpot = spot } }
+                        ForEach(saved) { spot in RecommendationCard(spot: spot) { vm.trackSpotOpened(spot); selectedSavedSpot = spot } }
                     }
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
             .navigationTitle("Trips")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { vm.trackScreen("trip_planning") }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
         .sheet(item: $selectedSavedSpot) { SpotDetailView(spot: $0) }
@@ -1023,6 +1099,7 @@ struct RulesView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Rules")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { vm.trackScreen("fishing_rules") }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $showAreas) {
                 NavigationStack {

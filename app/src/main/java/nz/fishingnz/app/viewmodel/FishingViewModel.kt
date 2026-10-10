@@ -14,6 +14,7 @@ import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.AnalyticsPayload
+import nz.fishingnz.app.data.PrivacyPreferences
 import nz.fishingnz.app.data.SignInProviders
 import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.data.SearchPreferencesStore
@@ -583,6 +584,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun signOut() {
         val version = ++accountVersion
         _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
+        PrivacyPreferences.setPhotoConsentRemembered(false)
         viewModelScope.launch {
             try {
                 Analytics.track("sign_out")
@@ -620,6 +622,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             try {
                 repository.signOutEverywhere()
                 Analytics.track("signed_out_everywhere")
+                PrivacyPreferences.setPhotoConsentRemembered(false)
                 if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
                     hasStoredSession = false, verificationPending = false, accountNotice = "You’re signed out of every device.")
             } catch (cancelled: CancellationException) {
@@ -682,8 +685,11 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                // A connection failure reads as the iPhone app does; LINZ data problems keep their own explanation.
+                val message = if (error is java.io.IOException) "Tide predictions are unavailable for ${station.name} on this date. Check your connection and try again."
+                    else error.message ?: "Tide table unavailable."
                 if (_state.value.selectedStation == station && _state.value.tideDate == date)
-                    _state.value = _state.value.copy(tideLoading = false, tideError = error.message ?: "Tide table unavailable.")
+                    _state.value = _state.value.copy(tideLoading = false, tideError = message)
             }
         }
     }

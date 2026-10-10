@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -255,6 +256,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
     val uriHandler = LocalUriHandler.current
     var analyticsEnabled by remember { mutableStateOf(PrivacyPreferences.analyticsEnabled()) }
     var firebaseEnabled by remember { mutableStateOf(PrivacyPreferences.firebaseEnabled()) }
+    var photoConsentRemembered by remember { mutableStateOf(PrivacyPreferences.photoConsentRemembered()) }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Terms & privacy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("A short guide to using Fishdays - NZ and understanding the information it uses.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -293,6 +295,14 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                         firebaseEnabled = it
                         PrivacyPreferences.setFirebaseEnabled(it)
                     })
+                }
+                if (photoConsentRemembered) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Fish photos", fontWeight = FontWeight.SemiBold)
+                    Text("You chose not to be asked before a photo is sent to OpenAI for identification.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = {
+                        PrivacyPreferences.setPhotoConsentRemembered(false)
+                        photoConsentRemembered = false
+                    }, contentPadding = PaddingValues(0.dp)) { Text("Ask me before sending photos again") }
                 }
                 Text("Fishdays - NZ is independent and is not affiliated with or endorsed by the New Zealand Government, MPI or LINZ.")
             }

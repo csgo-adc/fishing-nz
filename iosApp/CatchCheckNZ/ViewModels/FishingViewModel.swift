@@ -24,8 +24,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             guard oldValue != selectedTab else { return }
             let features = ["home", "map", "tide", "weather", "more"]
             guard features.indices.contains(selectedTab) else { return }
-            Analytics.track("screen_view", ["screen": .text(features[selectedTab])])
-            Task { await repository.trackEvent("feature_used", feature: features[selectedTab], platform: "ios") }
+            trackScreen(features[selectedTab])
         }
     }
     @Published var isBoatFishing = false {
@@ -76,6 +75,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published private(set) var tideLocationIssue: String?
     @Published var devicePlaceName: String?
     @Published private(set) var selectedSearchStationID: String?
+    /// A town, or a spot from the map, to search around within the radius. Nil with no station means the device location.
+    @Published private(set) var selectedSearchOrigin: SearchOrigin?
     @Published var isResolvingRecommendationLocation = false
     @Published var recommendationLocationError: String?
     @Published var weather: WeatherState?
@@ -119,6 +120,10 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var isLoadingRecommendations = false
     @Published var hasSearchedRecommendations = false
     @Published var recommendationError: String?
+    /// Nearby spots from the last search whose forecast failed, nearest first.
+    @Published private(set) var failedSpotNames: [String] = []
+    /// Nearby spots from the last search that loaded but had no window that fits, nearest first.
+    @Published private(set) var nearbyPlacesWithoutWindows: [String] = []
     @Published var account: AccountProfile?
     @Published var fishIdentityQuota: FishIdentityQuota?
     var fishIdentityAvailable: Bool { account != nil }
@@ -148,6 +153,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private var accountRequestVersion = 0
     @Published private(set) var rulesAreaSelectionIsManual = false
     private static let searchStationKey = "fishingSearchStationID"
+    private static let searchOriginKey = "fishingSearchOrigin"
     private static let searchRadiusKey = "fishingSearchRadiusKm"
     private static let planBoatKey = "fishingPlanBoat"
     private static let planDatePresetKey = "fishingPlanDatePreset"
@@ -201,13 +207,14 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     var locationSummary: String {
         if let selectedSearchStation { return "From \(selectedSearchStation.name)" }
+        if let selectedSearchOrigin { return "From \(selectedSearchOrigin.name)" }
         if hasDeviceLocation { return "From \(devicePlaceName ?? "your current location")" }
         if tideLocationIssue != nil { return "Choose a search location" }
         return "Finding your current location…"
     }
 
     var homeCityLabel: String {
-        selectedSearchStation?.name ?? (hasDeviceLocation ? devicePlaceName ?? "Current location" : tideLocationIssue == nil ? "Finding location…" : "Choose location")
+        selectedSearchStation?.name ?? selectedSearchOrigin?.name ?? (hasDeviceLocation ? devicePlaceName ?? "Current location" : tideLocationIssue == nil ? "Finding location…" : "Choose location")
     }
 
     var selectedSearchStation: TideStation? {
@@ -221,10 +228,14 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         return "Finding a station near your current location…"
     }
 
+    /// True when searches start from the phone's position rather than a chosen town or tide location.
+    var searchesFromDeviceLocation: Bool { selectedSearchStationID == nil && selectedSearchOrigin == nil }
+
     private var recommendationOrigin: GeoPoint? {
         if let selectedSearchStation {
             return GeoPoint(latitude: selectedSearchStation.latitude, longitude: selectedSearchStation.longitude)
         }
+        if let selectedSearchOrigin { return selectedSearchOrigin.point }
         return hasDeviceLocation ? location : nil
     }
 
@@ -309,22 +320,6 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         return [10, 30, 50, 100, 200, 300, 400, 500].first { $0 > radiusKm && Double($0) >= nearestDistance }
     }
 
-    var nearbyPlacesWithoutWindows: [String] {
-        if selectedSearchStationID != nil { return [] }
-        guard let recommendationOrigin else { return [] }
-        let origin = CLLocation(latitude: recommendationOrigin.latitude, longitude: recommendationOrigin.longitude)
-        let scored = Set(recommendations.map(\.name))
-        var seen = Set<String>()
-        return fishingSpots.filter { $0.boat == isBoatFishing }
-            .map { spot in (spot.name, origin.distance(from: CLLocation(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude)) / 1_000) }
-            .filter { $0.1 <= Double(radiusKm) }
-            .sorted { $0.1 < $1.1 }
-            .compactMap { name, _ in
-                guard !scored.contains(name), seen.insert(name).inserted else { return nil }
-                return name
-            }
-    }
-
     func recommendationDays(now: Date = .now) -> [Date] {
         let calendar = nzCalendar
         let today = calendar.startOfDay(for: now)
@@ -354,23 +349,49 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     func showRecommendations() {
         showingResults = true
         searchRecommendations()
-        if selectedSearchStationID == nil && hasDeviceLocation { requestLocation() }
+        if searchesFromDeviceLocation && hasDeviceLocation { requestLocation() }
     }
 
+    /// One tide location, or nil to search around the device location.
     func selectSearchStation(_ station: TideStation?) {
         selectedSearchStationID = station?.id
+        selectedSearchOrigin = nil
+        UserDefaults.standard.removeObject(forKey: Self.searchOriginKey)
         if let station {
             UserDefaults.standard.set(station.id, forKey: Self.searchStationKey)
         } else {
             UserDefaults.standard.removeObject(forKey: Self.searchStationKey)
         }
+        searchOriginChanged()
+        if station == nil { requestLocation() }
+    }
+
+    /// Search within the radius around a town, or around a spot chosen on the map.
+    func selectSearchOrigin(_ origin: SearchOrigin) {
+        selectedSearchOrigin = origin
+        selectedSearchStationID = nil
+        UserDefaults.standard.removeObject(forKey: Self.searchStationKey)
+        UserDefaults.standard.set(["name": origin.name, "latitude": origin.point.latitude, "longitude": origin.point.longitude] as [String: Any],
+                                  forKey: Self.searchOriginKey)
+        searchOriginChanged()
+    }
+
+    private func searchOriginChanged() {
         isResolvingRecommendationLocation = false
         recommendationLocationError = nil
         locationRequestID = UUID()
         if showingResults { searchRecommendations() }
         else { invalidateRecommendations() }
         refreshConditions()
-        if station == nil { requestLocation() }
+    }
+
+    func trackScreen(_ screen: String) {
+        Analytics.track("screen_view", ["screen": .text(screen)])
+        Task { await repository.trackEvent("feature_used", feature: screen, platform: "ios") }
+    }
+
+    func trackSpotOpened(_ spot: Recommendation) {
+        Analytics.track("spot_opened", ["spot_id": .text(spot.id), "mode": .text(spot.boat ? "boat" : "land")])
     }
 
     func selectRulesArea(_ areaID: String) {
@@ -441,6 +462,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         recommendationTask?.cancel()
         recommendationSearchID = UUID()
         scoredWindows = []
+        failedSpotNames = []
+        nearbyPlacesWithoutWindows = []
         recommendationError = nil
         hasSearchedRecommendations = false
         isLoadingRecommendations = false
@@ -451,6 +474,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         let searchID = UUID()
         recommendationSearchID = searchID
         scoredWindows = []
+        failedSpotNames = []
+        nearbyPlacesWithoutWindows = []
         recommendationError = nil
         guard let origin = recommendationOrigin else {
             hasSearchedRecommendations = false
@@ -464,7 +489,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 try? await Task.sleep(for: .seconds(10))
                 guard locationRequestID == requestID, isResolvingRecommendationLocation else { return }
                 isResolvingRecommendationLocation = false
-                recommendationLocationError = "Couldn’t get your current location. Choose a tide location on Home or enable Location Services, then try again."
+                recommendationLocationError = "Couldn’t get your current location. Choose a town or tide location on Home or enable Location Services, then try again."
             }
             return
         }
@@ -484,10 +509,13 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         isLoadingRecommendations = true
         recommendationTask = Task {
             do {
-                let windows = try await scoringService.rank(origin: origin, radiusKm: radius, selectedStation: station,
-                                                            days: days, boat: boat, preferredHours: hours, priority: priority, land: land)
+                let result = try await scoringService.search(origin: origin, radiusKm: radius, selectedStation: station,
+                                                             days: days, boat: boat, preferredHours: hours, priority: priority, land: land)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
+                let windows = result.windows
                 scoredWindows = windows
+                failedSpotNames = result.failedSpots
+                nearbyPlacesWithoutWindows = result.spotsWithoutWindows
                 Analytics.track("search_run", ["mode": .text(boat ? "boat" : "land"), "radius_km": .number(radius),
                                                "date_preset": .text(datePreset.rawValue), "result_count": .number(Double(windows.count))])
             } catch is CancellationError {
@@ -547,11 +575,16 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         if let stationID = UserDefaults.standard.string(forKey: Self.searchStationKey),
            tideStations.contains(where: { $0.id == stationID }) {
             selectedSearchStationID = stationID
+        } else if let stored = defaults.dictionary(forKey: Self.searchOriginKey),
+                  let name = stored["name"] as? String, !name.isEmpty,
+                  let latitude = stored["latitude"] as? Double, let longitude = stored["longitude"] as? Double,
+                  (-90...90).contains(latitude), (-180...180).contains(longitude) {
+            selectedSearchOrigin = SearchOrigin(name: name, point: GeoPoint(latitude: latitude, longitude: longitude))
         }
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         refreshStationTide()
-        if selectedSearchStationID != nil { refreshConditions() }
+        if !searchesFromDeviceLocation { refreshConditions() }
         refreshAccount()
     }
     func requestLocation() {
@@ -566,7 +599,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             hasDeviceLocation = false
             if isResolvingRecommendationLocation {
                 isResolvingRecommendationLocation = false
-                recommendationLocationError = "Location access is off. Choose a tide location on Home or enable location access in Settings."
+                recommendationLocationError = "Location access is off. Choose a town or tide location on Home or enable location access in Settings."
             }
         @unknown default:
             break
@@ -581,7 +614,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             hasDeviceLocation = false
             if isResolvingRecommendationLocation {
                 isResolvingRecommendationLocation = false
-                recommendationLocationError = "Location access is off. Choose a tide location on Home or enable location access in Settings."
+                recommendationLocationError = "Location access is off. Choose a town or tide location on Home or enable location access in Settings."
             }
         }
         if pendingFishPhoto != nil {
@@ -611,8 +644,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             }
         }
         refreshConditions()
-        if showingResults && selectedSearchStationID == nil { searchRecommendations() }
-        else if !showingResults { invalidateRecommendations() }
+        if searchesFromDeviceLocation {
+            if showingResults { searchRecommendations() } else { invalidateRecommendations() }
+        }
         if pendingFishPhoto != nil { identifyPendingFish(at: location) }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -621,7 +655,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         }
         if isResolvingRecommendationLocation {
             isResolvingRecommendationLocation = false
-            recommendationLocationError = "Couldn’t get your current location. Choose a tide location on Home or try again."
+            recommendationLocationError = "Couldn’t get your current location. Choose a town or tide location on Home or try again."
         }
         if pendingFishPhoto != nil { identifyPendingFish(at: location) }
     }
@@ -824,6 +858,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             do {
                 try await repository.logoutEverywhere()
                 Analytics.track("signed_out_everywhere")
+                PhotoUploadConsent.isRemembered = false
                 account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
                 accountNotice = "You’re signed out of every device."
             } catch { accountError = error.localizedDescription }

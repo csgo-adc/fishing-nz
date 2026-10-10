@@ -13,6 +13,8 @@ object PrivacyPreferences {
     // Google Analytics (Firebase). Opt-in: off unless the person switches it on. This is the key the old single switch used.
     private const val FIREBASE_KEY = "analytics_enabled"
     private const val MIGRATED_KEY = "consent_migrated"
+    // "Don't ask me again" on the photo-upload consent. Only ever set from that dialog; cleared on sign-out and account deletion.
+    private const val PHOTO_CONSENT_KEY = "photo_upload_consent_remembered"
     private var appContext: Context? = null
 
     private fun preferences(): SharedPreferences? = appContext?.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -82,6 +84,12 @@ object PrivacyPreferences {
             setAnalyticsCollectionEnabled(enabled)
             if (!enabled) resetAnalyticsData()
         }
+    }
+
+    fun photoConsentRemembered(): Boolean = preferences()?.getBoolean(PHOTO_CONSENT_KEY, false) ?: false
+
+    fun setPhotoConsentRemembered(remembered: Boolean) {
+        preferences()?.edit()?.putBoolean(PHOTO_CONSENT_KEY, remembered)?.apply()
     }
 
     fun clearFishPhotos() {

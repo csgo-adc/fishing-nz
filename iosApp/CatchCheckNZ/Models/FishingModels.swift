@@ -216,6 +216,43 @@ struct AccountProfileEnvelope: Decodable { let user: AccountProfile }
 typealias AccountPermissionsEnvelope = AccountPermissions
 struct AccountAuthResponse: Decodable { let token: String; let user: AccountProfile; let permissions: AccountPermissions }
 
+/// A town, or a spot picked on the map, to search for fishing windows around. The same towns as Android's `searchOrigins`.
+struct SearchOrigin: Identifiable, Equatable, Sendable {
+    let name: String
+    let point: GeoPoint
+    var id: String { name }
+}
+
+// Manual origins keep radius searches usable when device location is unavailable.
+let searchOrigins: [SearchOrigin] = [
+    .init(name: "Whangārei", point: .init(latitude: -35.725, longitude: 174.324)),
+    .init(name: "Kerikeri", point: .init(latitude: -35.227, longitude: 173.95)),
+    .init(name: "Kaitaia", point: .init(latitude: -35.112, longitude: 173.263)),
+    .init(name: "Whitianga", point: .init(latitude: -36.835, longitude: 175.705)),
+    .init(name: "Hamilton", point: .init(latitude: -37.787, longitude: 175.279)),
+    .init(name: "Auckland", point: .init(latitude: -36.8485, longitude: 174.7633)),
+    .init(name: "Tauranga", point: .init(latitude: -37.686, longitude: 176.166)),
+    .init(name: "Thames", point: .init(latitude: -37.138, longitude: 175.54)),
+    .init(name: "Whakatāne", point: .init(latitude: -37.953, longitude: 176.991)),
+    .init(name: "Gisborne", point: .init(latitude: -38.662, longitude: 178.018)),
+    .init(name: "Napier", point: .init(latitude: -39.493, longitude: 176.912)),
+    .init(name: "New Plymouth", point: .init(latitude: -39.057, longitude: 174.074)),
+    .init(name: "Whanganui", point: .init(latitude: -39.932, longitude: 175.052)),
+    .init(name: "Wellington", point: .init(latitude: -41.286, longitude: 174.776)),
+    .init(name: "Nelson", point: .init(latitude: -41.271, longitude: 173.284)),
+    .init(name: "Blenheim", point: .init(latitude: -41.513, longitude: 173.961)),
+    .init(name: "Westport", point: .init(latitude: -41.755, longitude: 171.603)),
+    .init(name: "Greymouth", point: .init(latitude: -42.449, longitude: 171.207)),
+    .init(name: "Hokitika", point: .init(latitude: -42.717, longitude: 170.965)),
+    .init(name: "Kaikōura", point: .init(latitude: -42.404, longitude: 173.681)),
+    .init(name: "Christchurch", point: .init(latitude: -43.532, longitude: 172.636)),
+    .init(name: "Timaru", point: .init(latitude: -44.397, longitude: 171.254)),
+    .init(name: "Oamaru", point: .init(latitude: -45.097, longitude: 170.969)),
+    .init(name: "Dunedin", point: .init(latitude: -45.878, longitude: 170.503)),
+    .init(name: "Invercargill", point: .init(latitude: -46.413, longitude: 168.354)),
+    .init(name: "Bluff", point: .init(latitude: -46.598, longitude: 168.33))
+]
+
 // Verified daily-prediction locations and coordinates from the LINZ tide prediction list and 2026 CSV headers.
 // https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions/tide-predictions-list-view
 // Offset/secondary ports are excluded because they require reference-port corrections.

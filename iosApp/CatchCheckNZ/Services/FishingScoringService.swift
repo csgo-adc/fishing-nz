@@ -201,6 +201,14 @@ struct FishingScoringService: Sendable {
     func rank(origin: GeoPoint, radiusKm: Double, selectedStation: TideStation? = nil, days: [Date], boat: Bool,
               preferredHours: PreferredFishingHours?, priority: WindowPriority = .weather,
               land: LandPreferences = LandPreferences()) async throws -> [ScoredFishingWindow] {
+        try await search(origin: origin, radiusKm: radiusKm, selectedStation: selectedStation, days: days, boat: boat,
+                         preferredHours: preferredHours, priority: priority, land: land).windows
+    }
+
+    /// The ranked windows, plus the spots whose forecast could not be loaded, so the results can say so.
+    func search(origin: GeoPoint, radiusKm: Double, selectedStation: TideStation? = nil, days: [Date], boat: Bool,
+                preferredHours: PreferredFishingHours?, priority: WindowPriority = .weather,
+                land: LandPreferences = LandPreferences()) async throws -> FishingWindowSearch {
         if !boat && land.daylightOnly && (land.arrivalMinutes == nil || land.returnMinutes == nil) { throw ScoringError.missingAccessTime }
         if selectedStation == nil {
             guard radiusKm.isFinite, radiusKm > 0 else { throw ScoringError.invalidRadius }
@@ -228,42 +236,57 @@ struct FishingScoringService: Sendable {
                 return .init(spot: spot, distanceKm: distance, isTideStation: false, tideStation: Self.matchingStation(for: spot))
             }
         }
-        guard !candidates.isEmpty else { return [] }
+        guard !candidates.isEmpty else { return FishingWindowSearch(windows: [], failedSpots: [], spotsWithoutWindows: []) }
         var windows: [ScoredFishingWindow] = []
+        var failed = Set<String>()
+        var withoutWindows = Set<String>()
         var weatherSucceeded = false
         var usableWeatherFound = false
-        await withTaskGroup(of: SpotOutcome.self) { group in
+        await withTaskGroup(of: (String, SpotOutcome).self) { group in
             var next = 0
             for _ in 0..<min(Self.maximumConcurrentSpots, candidates.count) {
                 let candidate = candidates[next]; next += 1
-                group.addTask { await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
-                                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land) }
+                group.addTask { (candidate.spot.name, await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
+                                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land)) }
             }
-            while let outcome = await group.next() {
+            while let (name, outcome) = await group.next() {
                 if Task.isCancelled { group.cancelAll(); break }
                 switch outcome {
                 case .forecastAvailable(let found, let hasUsableWeather):
                     weatherSucceeded = true
                     usableWeatherFound = usableWeatherFound || hasUsableWeather
                     windows.append(contentsOf: found)
-                case .forecastFailed: break
+                    if found.isEmpty { withoutWindows.insert(name) }
+                case .forecastFailed: failed.insert(name)
                 }
                 if next < candidates.count {
                     let candidate = candidates[next]; next += 1
-                    group.addTask { await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
-                                                         now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land) }
+                    group.addTask { (candidate.spot.name, await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
+                                                         now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land)) }
                 }
             }
         }
         try Task.checkCancellation()
         guard weatherSucceeded else { throw ScoringError.forecastsUnavailable }
         guard usableWeatherFound else { throw ScoringError.noUsableForecast }
-        if selectedStation != nil { return windows.sorted { $0.start < $1.start } }
-        return windows.sorted {
-            if Self.isBetter($0, than: $1) { return true }
-            if Self.isBetter($1, than: $0) { return false }
-            return $0.spotName.localizedStandardCompare($1.spotName) == .orderedAscending
+        // Nearest first, the order the results list them in.
+        func byDistance(_ names: Set<String>) -> [String] {
+            var seen = Set<String>()
+            return candidates.sorted { $0.distanceKm < $1.distanceKm }.map(\.spot.name)
+                .filter { names.contains($0) && seen.insert($0).inserted }
         }
+        let sorted: [ScoredFishingWindow]
+        if selectedStation != nil {
+            sorted = windows.sorted { $0.start < $1.start }
+        } else {
+            sorted = windows.sorted {
+                if Self.isBetter($0, than: $1) { return true }
+                if Self.isBetter($1, than: $0) { return false }
+                return $0.spotName.localizedStandardCompare($1.spotName) == .orderedAscending
+            }
+        }
+        return FishingWindowSearch(windows: sorted, failedSpots: byDistance(failed),
+                                   spotsWithoutWindows: selectedStation == nil ? byDistance(withoutWindows) : [])
     }
 
     // Finds an exact link; loadTideReference supplies automatic nearby references.
@@ -675,6 +698,14 @@ struct FishingScoringService: Sendable {
 
 struct Candidate: Sendable { let spot: FishingSpot; let distanceKm: Double; let isTideStation: Bool; let tideStation: TideStation? }
 private enum SpotOutcome: Sendable { case forecastAvailable([ScoredFishingWindow], Bool), forecastFailed }
+
+/// One search's result. A spot named in `failedSpots` had no forecast, so it is missing from `windows` for that reason;
+/// `spotsWithoutWindows` loaded but had no session that fits. Both are empty for a single tide location.
+struct FishingWindowSearch: Sendable {
+    let windows: [ScoredFishingWindow]
+    let failedSpots: [String]
+    let spotsWithoutWindows: [String]
+}
 struct SolarDay: Sendable { let sunrise: Date; let sunset: Date }
 struct WeatherHour: Sendable {
     let time: Date; let wind: Double?; let gust: Double?; let precipitation: Double?; let rainProbability: Double?; let code: Int?

@@ -440,6 +440,12 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
+    fun uploadAfterConsent(photo: android.net.Uri) {
+        if (vm.state.value.fishPhoto != photo || vm.state.value.account == null) return
+        val image = encodedFishPhoto(context, photo)
+        if (image == null) vm.reportUnreadableFishPhoto()
+        else identifyAtCurrentLocation(image, photo)
+    }
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
         s.fishPhoto?.let { uri -> val bitmap = remember(uri) { try { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } } catch (_: Exception) { null } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
@@ -468,7 +474,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
             if (needsAccountRefresh) vm.refreshAccount()
             else if (s.account == null) vm.selectTab(5)
             else if (hasFishAccess) s.fishPhoto?.let { uri ->
-                photoAwaitingConsent = uri
+                if (nz.fishingnz.app.data.PrivacyPreferences.photoConsentRemembered()) uploadAfterConsent(uri)
+                else photoAwaitingConsent = uri
             }
         }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(4.dp)); Text(when {
             hasFishAccess -> "Identify fish"
@@ -491,20 +498,25 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         Text("AI suggestions are a guide. Confirm species, area and current MPI rules before keeping a fish.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     } }
     photoAwaitingConsent?.let { photo ->
+        // Off by default, and kept only when the person agrees; cancelling never stores it.
+        var dontAskAgain by remember(photo) { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { photoAwaitingConsent = null },
             title = { Text("Send this photo for AI identification?") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Your selected photo will be sent through the Fishdays - NZ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
-                Text("Avoid photos containing people or private information. You can cancel and keep using the other tools.")
+                Text("Avoid photos containing people or private information. You can cancel and keep using the other tools. Details: More → Settings → Terms & privacy.")
                 TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
+                Row(Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.Checkbox) { dontAskAgain = !dontAskAgain },
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = dontAskAgain, onCheckedChange = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Don’t ask me again before sending a photo")
+                }
             } },
             confirmButton = { TextButton(onClick = {
                 photoAwaitingConsent = null
-                if (vm.state.value.fishPhoto == photo && vm.state.value.account != null) {
-                    val image = encodedFishPhoto(context, photo)
-                    if (image == null) vm.reportUnreadableFishPhoto()
-                    else identifyAtCurrentLocation(image, photo)
-                }
+                if (dontAskAgain) nz.fishingnz.app.data.PrivacyPreferences.setPhotoConsentRemembered(true)
+                uploadAfterConsent(photo)
             }) { Text("Agree and upload") } },
             dismissButton = { TextButton(onClick = { photoAwaitingConsent = null }) { Text("Cancel") } })
     }
@@ -944,12 +956,18 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         (if (nearest?.nearestSpot != null) " The nearest is ${nearest.nearestSpot}, about ${nearest.nearestSpotDistanceKm} km away. Try a wider radius." else " Try a wider radius or another city."), color = Navy)
                 }
                 s.recommendationSearch?.items?.isEmpty() == true -> item {
-                    Text(when {
-                        s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
-                        s.preference == WindowPriority.LATE_INCOMING -> "No two-hour window matches the late-incoming preference with the available tide and weather data. Try ${WindowPriority.WEATHER.label(s.boat)} or another date."
-                        s.dateLabel == "Today" -> "No two-hour planning window remains today within your selected hours and the available forecasts. Try another date or adjust your hours."
-                        else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
-                    }, color = Navy)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(when {
+                            s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
+                            s.preference == WindowPriority.LATE_INCOMING -> "No two-hour window matches the late-incoming preference with the available tide and weather data. Try ${WindowPriority.WEATHER.label(s.boat)} or another date."
+                            s.dateLabel == "Today" -> "No two-hour planning window remains today within your selected hours and the available forecasts. Try another date or adjust your hours."
+                            else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
+                        }, color = Navy)
+                        s.recommendationSearch.spotsWithoutWindows.takeIf { it.isNotEmpty() }?.let { checked ->
+                            Text("Nearby areas checked: ${checked.take(5).joinToString(", ")}.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
                 else -> {
                     val results = s.recommendationSearch?.items.orEmpty()
@@ -958,6 +976,10 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                             else "No window meets your comfort preference · alternatives below", color = Orange)
                     }
                     items(results) { RecommendationCard(it, showWhy = shouldShowWindowReason(it, results)) { vm.openSpot(it) } }
+                    s.recommendationSearch?.spotsWithoutWindows?.takeIf { it.isNotEmpty() }?.let { missing -> item {
+                        Text("No planning window available at: ${missing.take(5).joinToString(", ")}.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    } }
                 }
             }
             if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); no planning windows are shown for those spots.", color = Orange, style = MaterialTheme.typography.bodySmall) }
@@ -1471,7 +1493,10 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
             } }
         } ?: item {
             if (s.tideLoading) CircularProgressIndicator()
-            else Text(s.tideError ?: "LINZ tide data unavailable for this station and date.", color = Navy)
+            else Column {
+                Text(s.tideError ?: "LINZ tide data unavailable for this station and date.", color = Navy)
+                OutlinedButton(onClick = vm::refreshStationTide) { Text("Try again") }
+            }
         }
         item { Text("High and low tide predictions: Toitū Te Whenua Land Information New Zealand (LINZ). Times are New Zealand local time; heights are above the station's Chart Datum. Check the official table before planning around water depth.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
     }

@@ -159,7 +159,9 @@ data class RecommendationSearch(
     val nearbySpots: Int,
     val failedSpots: Int,
     val nearestSpot: String? = null,
-    val nearestSpotDistanceKm: Int? = null
+    val nearestSpotDistanceKm: Int? = null,
+    /** Nearby spots whose forecast loaded but had no window that fits, nearest first. Empty for a single tide location. */
+    val spotsWithoutWindows: List<String> = emptyList()
 )
 data class FishRuleDetail(val label: String, val value: String)
 data class FishRuleMatch(val species: String, val dailyLimit: String?, val minimumSize: String?, val details: List<FishRuleDetail>, val minimumSizeLabel: String? = null)
