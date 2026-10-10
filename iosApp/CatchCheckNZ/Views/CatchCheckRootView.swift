@@ -22,6 +22,15 @@ enum CatchCheckColor {
     static let hero = adaptive(0x183862, 0x1B3557)
     static let accent = adaptive(0x2867D9, 0x6197F5)
     static let warning = adaptive(0xA7442F, 0xFFB09D)
+    // Outlook badges and highlighted numbers on fishing window cards; the same colours as Android.
+    static let goodFill = adaptive(0xE3F4E5, 0x1F3A26)
+    static let goodText = adaptive(0x1E6B34, 0xA8E0B4)
+    static let cautionFill = adaptive(0xFCEFD8, 0x3D2E12)
+    static let cautionText = adaptive(0x8A5300, 0xF5C77A)
+    static let poorFill = adaptive(0xFBE4E1, 0x3F1D19)
+    static let poorText = adaptive(0x9B2C1F, 0xF3A99F)
+    static let tile = adaptive(0xEDF1F8, 0x223049)
+    static let tileText = adaptive(0x536179, 0xB4C1D5)
 }
 
 private enum MoreDestination: String, Identifiable {
@@ -1404,12 +1413,24 @@ struct SpotDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                    Text(spot.area).foregroundStyle(.secondary)
+                    if spot.hasHighlights {
+                        WindowPlace(spot: spot)
+                    } else {
+                        Text(spot.area).foregroundStyle(.secondary)
+                    }
                     if !spot.time.isEmpty {
-                        WindowOutlook(outlook: spot.windowOutlook)
-                        WindowChecks(spot: spot)
-                        Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
-                        Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
+                        if spot.hasHighlights {
+                            WindowTimeHeader(spot: spot)
+                            WindowKeyTiles(spot: spot)
+                            WindowWatchOut(spot: spot)
+                            if let note = spot.forecastNote { Text(note).font(.caption).foregroundStyle(.secondary) }
+                            DisclosureGroup("Details & sources") { WindowSources(spot: spot).padding(.top, 6) }.font(.caption)
+                        } else {
+                            WindowOutlook(outlook: spot.windowOutlook)
+                            WindowChecks(spot: spot)
+                            Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
+                            Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
+                        }
                         if shouldShowWindowReason(spot, among: vm.recommendations) {
                             Card(background: CatchCheckColor.seafoam) {
                                 Text("Why this window").bold().foregroundStyle(CatchCheckColor.navy)
@@ -1484,7 +1505,46 @@ struct RecommendationCard: View {
     let spot: Recommendation
     var showWhy = true
     let action: () -> Void
+    @State private var showAllConditions = false
+
     var body: some View {
+        if spot.hasHighlights { highlighted } else { classic }
+    }
+
+    /// Time, outlook, three key numbers and any watch-outs first; the full conditions fold away.
+    private var highlighted: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            WindowTimeHeader(spot: spot)
+            WindowPlace(spot: spot, compact: true)
+            WindowKeyTiles(spot: spot)
+            WindowWatchOut(spot: spot)
+            if let note = spot.forecastNote { Text(note).font(.caption).foregroundStyle(.secondary) }
+            // A tap target rather than a Button: a List fires a row's first Button when the row itself is tapped.
+            HStack(spacing: 4) {
+                Text(showAllConditions ? "Hide conditions" : "All conditions")
+                Image(systemName: showAllConditions ? "chevron.up" : "chevron.down").font(.caption.bold())
+            }
+            .font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.accent)
+            .padding(.vertical, 4).contentShape(Rectangle())
+            .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showAllConditions.toggle() } }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { showAllConditions.toggle() }
+            if showAllConditions {
+                WindowConditions(spot: spot)
+                WindowSources(spot: spot).font(.caption)
+            }
+        }
+        .foregroundStyle(CatchCheckColor.navy)
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "Open window", action)
+    }
+
+    private var classic: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -1519,6 +1579,116 @@ struct RecommendationCard: View {
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
         }
+    }
+}
+
+/// "Waikato · Land · 41 km", plus the distance note when it is not a plain distance (a selected tide location or a shared window).
+private struct WindowPlace: View {
+    let spot: Recommendation
+    var compact = false
+    private var kilometres: String? {
+        guard spot.distance.hasSuffix("km straight-line") else { return nil }
+        return spot.distance.replacingOccurrences(of: " straight-line", with: "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if compact { Text(spot.name).font(.headline).foregroundStyle(CatchCheckColor.navy) }
+            Text("\(spot.area) · \(spot.boat ? "Boat" : "Land")\(kilometres.map { " · \($0)" } ?? "")")
+                .font(compact ? .subheadline : .body).foregroundStyle(.secondary)
+            if kilometres == nil && !spot.distance.isEmpty {
+                Text(spot.distance).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private func toneColors(_ tone: OutlookTone) -> (fill: Color, text: Color) {
+    switch tone {
+    case .good: (CatchCheckColor.goodFill, CatchCheckColor.goodText)
+    case .caution: (CatchCheckColor.cautionFill, CatchCheckColor.cautionText)
+    case .poor: (CatchCheckColor.poorFill, CatchCheckColor.poorText)
+    case .unknown: (CatchCheckColor.tile, CatchCheckColor.tileText)
+    }
+}
+
+/// The day, the two-hour window in large type, and the coloured outlook badge.
+private struct WindowTimeHeader: View {
+    let spot: Recommendation
+    var body: some View {
+        let when = spot.windowDayAndHours
+        let mood = spot.windowMood
+        let colors = toneColors(WindowHighlights.tone(mood.label))
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(when.day).font(.subheadline).foregroundStyle(.secondary)
+                Text(when.hours).font(.title3.bold()).foregroundStyle(CatchCheckColor.navy)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
+            Text("\(mood.emoji) \(mood.label)")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(colors.text).lineLimit(1)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(colors.fill, in: Capsule())
+                .accessibilityLabel("Window outlook: \(mood.label)")
+        }
+    }
+}
+
+/// Three key numbers; one that needs attention turns amber.
+private struct WindowKeyTiles: View {
+    let spot: Recommendation
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            ForEach(Array(spot.keyTiles.enumerated()), id: \.offset) { _, tile in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tile.label).font(.caption)
+                        .foregroundStyle(tile.concern ? CatchCheckColor.cautionText : CatchCheckColor.tileText)
+                    Text(tile.value).font(.headline).lineLimit(1).minimumScaleFactor(0.75)
+                        .foregroundStyle(tile.concern ? CatchCheckColor.cautionText : CatchCheckColor.navy)
+                    if !tile.detail.isEmpty {
+                        Text(tile.detail).font(.caption2).lineLimit(2)
+                            .foregroundStyle(tile.concern ? CatchCheckColor.cautionText : CatchCheckColor.tileText)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(10)
+                .background(tile.concern ? CatchCheckColor.cautionFill : CatchCheckColor.tile, in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(tile.label) \(tile.value) \(tile.detail)\(tile.concern ? ", needs attention" : "")")
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The amber box: only shown when something needs attention.
+private struct WindowWatchOut: View {
+    let spot: Recommendation
+    var body: some View {
+        let lines = spot.watchOuts
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(lines, id: \.self) { line in
+                    Label(line, systemImage: "exclamationmark.triangle.fill").font(.subheadline)
+                }
+            }
+            .foregroundStyle(CatchCheckColor.cautionText)
+            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            .background(CatchCheckColor.cautionFill, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+private struct WindowSources: View {
+    let spot: Recommendation
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(spot.assessment?.details ?? [], id: \.self) { Text($0) }
+            if !spot.sourceNote.isEmpty { Text(spot.sourceNote) }
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

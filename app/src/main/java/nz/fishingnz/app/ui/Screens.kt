@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -763,8 +765,47 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
     }
 }
 
+/** "41 km" for a radius search; null when the distance line is a note, such as a selected tide location or a shared window. */
+private fun kilometres(item: Recommendation): String? = item.distance.takeIf { it.endsWith("km straight line") }?.removeSuffix(" straight line")
+
+/** "Waikato · Land · 41 km", or the area and mode when the distance is a note. */
+private fun placeLine(item: Recommendation): String = "${item.area} · ${if (item.boat) "Boat" else "Land"}" +
+    (kilometres(item)?.let { " · $it" } ?: "")
+
+/** Collapsed by default: the full condition rows, then the details and sources. */
+@Composable private fun AllConditions(item: Recommendation) {
+    var expanded by rememberSaveable(item.startsAtEpochSeconds, item.name) { mutableStateOf(false) }
+    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+        Text(if (expanded) "Hide conditions" else "All conditions")
+        Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+    }
+    if (expanded) {
+        WindowConditions(item)
+        WindowSources(item)
+    }
+}
+
+@Composable private fun WindowSources(item: Recommendation) {
+    item.assessment?.details?.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    if (item.sourceNote.isNotEmpty()) Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
 @Composable private fun RecommendationCard(item: Recommendation, showWhy: Boolean = true, click: () -> Unit = {}) {
-    Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+    if (item.hasHighlights) Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            WindowTimeHeader(item)
+            Column {
+                Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                Text(placeLine(item), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                if (kilometres(item) == null && item.distance.isNotBlank()) Text(item.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            WindowKeyTiles(item)
+            WindowWatchOut(item)
+            item.forecastNote()?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium) }
+            AllConditions(item)
+        }
+    }
+    else Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
             Text("${item.area} · ${if (item.boat) "Boat" else "Land"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -997,11 +1038,23 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
         Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             OutlinedButton(onClick = { vm.closeSpot() }) { Text("Back") }
             Text(spot.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Navy)
-            Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            WindowOutlook(spot.windowOutlook)
-            WindowChecks(spot)
-            Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (spot.hasHighlights) {
+                Text(placeLine(spot), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (kilometres(spot) == null && spot.distance.isNotBlank()) Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                WindowTimeHeader(spot)
+                WindowKeyTiles(spot)
+                WindowWatchOut(spot)
+                spot.forecastNote()?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium) }
+                var sources by rememberSaveable(spot.startsAtEpochSeconds, spot.name) { mutableStateOf(false) }
+                TextButton(onClick = { sources = !sources }, contentPadding = PaddingValues(0.dp)) { Text(if (sources) "Hide details" else "Details & sources") }
+                if (sources) WindowSources(spot)
+            } else {
+                Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                WindowOutlook(spot.windowOutlook)
+                WindowChecks(spot)
+                Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (shouldShowWindowReason(spot, reasonPeers)) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Why this window", fontWeight = FontWeight.Bold, color = Navy)

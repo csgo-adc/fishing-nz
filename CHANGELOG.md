@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.25 — 2026-10-11 (build code 26)
+
+- **Fishing window cards highlight what matters** on Android and iPhone:
+  - The day and two-hour window come first, with a coloured outlook badge: green for Comfortable or
+    Okay, amber for Demanding, red for Uncomfortable, grey when data is missing.
+  - Three key numbers sit in tiles: wind, tide and rain for land fishing, or waves, wind and tide for
+    boat fishing. A tile turns amber when that condition is the problem.
+  - An amber box lists only what needs attention, such as gusts, choppy or large waves, rain, cold or
+    heat, part of the session after dark, or a window outside your comfort setting.
+  - In the results list the full conditions fold away under **All conditions**. A window's own page
+    shows the same highlights at the top, with the full conditions below.
+  - Shared windows use the same layout, and windows without condition rows keep the previous one.
+- New Android unit tests and iPhone checks cover the tiles, warnings, colours and times.
+
 ## 1.0.24 — 2026-10-11 (build code 25)
 
 - The account screen no longer says "Account" twice. Signed in, its header shows your name (or your

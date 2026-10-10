@@ -218,6 +218,7 @@ import Foundation
         try expect(FishingScoringService.daylightFraction(start: at(30, 6), end: at(30, 8), solar: solar, calendar: calendar) == 0.5, "Daylight must cover full session")
         try expect(FishingScoringService.daylightFraction(start: at(30, 23), end: at(30, 23).addingTimeInterval(7200), solar: solar, calendar: calendar) == nil, "Midnight needs next-day solar")
         try landChecks(calendar: calendar)
+        try highlightChecks(calendar: calendar)
         print("Passed \(checks) Swift fishing-window regression checks.")
         print("Frozen Raglan: weather 07:00–09:00; late incoming 11:00–13:00; official high 13:23.")
         if CommandLine.arguments.contains("--live") {
@@ -303,5 +304,40 @@ import Foundation
         let oneBuffer = evaluate(core, all: core + [hour(11, rain: 1)], prefs: LandPreferences(returnMinutes: 30))!
         try expect(oneBuffer.assessment!.rainTotal == 0.5 && oneBuffer.assessment!.conditions.first { $0.title == "Daylight" }!.value == "100% known time", "One known buffer must be included without claiming complete visit timing")
         try expect(oneBuffer.assessment!.conditions.first { $0.title == "Daylight" }!.mood.label == "Visit times needed", "Missing visit timing still needs checking")
+    }
+
+    /// The highlighted card layout must read the same condition rows as Android's WindowHighlights.kt.
+    static func highlightChecks(calendar: Calendar) throws {
+        let start = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 10))!
+        let land: [ConditionItem] = [
+            .init(title: "Wind", value: "20 km/h · gust 45 · NW", mood: comfortMood(2)),
+            .init(title: "Rain", value: "0.8 mm · peak 0.4 mm/h · 70% hourly", mood: .init(emoji: "🌧️", label: "Light rain")),
+            .init(title: "Feels like", value: "16°C", mood: .init(emoji: "😌", label: "Mild")),
+            .init(title: "Tide", value: "Next high 12:53 PM · 3.3 m CD\nLINZ Raglan", mood: .init(emoji: "🎯", label: "Late incoming")),
+            .init(title: "Daylight", value: "100% session", mood: .init(emoji: "🌞", label: "Daylight"))]
+        func window(boat: Bool = false, _ rows: [ConditionItem], matches: Bool = false, hours: Double = 2, from: Date? = nil) -> Recommendation {
+            let begin = from ?? start
+            return Recommendation(name: "Manu Bay Coast", area: "Waikato", rating: 50, time: "", distance: "41 km straight-line", reasons: [], boat: boat,
+                                  startsAt: begin, endsAt: begin.addingTimeInterval(hours * 3600),
+                                  assessment: WindowAssessment(mood: comfortMood(2), conditions: rows, confidence: .init(emoji: "🗓️", label: "Planning forecast"),
+                                                               matchesComfort: matches, comfortComplete: true))
+        }
+        let tiles = window(land).keyTiles
+        try expect(tiles == [KeyTile(label: "Wind", value: "20 km/h", detail: "gust 45", concern: true),
+                             KeyTile(label: "Tide", value: "High", detail: "next 12:53 PM", concern: false),
+                             KeyTile(label: "Rain", value: "70%", detail: "0.8 mm", concern: false)], "Land tiles must show wind, tide and rain")
+        try expect(window(land).watchOuts == ["Gusts to 45 km/h", "Outside your comfort preference"], "Watch-outs must list gusts and comfort")
+        let boat = window(boat: true, [.init(title: "Offshore waves", value: "1.4 m · 5.0–5.5 s", mood: .init(emoji: "🌊", label: "Choppy")),
+                                       .init(title: "Wind", value: "12 km/h · gust 20", mood: comfortMood(1)),
+                                       .init(title: "Tide", value: "low Thu 1:20 AM · 0.4 m CD", mood: .init(emoji: "🕒", label: "Tide timing"))], matches: true)
+        try expect(boat.keyTiles.map(\.value) == ["1.4 m", "12 km/h", "Low"] && boat.keyTiles[2].detail == "1:20 AM", "Boat tiles must lead with waves")
+        try expect(boat.watchOuts == ["Short, choppy waves (1.4 m)"], "Choppy waves must be called out")
+        try expect(window([.init(title: "Tide", value: "—", mood: needsDataMood)]).keyTiles[0] == KeyTile(label: "Wind", value: "—", detail: "No data", concern: false), "Missing rows show no data")
+        try expect(window(land).windowDayAndHours == ("Wed 14 Oct", "10:00 AM–12:00 PM"), "Day and hours")
+        let late = calendar.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 23))!
+        try expect(window(land, from: late).windowDayAndHours.hours == "11:00 PM–Thu 1:00 AM", "Midnight-crossing hours name the end day")
+        try expect(WindowHighlights.tone("Okay") == .good && WindowHighlights.tone("Demanding") == .caution && WindowHighlights.tone("Uncomfortable") == .poor
+                   && WindowHighlights.tone("Needs more data") == .unknown, "Outlook colours")
+        try expect(window(land).forecastNote == "Planning forecast · local checks needed" && !window(land, hours: 0).hasHighlights, "Forecast note and eligibility")
     }
 }

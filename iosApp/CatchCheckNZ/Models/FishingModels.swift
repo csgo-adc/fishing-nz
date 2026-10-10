@@ -134,6 +134,118 @@ struct Recommendation: Identifiable, Equatable {
     }
 }
 
+/// What a fishing window card puts first: the day and hours, an outlook colour, three key numbers and anything that
+/// needs attention. Built from the window's own condition rows, so shared windows highlight the same way. Android has the
+/// same rules in `WindowHighlights.kt`.
+enum OutlookTone { case good, caution, poor, unknown }
+
+struct KeyTile: Equatable {
+    let label: String
+    let value: String
+    let detail: String
+    let concern: Bool
+}
+
+enum WindowHighlights {
+    static let goodLabels: Set<String> = ["Excellent", "Good", "Comfortable", "Okay"]
+    static let poorLabels: Set<String> = ["Uncomfortable", "Challenging", "Concerning", "Check conditions"]
+    static let cautionLabels: Set<String> = ["Demanding", "Fair", "Mixed conditions", "Unfavourable"]
+    /// Condition moods that make a key number amber and add a line to the watch-out box.
+    static let concernLabels: Set<String> = ["Demanding", "Uncomfortable", "Choppy", "More motion", "High waves", "Wet", "Cold", "Hot",
+                                             "After dark", "Limited daylight", "Challenging", "Concerning", "Check conditions", "Unfavourable"]
+
+    static func tone(_ label: String) -> OutlookTone {
+        if goodLabels.contains(label) { return .good }
+        if poorLabels.contains(label) { return .poor }
+        if cautionLabels.contains(label) { return .caution }
+        return .unknown
+    }
+
+    static func segments(_ value: String) -> [String] {
+        (value.split(separator: "\n", omittingEmptySubsequences: false).first.map(String.init) ?? value)
+            .components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    static func isConcern(_ item: ConditionItem) -> Bool { concernLabels.contains(item.mood.label) }
+
+    static func tile(_ label: String, _ item: ConditionItem?) -> KeyTile {
+        guard let item, item.value.trimmingCharacters(in: .whitespaces) != "—" else { return KeyTile(label: label, value: "—", detail: "No data", concern: false) }
+        let parts = segments(item.value)
+        let first = parts.first ?? item.value
+        switch item.title {
+        case "Rain":
+            if let chance = parts.first(where: { $0.contains("%") })?.split(separator: " ").first.map(String.init) {
+                return KeyTile(label: label, value: chance, detail: first, concern: isConcern(item))
+            }
+            return KeyTile(label: label, value: first, detail: parts.count > 1 ? parts[1] : "", concern: isConcern(item))
+        case "Tide":
+            let high = first.localizedCaseInsensitiveContains("high")
+            let time = first.range(of: "\\d{1,2}:\\d{2}\\s?[AP]M", options: [.regularExpression, .caseInsensitive]).map { String(first[$0]) } ?? ""
+            return KeyTile(label: label, value: high ? "High" : "Low", detail: first.hasPrefix("Next") ? "next \(time)" : time, concern: isConcern(item))
+        default:
+            return KeyTile(label: label, value: first, detail: parts.count > 1 ? parts[1] : "", concern: isConcern(item))
+        }
+    }
+}
+
+extension Recommendation {
+    /// True when the card can use the highlighted layout: a timed window with condition rows.
+    var hasHighlights: Bool {
+        guard assessment != nil, let startsAt, let endsAt else { return false }
+        return endsAt > startsAt
+    }
+
+    private func condition(_ title: String) -> ConditionItem? { assessment?.conditions.first { $0.title == title } }
+
+    /// "Wed 14 Oct" and "10:00 AM–12:00 PM" (or "11:00 PM–Thu 1:00 AM" across midnight), in New Zealand time.
+    var windowDayAndHours: (day: String, hours: String) {
+        guard let startsAt, let endsAt else { return (time, "") }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        func text(_ date: Date, _ pattern: String) -> String {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = calendar.timeZone
+            formatter.dateFormat = pattern
+            return formatter.string(from: date)
+        }
+        let end = calendar.isDate(startsAt, inSameDayAs: endsAt) ? text(endsAt, "h:mm a") : text(endsAt, "EEE h:mm a")
+        return (text(startsAt, "EEE d MMM"), "\(text(startsAt, "h:mm a"))–\(end)")
+    }
+
+    /// Land: wind, tide and rain. Boat: waves, wind and tide.
+    var keyTiles: [KeyTile] {
+        boat ? [WindowHighlights.tile("Waves", condition("Offshore waves")), WindowHighlights.tile("Wind", condition("Wind")), WindowHighlights.tile("Tide", condition("Tide"))]
+             : [WindowHighlights.tile("Wind", condition("Wind")), WindowHighlights.tile("Tide", condition("Tide")), WindowHighlights.tile("Rain", condition("Rain"))]
+    }
+
+    /// Short lines for the amber box: only what needs attention, most important first.
+    var watchOuts: [String] {
+        guard let assessment else { return [] }
+        var lines: [String] = []
+        if let wind = condition("Wind"), WindowHighlights.isConcern(wind) {
+            if let range = wind.value.range(of: "gust \\d+", options: .regularExpression) {
+                lines.append("Gusts to \(wind.value[range].dropFirst(5)) km/h")
+            } else { lines.append("Wind \(WindowHighlights.segments(wind.value).first ?? wind.value)") }
+        }
+        if let waves = condition("Offshore waves"), WindowHighlights.isConcern(waves) {
+            let height = WindowHighlights.segments(waves.value).first ?? waves.value
+            lines.append(waves.mood.label == "Choppy" ? "Short, choppy waves (\(height))" : "Waves to \(height)")
+        }
+        if let rain = condition("Rain"), WindowHighlights.isConcern(rain) { lines.append("Rain: \(WindowHighlights.segments(rain.value).first ?? rain.value) expected") }
+        if let feels = condition("Feels like"), WindowHighlights.isConcern(feels) { lines.append("\(feels.mood.label): feels like \(WindowHighlights.segments(feels.value).first ?? feels.value)") }
+        if let daylight = condition("Daylight"), WindowHighlights.isConcern(daylight) { lines.append("Part of the session is after dark") }
+        if assessment.comfortComplete && !assessment.matchesComfort { lines.append("Outside your comfort preference") }
+        return lines
+    }
+
+    /// "Planning forecast · local checks needed".
+    var forecastNote: String? {
+        guard let assessment else { return nil }
+        return "\(assessment.confidence.label) · \(assessment.checks.label.prefix(1).lowercased())\(assessment.checks.label.dropFirst())"
+    }
+}
+
 func warningMood(_ warning: String) -> WindowMood {
     if warning.hasPrefix("Wave data is incomplete") || warning.hasPrefix("Verified local tide coverage is unavailable") ||
         warning.hasPrefix("Long-range forecast") { return .unknown }
