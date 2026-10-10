@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.23 — 2026-10-11 (build code 24)
+
+Plainer wording on Android, iPhone and the shared-window web page. Required notices (privacy,
+photo consent, analytics, MPI/LINZ independence and attributions) are unchanged.
+
+- **Account and More:** "Welcome aboard" is now "Account". Removed the "Good to see you" heading,
+  "Signed in securely", "Keep your account safe", the plain-text password line and the filler
+  subtitles. "Choose how you get back on board" is now "Google or Apple".
+- **Planning:** shorter help for the late incoming tide, boat and land preferences and custom hours.
+  Removed the iPhone "Tap to change your options" line and its repeated footnote on Home.
+- **Window cards:** "Outside your comfort preference" appears once. Reasons read "Most comfortable
+  option", "Matches the late incoming tide" and "Not enough data to rate comfort". "Details &
+  sources" now uses plain sentences ("Some wave data is missing", "Check footing, surge and a way off
+  the rocks") and a short source line ("Weather and waves: Open-Meteo, updated 8:03 AM. Tide: LINZ …")
+  without grid coordinates.
+- **Forecast label:** the next two days are now "⏱️ Short-range forecast" instead of
+  "🤔 Limited confidence".
+- **Conditions, tide and rules:** removed the fetch-time and grid lines and the duplicate swipe
+  hints, shortened the tide source note, and replaced the long boundary notes with "Near an area
+  boundary? Check the MPI map."
+- **Shared-window page:** shorter area-marker and "Check before you go" notes. Deploy the API to
+  publish it.
+
 ## 1.0.22 — 2026-10-11 (build code 23)
 
 Android and iPhone now offer the same features.

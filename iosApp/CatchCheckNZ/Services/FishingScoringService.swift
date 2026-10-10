@@ -531,16 +531,16 @@ struct FishingScoringService: Sendable {
             .init(title: "Daylight", value: "\(Int((daylight*100).rounded()))% session", mood: .init(emoji: daylight == 1 ? "🌞" : "🌙", label: daylight == 1 ? "Daylight" : "After dark"))
         ]
         let age = start.timeIntervalSince(now)
-        let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "🤔", label: "Limited confidence")
-        var details = warnings + ["Waves lead boat ranking. Feels-like temperature limits the outlook and breaks comfort ties. Route, vessel response, model timing, agreement and return conditions unchecked. CD = Chart Datum.",
+        let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "⏱️", label: "Short-range forecast")
+        var details = warnings + ["Boat windows are ranked mainly by waves. Your route and the trip back are not checked. CD = Chart Datum, the tide-table reference level.",
             "Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period."]
         if tideFacts.complete { details.append("Tide times and heights are for the named reference station; local timing can differ.") }
-        if temperature.count != 3 { details.append("Feels-like temperature coverage incomplete.") }
+        if temperature.count != 3 { details.append("Some feels-like temperatures are missing.") }
         if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }
         let assessment = WindowAssessment(mood: complete ? comfortMood(comfortBand) : needsDataMood,
             conditions: rows, confidence: confidence,
             details: details, band: comfortBand, comfortComplete: complete)
-        let briefReason = priority == .lateIncoming ? "Fits late incoming · waves first" : "Waves first"
+        let briefReason = priority == .lateIncoming ? "Matches the late incoming tide · waves first" : "Waves first"
         return .init(id: "\(spot.name)|\(spot.boat)|\(Int(start.timeIntervalSince1970))", spotName: spot.name,
                      area: spot.area, boat: spot.boat, score: Int((comfort * 100).rounded()), start: start, end: end,
                      distanceKm: distanceKm, reasons: [briefReason], warnings: warnings,
@@ -606,16 +606,10 @@ struct FishingScoringService: Sendable {
     }
 
     private static func sourceNote(spot: FishingSpot, weather: WeatherPayload, marine: MarinePayload?, station: TideStation?) -> String {
-        let weatherGrid = String(format: "%.4f, %.4f", weather.latitude, weather.longitude)
-        var text = "Open-Meteo best-match weather grid \(weatherGrid); retrieved \(stamp(weather.retrievedAt)) NZ time."
-        if let marine {
-            text += String(format: " Marine grid %.4f, %.4f; retrieved %@.", marine.latitude, marine.longitude, stamp(marine.retrievedAt))
-        }
-        text += station.map { " Tide reference: \(tideReferenceLabel(spot: spot, station: $0)), published local times (NZST/NZDT). Times and heights are for this station; local timing can differ." } ?? " No LINZ tide reference data available."
-        return text + " Retrieval time is not the forecast model's issue time."
+        let updated = format(weather.retrievedAt, pattern: "h:mm a")
+        let text = marine != nil ? "Weather and waves: Open-Meteo, updated \(updated)." : "Weather: Open-Meteo, updated \(updated). No offshore wave data."
+        return text + (station.map { " Tide: \(tideReferenceLabel(spot: spot, station: $0))." } ?? " No LINZ tide data.")
     }
-
-    private static func stamp(_ time: Date) -> String { format(time, pattern: "d MMM, h:mm a") }
     private static func clock(_ time: Date) -> String { format(time, pattern: "h:mm a") }
     private static func format(_ time: Date, pattern: String) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_NZ")
@@ -898,33 +892,33 @@ enum LandAssessment {
         ]
         let localReason: String
         switch preferences.setting {
-        case .rocks: localReason = "Rock footing, surge and escape route unchecked."
-        case .beach: localReason = "Surf, wading and beach access unchecked."
-        case .wharf: localReason = "Wharf access and exposure unchecked."
-        case .bank: localReason = "Bank footing and tide access unchecked."
-        case .unknown: localReason = "Shore type and access unchecked."
+        case .rocks: localReason = "Check footing, surge and a way off the rocks."
+        case .beach: localReason = "Check surf, wading depth and beach access."
+        case .wharf: localReason = "Check wharf access and exposure."
+        case .bank: localReason = "Check bank footing and tide access."
+        case .unknown: localReason = "Check the shore type and access."
         }
-        var details = [localReason, "Official warnings unchecked. Single forecast; model timing and agreement unverified."]
-        if !visitKnown { details.append("Access/setup or return time not set; only the session and known extra time are assessed.") }
-        if !completeWeather { details.append("Visit weather coverage incomplete; displayed amounts use available samples.") }
-        if !completeTemperature { details.append("Feels-like temperature coverage incomplete.") }
-        if !tideFacts.complete { details.append("Local tide coverage unverified.") }
+        var details = [localReason, "Check official marine warnings before you go."]
+        if !visitKnown { details.append("Set walk-in and return times to check the whole trip.") }
+        if !completeWeather { details.append("Some hourly weather is missing; totals may be low.") }
+        if !completeTemperature { details.append("Some feels-like temperatures are missing.") }
+        if !tideFacts.complete { details.append("No local tide data for this time.") }
         else { details.append("Tide times and heights are for the named reference station; local timing can differ.") }
-        if !completeMarine { details.append("Offshore wave coverage incomplete.") }
-        if probabilities.count != intervals.count { details.append("Rain likelihood incomplete.") }
+        if !completeMarine { details.append("Some wave data is missing.") }
+        if probabilities.count != intervals.count { details.append("Some rain chances are missing.") }
         if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }
         if waves.contains(where: { $0 >= 1.5 }) { details.append("Elevated offshore waves; local exposure unchecked.") }
         if marineHours.contains(where: { (valid($0.wave) ?? 0) >= 0.8 && (valid($0.period) ?? 0) >= 12 }) { details.append("Long-period waves; local surge unchecked.") }
         if codes.contains(where: { $0 == 45 || $0 == 48 }) { details.append("Fog forecast; visibility needs checking.") }
         if temps.contains(where: { $0 < 12 }) && peakRain > 0.2 { details.append("Cold and wet conditions.") }
         details.append("Rain chance is the highest hourly likelihood, not the chance for the whole visit. Offshore waves show significant height and mean period.")
-        details.append("Trial comfort bands; not a catch forecast. CD = Chart Datum. Hourly weather timing is approximate.")
+        details.append("Not a catch forecast. CD = Chart Datum, the tide-table reference level.")
         let age = start.timeIntervalSince(now)
-        let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "🤔", label: "Limited confidence")
+        let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "⏱️", label: "Short-range forecast")
         let assessment = WindowAssessment(mood: complete ? comfortMood(grade) : needsDataMood, conditions: rows, confidence: confidence,
             details: details, band: grade, demandingHours: demanding, uncomfortableHours: uncomfortable,
             matchesComfort: complete && grade <= preferences.maxBand, comfortComplete: complete, maxWind: maxWind, maxGust: maxGust, rainTotal: totalRain, priority: preferences.priority)
-        let reason = !complete ? "Comfort assessment incomplete" : grade > preferences.maxBand ? "Outside your comfort preference" : priority == .lateIncoming ? "Fits late incoming" : "Lower discomfort"
+        let reason = !complete ? "Not enough data to rate comfort" : grade > preferences.maxBand ? "Outside your comfort preference" : priority == .lateIncoming ? "Matches the late incoming tide" : "Most comfortable option"
         return .init(id: "\(spot.name)|false|\(Int(start.timeIntervalSince1970))", spotName: spot.name, area: spot.area, boat: false,
                      score: 100-grade*25, start: start, end: end, distanceKm: distance, reasons: [reason], warnings: details,
                      summary: reason, conditions: rows.map { "\($0.title): \($0.value) · \($0.mood.emoji) \($0.mood.label)" },

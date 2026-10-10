@@ -89,8 +89,6 @@ private struct MoreView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("More").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                    Text("Your account, trips and fishing tools in one place.")
-                        .foregroundStyle(.secondary)
                     VStack(spacing: 10) {
                         MoreNavigationRow(title: "Account", subtitle: vm.account?.email ?? "Sign in and manage your profile", icon: "person.crop.circle") { open(.account) }
                     }
@@ -393,10 +391,7 @@ struct HomeView: View {
                                         .font(.title3).foregroundStyle(CatchCheckColor.accent)
                                         .frame(width: 42, height: 42)
                                         .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Your fishing plan").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                                        Text("Tap to change your options").font(.caption).foregroundStyle(.secondary)
-                                    }
+                                    Text("Your fishing plan").font(.headline).foregroundStyle(CatchCheckColor.navy)
                                     Spacer()
                                     Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
                                 }
@@ -429,8 +424,6 @@ struct HomeView: View {
                     } else {
                         Card { Text("Choose a distance and dates, then search for live fishing windows.").foregroundStyle(.secondary) }
                     }
-                    Text("Planning windows compare forecast conditions. Local access, wave exposure and current warnings still need checking.")
-                        .font(.caption).foregroundStyle(.secondary)
                 }.padding(20)
             }.background(CatchCheckColor.cream)
             .sheet(isPresented: $showingPlan) {
@@ -503,7 +496,7 @@ private struct PlanningSheet: View {
                             }.pickerStyle(.menu)
                             Text(vm.preferredStartMinute > vm.preferredEndMinute
                                  ? "This range continues after midnight."
-                                 : "Only complete two-hour sessions within these hours appear.")
+                                 : "Shows 2-hour sessions that fit within these hours.")
                                 .font(.caption).foregroundStyle(.secondary)
                         } else if vm.timeMode == .comfortable {
                             Text("Suggestions fit between 7 AM and 9 PM.")
@@ -517,10 +510,10 @@ private struct PlanningSheet: View {
                             Text("Late incoming tide").tag(WindowPriority.lateIncoming)
                         }.pickerStyle(.segmented)
                         Text(vm.preference == .lateIncoming
-                             ? "Focus on the last part of the incoming tide, around high water, using the shown LINZ reference station. Tide timing at your spot can differ; this does not guarantee better fishing." + (vm.isBoatFishing ? " Wave comfort remains the main factor when comparing sessions that fit." : "")
+                             ? "Prefers the last of the incoming tide, near high water. Times are for the nearest LINZ station." + (vm.isBoatFishing ? " Waves still rank first." : "")
                              : (vm.isBoatFishing
-                                ? "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
-                                : "Compare wind, rain and feels-like temperature."))
+                                ? "Ranks by waves first, then wind and rain."
+                                : "Ranks by wind, rain and feels-like temperature."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if !vm.isBoatFishing { Card { LandOptions() } }
@@ -844,17 +837,14 @@ struct AccountView: View {
                                 .background(.white.opacity(0.12), in: Circle())
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("FISHDAYS · NZ").font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.92))
-                                Text(vm.account?.displayName.isEmpty == false ? vm.account!.displayName : vm.account == nil ? "Welcome aboard" : "Your account")
+                                Text(vm.account?.displayName.isEmpty == false ? vm.account!.displayName : "Account")
                                     .font(.title2.bold()).foregroundStyle(.white)
                             }
                             Spacer(minLength: 0)
                         }
-                        Text(vm.account == nil ? "A little help with your next catch. Sign in to identify fish and manage your profile."
-                             : "Manage your profile and sign-in options in one place.")
-                            .font(.subheadline).foregroundStyle(.white.opacity(0.8))
-                        if vm.account != nil {
-                            Label("Signed in securely", systemImage: "checkmark.shield.fill")
-                                .font(.caption.weight(.semibold)).foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.92))
+                        if vm.account == nil {
+                            Text("Sign in to identify fish and manage your profile.")
+                                .font(.subheadline).foregroundStyle(.white.opacity(0.8))
                         }
                     }
                     .padding(24).frame(maxWidth: .infinity, alignment: .leading)
@@ -890,11 +880,11 @@ struct AccountView: View {
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
                         }
                         if !offeredSignInProviders.isEmpty {
-                            accountSection("Sign-in options", subtitle: "Choose how you get back on board.", icon: "lock.shield") {
+                            accountSection("Sign-in options", subtitle: "Google or Apple", icon: "lock.shield") {
                                 socialSignInButtons
                             }
                         }
-                        accountSection("Password", subtitle: account.hasPassword ? "Keep your account safe." : "Add one to also sign in with your email.", icon: "key") {
+                        accountSection("Password", subtitle: account.hasPassword ? nil : "Add one to also sign in with your email.", icon: "key") {
                             if account.hasPassword {
                                 Button { showChangePassword = true } label: { Label("Change password", systemImage: "key").frame(maxWidth: .infinity) }
                                     .buttonStyle(.bordered).disabled(vm.accountBusy)
@@ -940,12 +930,6 @@ struct AccountView: View {
                             }
                         }
                         VStack(alignment: .leading, spacing: 18) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "lock.shield.fill").foregroundStyle(CatchCheckColor.orange)
-                                Text(createAccount ? "Join Fishdays" : "Good to see you").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                            }
-                            Text("Sign in to use your fishing tools.")
-                                .font(.subheadline).foregroundStyle(.secondary)
                             if !offeredSignInProviders.isEmpty {
                                 socialSignInButtons
                                 Text("Or use your email").font(.caption).foregroundStyle(.secondary)
@@ -1020,11 +1004,6 @@ struct AccountView: View {
                         .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 24))
                         .overlay(RoundedRectangle(cornerRadius: 24).stroke(CatchCheckColor.outline, lineWidth: 1))
                         .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "lock.fill").foregroundStyle(CatchCheckColor.navy)
-                            Text("Your password is protected. We never store it as plain text.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }.padding(.horizontal, 4)
                     }
                 }.padding(20).padding(.bottom, 24)
             }
@@ -1069,13 +1048,13 @@ struct AccountView: View {
         }
     }
 
-    private func accountSection<Content: View>(_ title: String, subtitle: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+    private func accountSection<Content: View>(_ title: String, subtitle: String?, icon: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: icon).foregroundStyle(CatchCheckColor.navy).frame(width: 38, height: 38).background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline).foregroundStyle(CatchCheckColor.navy)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
                 }
             }
             content()
@@ -1422,8 +1401,6 @@ struct SpotDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(spot.name).font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text(spot.area).foregroundStyle(.secondary)
-                    Text("Area marker · access and closures unchecked.")
-                        .font(.subheadline).foregroundStyle(.secondary)
                     if !spot.time.isEmpty {
                         WindowOutlook(outlook: spot.windowOutlook)
                         WindowChecks(spot: spot)
@@ -1629,7 +1606,6 @@ private struct WindowChecks: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(assessment.checks.emoji) \(assessment.checks.label)")
                 Text("\(assessment.confidence.emoji) \(assessment.confidence.label)")
-                if assessment.comfortComplete && !assessment.matchesComfort { Text("Outside your comfort preference").foregroundStyle(CatchCheckColor.orange) }
                 if showDetails {
                     DisclosureGroup("Details & sources") {
                         VStack(alignment: .leading, spacing: 6) {

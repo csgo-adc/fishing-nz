@@ -589,7 +589,7 @@ struct TideForecastView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 28)
                     }
-                    Text("Source: Toitū Te Whenua Land Information New Zealand (LINZ). Published high and low tide heights are above Chart Datum. The curve and heights between them are interpolated estimates; weather can change actual water levels.")
+                    Text("Tide predictions: Toitū Te Whenua LINZ. Heights above Chart Datum; the curve between highs and lows is estimated.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -677,7 +677,7 @@ private struct TideDetails: View {
             Card {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Tide height through the day").bold().foregroundStyle(.primary)
-                    Text("Swipe this heading for another day. Tap or drag the curve to inspect time.")
+                    Text("Tap or drag the curve to see a time and height.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1037,7 +1037,7 @@ struct RulesView: View {
                             Label("Near \(vm.devicePlaceName ?? "your current location")", systemImage: "location.fill")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
-                        Text("The suggested area uses your current position and the nearest catalogued coast. MPI areas have local exceptions; confirm the exact fishing spot on the official map.")
+                        Text("Near an area boundary? Check the MPI map.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if selectedArea != nil {

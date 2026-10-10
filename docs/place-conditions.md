@@ -25,7 +25,7 @@ The main card shows offshore waves, wind, rain, feels-like temperature and dayli
 
 UV, minimum visibility, sea surface temperature and offshore swell are available under **UV, visibility & sea details**, each with its own expandable explanation. Rain details include the wettest available hour and a visual cloud/drop legend. Tide details explain the reference station and datum while keeping event heights and their Chart Datum label visible. UV at least 3 prompts sun protection. Visibility below 1 km gets “Poor at times.” Hourly cards show weather, temperature, feels-like temperature, wind, gusts, wave height and mean period, rain amount and rain chance. Hourly rain and gusts cover the preceding hour. The hourly timeline retains marine records if weather is unavailable.
 
-The view displays the offshore model grid's distance from the pin. Offshore waves and swell do not describe lake waves, shoreline breaking waves, harbour currents or a boat's entire route. Source details expose grid coordinates, timezone and fetch time. Fetch time does not establish a model's issue time. Near-term data has **Limited confidence**; days 3–5 use **Planning forecast**, and later dates use **Early outlook**.
+The view displays the offshore model grid's distance from the pin. Offshore waves and swell do not describe lake waves, shoreline breaking waves, harbour currents or a boat's entire route. Forecast details show the timezone and when weather and waves were last updated (fetch time, not the model's issue time). The next two days are labelled **Short-range forecast**; days 3–5 use **Planning forecast**, and later dates use **Early outlook**.
 
 ## Tide references and missing data
 

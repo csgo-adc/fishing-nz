@@ -167,7 +167,7 @@ import Foundation
         try expect(evaluate(hours, ending) == nil, "Final endpoint wave omitted")
         let partial = evaluate(hours, [:])!
         try expect(partial.dataComplete && !FishingScoringService.isBetter(interval!, than: partial) && !FishingScoringService.isBetter(partial, than: interval!), "Missing marine must stay independent of land weather comfort")
-        try expect(partial.assessment!.checks.label == "Local checks needed" && partial.assessment!.details.contains { $0.contains("wave coverage incomplete") }, "Missing local data must retain its outstanding checks")
+        try expect(partial.assessment!.checks.label == "Local checks needed" && partial.assessment!.details.contains { $0.contains("Some wave data is missing") }, "Missing local data must retain its outstanding checks")
         let boatSpot = FishingSpot(name: spot.name, area: spot.area, coordinate: spot.coordinate, boat: true)
         let boatHours = (7...9).map { WeatherHour(time: at(30, $0), wind: 5, gust: 10, precipitation: 0, rainProbability: 0, code: 0, feelsLike: 16) }
         func boatWaves(_ height: Double, _ period: Double) -> [Int: MarineHour] {
@@ -202,7 +202,7 @@ import Foundation
         let lateBoatHours = (11...13).map { WeatherHour(time: at(30, $0), wind: 5, gust: 10, precipitation: 0, rainProbability: 0, code: 0, feelsLike: 16) }
         let lateBoatWaves = Dictionary(uniqueKeysWithValues: lateBoatHours.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: 1, period: 8)) })
         let lateBoat = evaluateBoat(lateBoatHours, lateBoatWaves, priority: .lateIncoming)!
-        try expect(lateBoat.tidePreferenceFit >= 0.8 && lateBoat.reasons == ["Fits late incoming · waves first"] && lateBoat.rankingValue == evaluateBoat(lateBoatHours, lateBoatWaves)!.rankingValue, "Late incoming must retain boat wave ranking and explain it")
+        try expect(lateBoat.tidePreferenceFit >= 0.8 && lateBoat.reasons == ["Matches the late incoming tide · waves first"] && lateBoat.rankingValue == evaluateBoat(lateBoatHours, lateBoatWaves)!.rankingValue, "Late incoming must retain boat wave ranking and explain it")
         let coldBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code, feelsLike: 7) }
         let hotBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code, feelsLike: 34) }
         let unknownBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code) }
@@ -270,7 +270,7 @@ import Foundation
         try expect(evaluate([hour(8), hour(9), hour(10, temp: 4)])!.assessment!.mood.label == "Uncomfortable", "Final temperature endpoint matters")
         let likely = evaluate(hours(rain: 0.15))!, unlikely = evaluate(hours(rain: 0.15, chance: 20))!, absent = evaluate(hours(rain: 0.15, chance: nil))!
         try expect(likely.rankingValue == unlikely.rankingValue && likely.rankingValue == absent.rankingValue, "Rain likelihood must not count as actual wetness")
-        try expect(absent.assessment!.details.contains { $0.contains("Rain likelihood incomplete") }, "Missing likelihood must remain visible")
+        try expect(absent.assessment!.details.contains { $0.contains("Some rain chances are missing") }, "Missing likelihood must remain visible")
         let badReturn = core + [hour(11, wind: 60)]
         try expect(evaluate(core, all: badReturn, prefs: LandPreferences(arrivalMinutes: 0, returnMinutes: 60)) == nil, "Return wind can rule out a visit")
         let ordinary = core + [hour(11)]
@@ -284,15 +284,15 @@ import Foundation
         try expect(evaluate(prefs: LandPreferences(arrivalMinutes: 0, returnMinutes: 0, daylightOnly: true)) != nil, "Known daylight visit should remain available")
         try expect(evaluate(prefs: LandPreferences(arrivalMinutes: 120)) == nil, "Known access time cannot begin in the past even if return is unset")
         let rocks = evaluate(prefs: LandPreferences(setting: .rocks), sourceTime: at(7).addingTimeInterval(-14400))!
-        try expect(rocks.assessment!.checks.label == "Local checks needed" && rocks.assessment!.confidence.label == "Limited confidence", "Unknown local exposure cannot claim supported confidence")
-        try expect(rocks.assessment!.details.contains { $0.contains("Rock footing") } && rocks.assessment!.details.contains { $0.contains("older than 3 hours") }, "Site and freshness reasons must be available")
+        try expect(rocks.assessment!.checks.label == "Local checks needed" && rocks.assessment!.confidence.label == "Short-range forecast", "Unknown local exposure cannot claim supported confidence")
+        try expect(rocks.assessment!.details.contains { $0.contains("a way off the rocks") } && rocks.assessment!.details.contains { $0.contains("older than 3 hours") }, "Site and freshness reasons must be available")
         let unpaired = [Int(at(8).timeIntervalSince1970): MarineHour(wave: 1, period: 8), Int(at(9).timeIntervalSince1970): MarineHour(wave: 0.4, period: 14), Int(at(10).timeIntervalSince1970): MarineHour(wave: 0.4, period: 8)]
         try expect(!evaluate(waves: unpaired)!.warnings.contains { $0.hasPrefix("Long-period waves") }, "Height and period warnings must stay paired")
         var partialBad = unpaired; partialBad[Int(at(10).timeIntervalSince1970)] = MarineHour(wave: 3.4, period: nil)
         try expect(evaluate(waves: partialBad) == nil, "Known adverse height must survive a missing period")
         let normal = evaluate()!, missing = evaluate(waves: [:])!
         try expect(normal.assessment!.mood == missing.assessment!.mood && !FishingScoringService.isBetter(normal, than: missing) && !FishingScoringService.isBetter(missing, than: normal), "Wave completeness must stay separate from land weather comfort")
-        try expect(missing.assessment!.details.contains { $0.contains("wave coverage incomplete") }, "Missing wave coverage still needs explanation")
+        try expect(missing.assessment!.details.contains { $0.contains("Some wave data is missing") }, "Missing wave coverage still needs explanation")
         let dry = evaluate(hours(wind: 14, gust: 25, rain: 0.2))!
         let calmer = evaluate((9...11).map { hour($0, rain: 0.3) })!
         try expect(FishingScoringService.landTradeoff(selected: dry, pool: [dry, calmer])?.0 == "Calmer alternative", "Balanced mode should offer a calmer peer")

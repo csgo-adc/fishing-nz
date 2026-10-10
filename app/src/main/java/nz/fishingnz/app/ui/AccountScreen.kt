@@ -78,17 +78,12 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("FISHDAYS · NZ", color = Color(0xFFBFE6DF), style = MaterialTheme.typography.labelMedium)
-                    Text(s.account?.user?.displayName?.takeIf { it.isNotBlank() } ?: if (s.account != null) "Your account" else "Welcome aboard",
+                    Text(s.account?.user?.displayName?.takeIf { it.isNotBlank() } ?: "Account",
                         color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 }
             }
-            Text(if (s.account != null) "Manage your profile and sign-in options in one place."
-                else "A little help with your next catch. Sign in to identify fish and manage your profile.",
+            if (s.account == null) Text("Sign in to identify fish and manage your profile.",
                 color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium)
-            if (s.account != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Default.VerifiedUser, null, Modifier.size(16.dp), tint = Color(0xFFBFE6DF))
-                Text("Signed in securely", color = Color(0xFFBFE6DF), style = MaterialTheme.typography.labelMedium)
-            }
         }
         s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
         s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
@@ -114,7 +109,6 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
         } else if (s.account == null) {
             if (s.verificationPending) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("Check your inbox", color = Navy, fontWeight = FontWeight.Bold); Text("Open the confirmation email, then sign in. The link expires after 24 hours.", color = Navy); OutlinedButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email) }) { Text("Resend confirmation email") } } }
             AccountPanel {
-                AccountSectionHeading(if (createAccount) "Join Fishdays" else "Good to see you", "Sign in to use your fishing tools.", Icons.Default.Lock)
                 socialButtons()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     HorizontalDivider(Modifier.weight(1f))
@@ -157,11 +151,11 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 Button(enabled = !s.accountBusy && countryCode.matches(Regex("[A-Z]{2}")), onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text(if (s.accountBusy) "Please wait…" else "Save changes") }
             }
             AccountPanel {
-                AccountSectionHeading("Sign-in options", "Choose how you get back on board.", Icons.Default.Lock)
+                AccountSectionHeading("Sign-in options", "Google or Apple", Icons.Default.Lock)
                 socialButtons()
             }
             AccountPanel {
-                AccountSectionHeading("Password", if (s.account.user.hasPassword) "Keep your account safe." else "Add one to also sign in with your email.", Icons.Default.Lock)
+                AccountSectionHeading("Password", if (s.account.user.hasPassword) null else "Add one to also sign in with your email.", Icons.Default.Lock)
                 if (s.account.user.hasPassword) {
                     OutlinedButton(enabled = !s.accountBusy, onClick = { showChangePassword = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text("Change password") }
                 } else {
@@ -232,12 +226,12 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
     }
 }
 
-@Composable private fun AccountSectionHeading(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+@Composable private fun AccountSectionHeading(title: String, subtitle: String?, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(42.dp).background(Seafoam, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Navy, modifier = Modifier.size(22.dp)) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }

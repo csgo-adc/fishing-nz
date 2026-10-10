@@ -144,30 +144,30 @@ internal object LandAssessment {
             ConditionItem("Shore plan", "${preferences.setting.label} · before ${arrival?.let { "$it min" } ?: "—"} · return ${returning?.let { "$it min" } ?: "—"}", WindowMood("🔎", "Access unchecked"))
         )
         val details = buildList {
-            add(when (preferences.setting) { ShoreSetting.ROCKS -> "Rock footing, surge and escape route unchecked."; ShoreSetting.BEACH -> "Surf, wading and beach access unchecked."; ShoreSetting.WHARF -> "Wharf access and exposure unchecked."; ShoreSetting.BANK -> "Bank footing and tide access unchecked."; else -> "Shore type and access unchecked." })
-            add("Official warnings unchecked. Single forecast; model timing and agreement unverified.")
-            if (!visitKnown) add("Access/setup or return time not set; only the session and known extra time are assessed.")
-            if (!completeWeather) add("Visit weather coverage incomplete; displayed amounts use available samples.")
-            if (!completeTemperature) add("Feels-like temperature coverage incomplete.")
-            if (!tideComplete) add("Local tide coverage unverified.")
+            add(when (preferences.setting) { ShoreSetting.ROCKS -> "Check footing, surge and a way off the rocks."; ShoreSetting.BEACH -> "Check surf, wading depth and beach access."; ShoreSetting.WHARF -> "Check wharf access and exposure."; ShoreSetting.BANK -> "Check bank footing and tide access."; else -> "Check the shore type and access." })
+            add("Check official marine warnings before you go.")
+            if (!visitKnown) add("Set walk-in and return times to check the whole trip.")
+            if (!completeWeather) add("Some hourly weather is missing; totals may be low.")
+            if (!completeTemperature) add("Some feels-like temperatures are missing.")
+            if (!tideComplete) add("No local tide data for this time.")
             else add("Tide times and heights are for the named reference station; local timing can differ.")
-            if (!completeMarine) add("Offshore wave coverage incomplete.")
-            if (probabilities.size != intervals.size) add("Rain likelihood incomplete.")
+            if (!completeMarine) add("Some wave data is missing.")
+            if (probabilities.size != intervals.size) add("Some rain chances are missing.")
             if (retrievedAt == null || Duration.between(retrievedAt, now).seconds > 3 * 3600) add("Forecast freshness unverified or older than 3 hours.")
             if (waves.any { it >= 1.5 }) add("Elevated offshore waves; local exposure unchecked.")
             if (marineHours.any { (valid(it.wave) ?: 0.0) >= .8 && (valid(it.period) ?: 0.0) >= 12 }) add("Long-period waves; local surge unchecked.")
             if (codes.any { it == 45 || it == 48 }) add("Fog forecast; visibility needs checking.")
             if (temps.any { it < 12 } && peakRain > .2) add("Cold and wet conditions.")
             add("Rain chance is the highest hourly likelihood, not the chance for the whole visit. Offshore waves show significant height and mean period.")
-            add("Trial comfort bands; not a catch forecast. CD = Chart Datum. Hourly weather timing is approximate.")
+            add("Not a catch forecast. CD = Chart Datum, the tide-table reference level.")
         }
         val age = Duration.between(now, start).seconds
-        val confidence = when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("🤔", "Limited confidence") }
+        val confidence = when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("⏱️", "Short-range forecast") }
         val assessment = WindowAssessment(if (complete) comfortMood(grade) else needsDataMood, rows, confidence,
             details = details, band = grade, demandingHours = demanding, uncomfortableHours = uncomfortable,
             matchesComfort = complete && grade <= preferences.maxBand, comfortComplete = complete,
             maxWind = maxWind, maxGust = maxGust, rainTotal = totalRain, priority = preferences.priority)
-        val reason = if (!complete) "Comfort assessment incomplete" else if (grade > preferences.maxBand) "Outside your comfort preference" else if (priority == WindowPriority.LATE_INCOMING) "Fits late incoming" else "Lower discomfort"
+        val reason = if (!complete) "Not enough data to rate comfort" else if (grade > preferences.maxBand) "Outside your comfort preference" else if (priority == WindowPriority.LATE_INCOMING) "Matches the late incoming tide" else "Most comfortable option"
         return Recommendation(spot.name, spot.area, (100 - grade * 25), WindowEvaluation.formatWindow(start, end),
             "${distance.roundToInt()} km straight line", listOf(reason), boat = false,
             warnings = details, distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = 2,

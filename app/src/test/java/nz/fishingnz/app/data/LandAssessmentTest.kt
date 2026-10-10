@@ -48,7 +48,7 @@ class LandAssessmentTest {
         val absent = checkNotNull(evaluate(hours(rain = .15).map { it.copy(rainProbability = null) }))
         assertEquals(likely.rankingValue, unlikely.rankingValue, 0.0)
         assertEquals(likely.rankingValue, absent.rankingValue, 0.0)
-        assertTrue(absent.assessment!!.details.any { it.contains("Rain likelihood incomplete") })
+        assertTrue(absent.assessment!!.details.any { it.contains("Some rain chances are missing") })
     }
     @Test fun returnWeatherAndInterpolatedReturnWavesCanRuleOutAVisit() {
         val all = hours() + ForecastHour(at(11), 60.0, 18.0, 0.0, 0.0, 0, feelsLike = 16.0)
@@ -69,8 +69,8 @@ class LandAssessmentTest {
     @Test fun unknownSiteAndOldForecastNeverClaimSupportedConfidence() {
         val rocks = checkNotNull(evaluate(prefs = LandPreferences(setting = ShoreSetting.ROCKS), sourceTime = at(7).minusSeconds(14400)))
         assertEquals("Local checks needed", rocks.assessment!!.checks.label)
-        assertEquals("Limited confidence", rocks.assessment.confidence.label)
-        assertTrue(rocks.assessment.details.any { it.contains("Rock footing") })
+        assertEquals("Short-range forecast", rocks.assessment.confidence.label)
+        assertTrue(rocks.assessment.details.any { it.contains("a way off the rocks") })
         assertTrue(rocks.assessment.details.any { it.contains("older than 3 hours") })
     }
     @Test fun longWaveWarningKeepsHeightAndPeriodPaired() {
@@ -84,7 +84,7 @@ class LandAssessmentTest {
         val missingWaves = checkNotNull(evaluate(waves = emptyMap()))
         assertEquals(0, windowOrder.compare(normal, missingWaves))
         assertEquals(normal.windowMood, missingWaves.windowMood)
-        assertTrue(missingWaves.assessment!!.details.any { it.contains("wave coverage incomplete") })
+        assertTrue(missingWaves.assessment!!.details.any { it.contains("Some wave data is missing") })
     }
     @Test fun balancedModeOffersRealCalmerOrDrierPeersWithinComfortLimit() {
         val dry = checkNotNull(evaluate(hours(14.0, 25.0, .2)))

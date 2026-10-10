@@ -90,11 +90,10 @@ class RecommendationEngine {
             catch (_: Exception) { null }
         val station = reference?.station
         val tides = reference?.value.orEmpty()
-        val retrieval = DateTimeFormatter.ofPattern("d MMM, h:mm a z", Locale.US)
-        val source = "Weather: Open-Meteo automatic best match, retrieved ${weather.retrievedAt.atZone(zone).format(retrieval)}; forecast grid ${weather.grid}. " +
-            (marine?.let { "Offshore waves: Open-Meteo automatic best match, retrieved ${it.retrievedAt.atZone(zone).format(retrieval)}; grid ${it.grid}. " } ?: "Offshore wave data unavailable. ") +
-            (station?.takeIf { tides.isNotEmpty() }?.let { "Tide reference: ${tideReferenceLabel(spot, it)}, published NZ local times. Times and heights are for this station; local timing can differ. " } ?: "No LINZ tide reference data available. ") +
-            "Retrieval times are not model issue times. These are planning conditions, not a prediction of catches."
+        val updated = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+        val source = (if (marine != null) "Weather and waves: Open-Meteo, updated ${weather.retrievedAt.atZone(zone).format(updated)}. "
+            else "Weather: Open-Meteo, updated ${weather.retrievedAt.atZone(zone).format(updated)}. No offshore wave data. ") +
+            (station?.takeIf { tides.isNotEmpty() }?.let { "Tide: ${tideReferenceLabel(spot, it)}." } ?: "No LINZ tide data.")
         val hours = weather.hours.filter {
             val day = it.time.atZone(zone).toLocalDate()
             day >= start && day <= end.plusDays(1) && it.time >= now

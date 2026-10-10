@@ -75,7 +75,7 @@ class WindowEvaluationTest {
         assertTrue(partial.dataComplete) // Weather comfort is separate from local wave confidence.
         assertEquals(0, windowOrder.compare(complete, partial))
         assertEquals("Local checks needed", partial.assessment!!.checks.label)
-        assertTrue(partial.warnings.any { it.contains("incomplete") })
+        assertTrue(partial.warnings.any { it.contains("Some wave data is missing") })
     }
     @Test fun boatLowerWavesOutrankDryCalmWindWithRoughWater() {
         val calmSeaHours = samples().map { it.copy(wind = 20.0, gust = 25.0, rain = .3, rainProbability = 50.0) }
@@ -120,7 +120,7 @@ class WindowEvaluationTest {
         val hours = samples(11)
         val result = checkNotNull(evaluateBoat(hours, marine(hours), WindowPriority.LATE_INCOMING))
         assertTrue(result.tidePreferenceFit >= .8)
-        assertEquals(listOf("Fits late incoming · waves first"), result.reasons)
+        assertEquals(listOf("Matches the late incoming tide · waves first"), result.reasons)
         assertEquals(checkNotNull(evaluateBoat(hours, marine(hours))).rankingValue, result.rankingValue, .0001)
     }
     @Test fun boatColdAndHeatLimitOutlookWhileWavesStillLeadRanking() {

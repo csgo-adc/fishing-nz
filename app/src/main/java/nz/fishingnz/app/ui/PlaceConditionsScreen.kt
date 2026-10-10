@@ -128,7 +128,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                 Column(Modifier.weight(1f)) {
                                     Text(day.format(DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH)), fontWeight = FontWeight.Bold)
                                     Text("${WeatherLabels.describe(daily?.code)} · ${PlaceConditionRows.range(listOf(daily?.low, daily?.high))}°C")
-                                    Text(if (recent) "Recent model data" else if (day > today.plusDays(5)) "🔭 Early outlook" else if (day > today.plusDays(2)) "🗓️ Planning forecast" else "🤔 Limited confidence", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (recent) "Recent model data" else if (day > today.plusDays(5)) "🔭 Early outlook" else if (day > today.plusDays(2)) "🗓️ Planning forecast" else "⏱️ Short-range forecast", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                             snapshot.marine?.gridPoint?.let { grid -> Text("Offshore wave model · ${placeDistanceKm(place.point, grid).toInt()} km from pin", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -213,9 +213,8 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                             if (sources) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("Open-Meteo model data · ${snapshot.zone.id}. Recent days use archived model output. Local exposure and official warnings need checking.")
                                 Text("Waves are offshore significant height and mean period. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
-                                snapshot.weather?.let { Text("Weather fetched ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)} · grid ${it.grid}") }
-                                snapshot.marine?.let { Text("Marine fetched ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)} · grid ${it.grid}") }
-                                Text("Fetch time is separate from model issue time. Feelings are general guides. Choose hours that suit your experience.")
+                                snapshot.weather?.let { Text("Weather updated ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)}") }
+                                snapshot.marine?.let { Text("Waves updated ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)}") }
                             }
                         }
                     }

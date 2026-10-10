@@ -121,7 +121,7 @@ struct PlaceConditionsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(format(day, "EEEE d MMM")).font(.headline)
                     Text("\(WeatherPresentation.label(daily?.code)) · \(PlaceConditionRows.range([daily?.low, daily?.high]))°C").font(.subheadline)
-                    Text(recent ? "Recent model data" : ahead > 5 ? "🔭 Early outlook" : ahead > 2 ? "🗓️ Planning forecast" : "🤔 Limited confidence").font(.caption).foregroundStyle(.secondary)
+                    Text(recent ? "Recent model data" : ahead > 5 ? "🔭 Early outlook" : ahead > 2 ? "🗓️ Planning forecast" : "⏱️ Short-range forecast").font(.caption).foregroundStyle(.secondary)
                 }
             }
             if let grid = snapshot.marine?.gridPoint { Text("Offshore wave model · \(Int(placeDistanceKm(place.point, grid))) km from pin").font(.caption).foregroundStyle(.secondary) }
@@ -210,9 +210,8 @@ struct PlaceConditionsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Open-Meteo model data · \(zone.identifier). Recent days use archived model output. Local exposure and official warnings need checking.")
                     Text("Waves are offshore significant height and mean period. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
-                    if let weather = snapshot.weather { Text("Weather fetched \(format(weather.fetchedAt, "h:mm a")) · grid \(weather.grid)") }
-                    if let marine = snapshot.marine { Text("Marine fetched \(format(marine.fetchedAt, "h:mm a")) · grid \(marine.grid)") }
-                    Text("Fetch time is separate from model issue time. Feelings are general guides. Choose hours that suit your experience.")
+                    if let weather = snapshot.weather { Text("Weather updated \(format(weather.fetchedAt, "h:mm a"))") }
+                    if let marine = snapshot.marine { Text("Waves updated \(format(marine.fetchedAt, "h:mm a"))") }
                 }.font(.caption).foregroundStyle(.secondary).padding(.top, 10)
             }
         }

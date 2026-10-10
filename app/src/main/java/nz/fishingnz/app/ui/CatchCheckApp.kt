@@ -187,7 +187,7 @@ private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> U
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Spacer(Modifier.height(2.dp))
         Text("More", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text(name?.let { "Signed in as $it" } ?: "Your fishing tools and preferences", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        name?.let { Text("Signed in as $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             MoreItem(Icons.Default.AccountCircle, "Account", "Profile and sign in") { onNavigate(5) }
         }

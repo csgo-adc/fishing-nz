@@ -294,7 +294,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                 if (s.preferredTime.end.isBefore(s.preferredTime.start)) " (ends next day)" else "",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
-        Text("Only complete two-hour sessions within these hours are shown. Each selected day is a session's start day.",
+        Text("Shows 2-hour sessions that fit within these hours.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Text("What matters most?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -304,10 +304,10 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                 onClick = { vm.setWindowPriority(WindowPriority.LATE_INCOMING) }, label = { Text("Late incoming tide") })
         }
         Text(if (s.preference == WindowPriority.LATE_INCOMING)
-            "Focus on the last part of the incoming tide, around high water, using the shown LINZ reference station. Tide timing at your spot can differ; this does not guarantee better fishing." +
-                if (s.boat) " Wave comfort remains the main factor when comparing sessions that fit." else ""
-        else if (s.boat) "Give waves the most weight, including short wave periods that can make fishing uncomfortable. Compare wind and rain too, preferring daylight within your selected hours."
-        else "Compare wind, rain and feels-like temperature.",
+            "Prefers the last of the incoming tide, near high water. Times are for the nearest LINZ station." +
+                if (s.boat) " Waves still rank first." else ""
+        else if (s.boat) "Ranks by waves first, then wind and rain."
+        else "Ranks by wind, rain and feels-like temperature.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         if (!s.boat) LandOptions(s.landPreferences, vm::setLandPreferences)
         Text("Find windows by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
@@ -803,8 +803,6 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
     var expanded by rememberSaveable(item.startsAtEpochSeconds, item.name) { mutableStateOf(false) }
     Text("${assessment.checks.emoji} ${assessment.checks.label}", style = MaterialTheme.typography.labelMedium)
     Text("${assessment.confidence.emoji} ${assessment.confidence.label}", style = MaterialTheme.typography.labelMedium)
-    if (assessment.comfortComplete && !assessment.matchesComfort) Text("Outside your comfort preference", color = MaterialTheme.colorScheme.tertiary,
-        style = MaterialTheme.typography.labelMedium)
     TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { Text(if (expanded) "Hide details" else "Details & sources") }
     if (expanded) {
         assessment.details.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -1261,7 +1259,7 @@ internal val fishingRulesAreas = listOf(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     locationNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                     area?.let { Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Text("GPS on land cannot safely identify the exact marine rule boundary. Select the MPI area for your fishing spot.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Near an area boundary? Check the MPI map.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1461,8 +1459,6 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
                         Icon(Icons.Default.ChevronRight, "Next day")
                     }
                 }
-                Text("Swipe this date bar to change day", modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
         }
         s.stationTide?.let { tide ->
@@ -1476,12 +1472,11 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
             item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Tide curve", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-                    Text("Tap or drag the curve to inspect a time and height. Swipe the date bar to change day.",
+                    Text("Tap or drag the curve to see a time and height.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     TideCurve(tide.points, s.tideDate)
                     if (tide.points.firstOrNull()?.minuteOfDay != 0 || tide.points.lastOrNull()?.minuteOfDay != 1440)
                         Text("Curve is limited where an adjacent day's table is unavailable.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                    Text("Curve heights between LINZ high and low tides are estimates.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } }
             item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1498,7 +1493,7 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
                 OutlinedButton(onClick = vm::refreshStationTide) { Text("Try again") }
             }
         }
-        item { Text("High and low tide predictions: Toitū Te Whenua Land Information New Zealand (LINZ). Times are New Zealand local time; heights are above the station's Chart Datum. Check the official table before planning around water depth.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        item { Text("Tide predictions: Toitū Te Whenua LINZ. Heights above Chart Datum; the curve between highs and lows is estimated.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
     }
     if (showStations) ModalBottomSheet(onDismissRequest = { showStations = false }) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -240,7 +240,7 @@ export async function renderSharePage(shared: SharedWindow, token: string, confi
     ];
     return `<section aria-labelledby="where"><h2 id="where">Where</h2><div class="maps">${
       links.map(([label, href]) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`).join("")
-    }</div><p class="small">An area marker, not a surveyed fishing spot. Access, closures and fishing restrictions are unchecked.</p></section>`;
+    }</div><p class="small">Area marker only. Check access, closures and fishing rules.</p></section>`;
   })() : "";
   const snapshot = shared.sharedAt
     ? `Forecast snapshot from ${longDay.format(new Date(shared.sharedAt * 1000))}. Forecasts change, so open the app for the latest.`
@@ -256,7 +256,7 @@ export async function renderSharePage(shared: SharedWindow, token: string, confi
   ${shared.reason ? `<section aria-labelledby="why"><h2 id="why">Why this window</h2><p class="why">${escapeHtml(shared.reason)}</p></section>` : ""}
   ${conditions}
   ${place}
-  <div class="notice"><strong>Check before you go.</strong> This compares forecast conditions only. It does not predict catches or confirm it is safe. Check local access, marine warnings and the current MPI fishing rules for your exact spot.</div>
+  <div class="notice"><strong>Check before you go.</strong> Forecast comparison only, not a catch or safety prediction. Check access, marine warnings and MPI rules.</div>
   <p class="small" style="margin:14px 0 0">${escapeHtml(snapshot)}</p>
 </article>
 ${getTheApp(config, "Compare fishing windows, tides, weather and MPI fishing rules around New Zealand. Open this window in the app, or download it.", true)}

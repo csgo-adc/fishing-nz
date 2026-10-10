@@ -198,16 +198,16 @@ internal object WindowEvaluation {
         val age = Duration.between(now, start).seconds
         val assessment = WindowAssessment(
             if (!complete) needsDataMood else comfortMood(comfortBand),
-            rows, when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("🤔", "Limited confidence") },
+            rows, when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("⏱️", "Short-range forecast") },
             band = comfortBand, comfortComplete = complete,
             details = warnings + buildList {
-                add("Waves lead boat ranking. Feels-like temperature limits the outlook and breaks comfort ties. Route, vessel response, model timing, agreement and return conditions unchecked. CD = Chart Datum.")
+                add("Boat windows are ranked mainly by waves. Your route and the trip back are not checked. CD = Chart Datum, the tide-table reference level.")
                 add("Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period.")
                 if (completeTides) add("Tide times and heights are for the named reference station; local timing can differ.")
-                if (temperature.size != 3) add("Feels-like temperature coverage incomplete.")
+                if (temperature.size != 3) add("Some feels-like temperatures are missing.")
                 if (retrievedAt == null || Duration.between(retrievedAt, now).seconds > 3 * 3600) add("Forecast freshness unverified or older than 3 hours.")
             })
-        val briefReason = if (priority == WindowPriority.LATE_INCOMING) "Fits late incoming · waves first" else "Waves first"
+        val briefReason = if (priority == WindowPriority.LATE_INCOMING) "Matches the late incoming tide · waves first" else "Waves first"
         return Recommendation(
             name = spot.name, area = spot.area, rating = comfort.roundToInt(),
             time = formatWindow(start, end), distance = "${distance.roundToInt()} km straight line",
