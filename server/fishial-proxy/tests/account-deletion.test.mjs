@@ -35,7 +35,7 @@ test("account deletion removes associated data and verifies web requests with re
       await db.prepare("INSERT INTO account_feedback VALUES (?, ?, 'bug', 'A private report', 3, ?)").bind(`${id}-feedback`, id, now).run();
       await db.prepare("INSERT INTO account_events VALUES (?, ?, 'app_opened', NULL, 'android', ?)").bind(`${id}-event`, id, now).run();
       await db.prepare("INSERT INTO account_email_verifications VALUES (?, ?, ?, ?)").bind(`${id}-verify`, id, now, future).run();
-      await db.prepare("INSERT INTO account_oauth_identities VALUES ('google', ?, ?, ?)").bind(`${id}-subject`, id, now).run();
+      await db.prepare("INSERT INTO account_oauth_identities (provider, subject, user_id, created_at) VALUES ('google', ?, ?, ?)").bind(`${id}-subject`, id, now).run();
       await db.prepare("INSERT INTO account_oauth_flows VALUES (?, 'google', 'nonce', 'pkce', 'secret', 'nz.fishingnz.app://auth/callback', ?, ?)").bind(`${id}-flow`, id, future).run();
       await db.prepare("INSERT INTO account_oauth_grants VALUES (?, 'secret', ?, 0, ?)").bind(`${id}-grant`, id, future).run();
     }

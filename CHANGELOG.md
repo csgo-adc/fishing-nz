@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.30 — 2026-10-11 (build code 31)
+
+- **Sign in with Apple on iPhone uses Apple's own sheet** (Face ID or passcode, no web page) and
+  Apple's standard button, shown above Google. New API endpoints `POST /v1/auth/apple/start` and
+  `/v1/auth/apple/native` check the signed Apple token against a single-use nonce and the app's
+  bundle ID. The button appears once the API has the Apple key; setup is in
+  `docs/account-sign-in.md`. Android keeps Apple's browser sign-in, which also needs a Services ID.
+- **Deleting an account revokes its Apple sign-in** (App Store guideline 5.1.1(v)). The API keeps
+  Apple's refresh token for this (migration `0012_apple_token_revocation.sql`) and revokes it on
+  deletion, or straight away when a sign-in ends without an account. The privacy policy says so.
+- Deploy the API to apply the migration and publish the policy change.
+
 ## 1.0.29 — 2026-10-11 (build code 30)
 
 - **A multi-day plan now lists a window for each day.** Before, a search kept only one window per

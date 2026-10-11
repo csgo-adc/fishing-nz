@@ -30,27 +30,41 @@ See [Google’s OpenID Connect setup and flow](https://developers.google.com/ide
 
 ## Apple
 
-1. In your [Apple Developer account](https://developer.apple.com/account/), register or select the primary App ID for Fishdays - NZ and enable Sign in with Apple. The current iPhone bundle identifier is `nz.fishingnz.catchcheck`; use your actual registered identifier if it differs.
-2. Register a **Services ID**, enable Sign in with Apple for it, and associate it with the primary App ID. This Services ID is the `APPLE_CLIENT_ID` used by the shared browser flow.
-3. In the Services ID’s website configuration, add domain `fishing.fishnz.space` and this exact return URL:
+The iPhone uses Apple's own sign-in sheet (Face ID or passcode, no web page) from 1.0.30. Android has no such sheet, so it uses Apple's web sign-in in the browser, like Google. Both use one Sign in with Apple key; Android also needs a Services ID. `APPLE_TEAM_ID` (`8T7835869S`) and `APPLE_BUNDLE_ID` (`nz.fishingnz.catchcheck`) are plain variables in `wrangler.toml`.
+
+### iPhone
+
+1. In your [Apple Developer account](https://developer.apple.com/account/resources/identifiers/list), open the App ID `nz.fishingnz.catchcheck`, tick **Sign in with Apple** (enable as a primary App ID) and save. The app's entitlements request this capability; Xcode's automatic signing also turns it on the first time it signs a build with them.
+2. Under **Keys**, add a key (for example "Fishdays Sign in with Apple"), tick **Sign in with Apple**, choose **Configure** → primary App ID `nz.fishingnz.catchcheck`, then register it. Download the `.p8` file (Apple offers it only once) and note the Key ID.
+3. From `server/fishial-proxy`, save the key as Worker secrets:
+
+   ```sh
+   npx wrangler secret put APPLE_KEY_ID
+   npx wrangler secret put APPLE_PRIVATE_KEY < /absolute/path/AuthKey_YOUR_KEY_ID.p8
+   ```
+
+4. Deploy the API, which applies migration `0012_apple_token_revocation.sql`. `GET /v1/auth/providers` then reports `"apple_native": true`, and iPhone 1.0.30 or later shows **Continue with Apple** above Google. (Guideline 4.8: the iPhone offers Google only while Apple is offered too.)
+
+How it works: `POST /v1/auth/apple/start` returns a single-use nonce that expires after 10 minutes. The app hands it to the Apple sheet, which puts it in the signed identity token. `POST /v1/auth/apple/native` checks the token against Apple's keys (issuer, audience = the bundle ID, expiry, nonce), exchanges the authorization code with Apple, and signs in or creates the account with the same linking rules as the browser flow. Apple sends the person's name only the first time; the app forwards it then.
+
+### Android (browser flow)
+
+1. Register a **Services ID** (for example `nz.fishingnz.catchcheck.web`), enable Sign in with Apple for it and group it with the primary App ID `nz.fishingnz.catchcheck`.
+2. In the Services ID's website configuration, add domain `fishing.fishnz.space` and this exact return URL:
 
    ```text
    https://fishing.fishnz.space/v1/auth/oauth/apple/callback
    ```
 
-4. Create a Sign in with Apple key associated with the primary App ID, download its `.p8` private key, and record the key ID and your team ID.
-5. From `server/fishial-proxy`, save these Worker secrets:
+3. Save the Services ID: `npx wrangler secret put APPLE_CLIENT_ID`. The key from the iPhone steps signs this flow too. `GET /v1/auth/providers` then reports `"apple": true`, and Android (and iPhone builds before 1.0.30) show Apple.
 
-   ```sh
-   npx wrangler secret put APPLE_CLIENT_ID
-   npx wrangler secret put APPLE_TEAM_ID
-   npx wrangler secret put APPLE_KEY_ID
-   npx wrangler secret put APPLE_PRIVATE_KEY < /absolute/path/AuthKey_YOUR_KEY_ID.p8
-   ```
+### Token revocation
 
-The API generates a short-lived signed Apple client secret for each exchange, so there is no static six-month client secret to renew. Keep the `.p8` file out of Git and the apps. If you send email to Apple private relay addresses, configure your sending domain/email sources in Apple’s private email relay settings.
+App Store guideline 5.1.1(v) requires apps with Sign in with Apple to revoke the person's Apple tokens when they delete their account. The API keeps Apple's refresh token, and the client ID it was issued to, with each Apple identity. Deleting the account, in either app or on the `/delete-account` web page, asks Apple to revoke it. A sign-in that ends without an account (for example, the email already belongs to another account) revokes the new token straight away. Revocation is best effort: if Apple cannot be reached, the account is still deleted and the failure is logged. Apple identities created before 1.0.30 have no stored token; the next Apple sign-in stores one.
 
-See [Apple’s cross-platform authorization flow](https://developer.apple.com/documentation/signinwithapple/incorporating-sign-in-with-apple-into-other-platforms) and [token validation](https://developer.apple.com/documentation/signinwithapplerestapi/generate-and-validate-tokens).
+The API generates a short-lived signed Apple client secret for each request, so there is no static six-month client secret to renew. Keep the `.p8` file out of Git and the apps. If you send email to Apple private relay addresses, configure your sending domain/email sources in Apple's private email relay settings.
+
+See [Apple's cross-platform authorization flow](https://developer.apple.com/documentation/signinwithapple/incorporating-sign-in-with-apple-into-other-platforms), [token validation](https://developer.apple.com/documentation/signinwithapplerestapi/generate-and-validate-tokens) and [revoking tokens](https://developer.apple.com/documentation/signinwithapplerestapi/revoke-tokens).
 
 ## Daily fish identification allowance
 

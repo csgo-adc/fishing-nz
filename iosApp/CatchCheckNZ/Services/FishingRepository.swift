@@ -7,12 +7,61 @@ import AuthenticationServices
 struct SignInProviders: Decodable {
     var google = false
     var apple = false
+    /// Sign in with Apple through the system sheet. Optional: services older than 1.0.30 do not send it.
+    var apple_native: Bool? = nil
     var connected: [String] = []
+
+    var appleNative: Bool { apple_native == true }
 }
 
 private struct SocialSignInStart: Decodable {
     let authorization_url: String
     let exchange_secret: String
+}
+
+private struct AppleSignInStart: Decodable {
+    let state: String
+    let nonce: String
+}
+
+/// The system Sign in with Apple sheet (Face ID or passcode, no web page).
+@MainActor
+final class AppleSignInSheet: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private var continuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>?
+
+    func authorize(nonce: String) async throws -> ASAuthorizationAppleIDCredential {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation?.resume(throwing: CancellationError())
+            self.continuation = continuation
+            let request = ASAuthorizationAppleIDProvider().createRequest()
+            request.requestedScopes = [.fullName, .email]
+            // The service's single-use nonce: Apple puts it in the identity token, which binds the token to this attempt.
+            request.nonce = nonce
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            controller.delegate = self
+            controller.presentationContextProvider = self
+            controller.performRequests()
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        if let credential = authorization.credential as? ASAuthorizationAppleIDCredential { finish(.success(credential)) }
+        else { finish(.failure(AccountAPIError(message: "Could not finish Apple sign-in. Please try again.", status: 400, code: nil))) }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        finish(.failure(error))
+    }
+
+    private func finish(_ result: Result<ASAuthorizationAppleIDCredential, Error>) {
+        continuation?.resume(with: result)
+        continuation = nil
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+    }
 }
 
 @MainActor
@@ -72,6 +121,28 @@ struct FishingRepository {
             throw AccountAPIError(message: "Could not start sign-in. Please try again.", status: 502, code: nil)
         }
         return (url, response.exchange_secret)
+    }
+
+    func startAppleSignIn(link: Bool) async throws -> (state: String, nonce: String) {
+        let response: AppleSignInStart = try await accountRequest("/v1/auth/apple/start", method: "POST",
+            body: ["link": link], token: KeychainSession.load())
+        return (response.state, response.nonce)
+    }
+
+    func completeAppleSignIn(state: String, credential: ASAuthorizationAppleIDCredential) async throws -> AccountSnapshot {
+        guard let identityToken = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
+              let authorizationCode = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }) else {
+            throw AccountAPIError(message: "Could not finish Apple sign-in. Please try again.", status: 400, code: nil)
+        }
+        var body: [String: Any] = ["state": state, "identity_token": identityToken, "authorization_code": authorizationCode]
+        // Apple shares the name on the first authorization only.
+        var name: [String: String] = [:]
+        if let given = credential.fullName?.givenName, !given.isEmpty { name["given"] = String(given.prefix(80)) }
+        if let family = credential.fullName?.familyName, !family.isEmpty { name["family"] = String(family.prefix(80)) }
+        if !name.isEmpty { body["name"] = name }
+        let response: AccountAuthResponse = try await accountRequest("/v1/auth/apple/native", method: "POST", body: body)
+        try KeychainSession.save(response.token)
+        return AccountSnapshot(user: response.user, permissions: response.permissions)
     }
 
     func completeSocialSignIn(code: String, secret: String) async throws -> AccountSnapshot {

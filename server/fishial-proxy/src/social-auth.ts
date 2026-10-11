@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT, type JWTPayload } from "jose";
+import { createRemoteJWKSet, decodeJwt, importPKCS8, jwtVerify, SignJWT, type JWTPayload } from "jose";
 import type { Account } from "./index";
 
 export interface SocialAuthEnv {
@@ -10,6 +10,8 @@ export interface SocialAuthEnv {
   APPLE_TEAM_ID?: string;
   APPLE_KEY_ID?: string;
   APPLE_PRIVATE_KEY?: string;
+  // The iPhone app's bundle identifier: the audience of tokens from the native Sign in with Apple sheet.
+  APPLE_BUNDLE_ID?: string;
 }
 
 type Provider = "google" | "apple";
@@ -36,10 +38,21 @@ const providers = {
   },
 };
 const accountColumns = "id, email, display_name, country_code, plan, created_at, email_verified, (password_hash != '') AS has_password";
+// Marks flows started by the iPhone's native Apple sheet; the browser callback never consumes them.
+const nativeAppleFlow = "native-apple";
+
+// The signing key is also what revokes Apple tokens when an account is deleted, so no Apple sign-in works without it.
+function appleKeyReady(env: SocialAuthEnv): boolean {
+  return Boolean(env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
+}
 
 function enabled(env: SocialAuthEnv, provider: Provider): boolean {
   return provider === "google" ? Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
-    : Boolean(env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
+    : Boolean(env.APPLE_CLIENT_ID && appleKeyReady(env));
+}
+
+function nativeAppleEnabled(env: SocialAuthEnv): boolean {
+  return Boolean(env.APPLE_BUNDLE_ID && appleKeyReady(env));
 }
 
 function json(body: object, status = 200): Response {
@@ -93,8 +106,10 @@ export async function handleSocialAuth(request: Request, env: SocialAuthEnv, hoo
     const auth = await hooks.authenticate(request, env);
     const connected = auth ? (await env.RULES_DB.prepare("SELECT provider FROM account_oauth_identities WHERE user_id = ?")
       .bind(auth.account.id).all<{ provider: Provider }>()).results.map((row) => row.provider) : [];
-    return json({ google: enabled(env, "google"), apple: enabled(env, "apple"), connected });
+    return json({ google: enabled(env, "google"), apple: enabled(env, "apple"), apple_native: nativeAppleEnabled(env), connected });
   }
+  if (path === "/v1/auth/apple/start" && request.method === "POST") return startNativeApple(request, env, hooks);
+  if (path === "/v1/auth/apple/native" && request.method === "POST") return finishNativeApple(request, env, hooks);
   if (path === "/v1/auth/oauth/start" && request.method === "POST") return start(request, env, hooks);
   if (path === "/v1/auth/oauth/exchange" && request.method === "POST") return exchange(request, env, hooks);
   const match = path.match(/^\/v1\/auth\/oauth\/(google|apple)\/callback$/);
@@ -136,17 +151,32 @@ async function start(request: Request, env: SocialAuthEnv, hooks: Hooks): Promis
   return json({ authorization_url: url.href, exchange_secret: secret });
 }
 
-async function appleClientSecret(env: SocialAuthEnv): Promise<string> {
+// clientId is the Services ID for the browser flow, or the bundle ID for the iPhone's native sheet.
+async function appleClientSecret(env: SocialAuthEnv, clientId: string): Promise<string> {
   const key = await importPKCS8(env.APPLE_PRIVATE_KEY!.replace(/\\n/g, "\n"), "ES256");
   return new SignJWT({}).setProtectedHeader({ alg: "ES256", kid: env.APPLE_KEY_ID! })
-    .setIssuer(env.APPLE_TEAM_ID!).setSubject(env.APPLE_CLIENT_ID!).setAudience("https://appleid.apple.com")
+    .setIssuer(env.APPLE_TEAM_ID!).setSubject(clientId).setAudience("https://appleid.apple.com")
     .setIssuedAt().setExpirationTime("5m").sign(key);
 }
 
-export async function verifyIdentityToken(token: string, provider: Provider, env: SocialAuthEnv, nonce: string): Promise<JWTPayload> {
+/** Ends the app's Apple authorization (App Store guideline 5.1.1(v)). Best effort: never blocks account deletion. */
+export async function revokeAppleToken(env: SocialAuthEnv, clientId: string, refreshToken: string): Promise<void> {
+  if (!appleKeyReady(env)) { console.error("Apple token not revoked: the Apple signing key is not configured"); return; }
+  try {
+    const response = await fetch("https://appleid.apple.com/auth/revoke", {
+      method: "POST", signal: AbortSignal.timeout(10_000),
+      body: new URLSearchParams({ client_id: clientId, client_secret: await appleClientSecret(env, clientId),
+        token: refreshToken, token_type_hint: "refresh_token" }),
+    });
+    if (!response.ok) console.error(`Apple token revocation failed (${response.status})`);
+  } catch { console.error("Apple token revocation failed"); }
+}
+
+export async function verifyIdentityToken(token: string, provider: Provider, env: SocialAuthEnv, nonce: string,
+  audience = provider === "google" ? env.GOOGLE_CLIENT_ID : env.APPLE_CLIENT_ID): Promise<JWTPayload> {
   const { payload } = await jwtVerify(token, providers[provider].keys, {
     issuer: providers[provider].issuer,
-    audience: provider === "google" ? env.GOOGLE_CLIENT_ID : env.APPLE_CLIENT_ID,
+    audience,
     algorithms: ["RS256"], requiredClaims: ["sub", "exp", "iat", "nonce"], clockTolerance: 5, maxTokenAge: "10m",
   });
   if (payload.nonce !== nonce || typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 255) throw new Error("Invalid identity.");
@@ -205,8 +235,8 @@ async function callback(request: Request, env: SocialAuthEnv, provider: Provider
   if (!/^[a-f0-9]{64}$/.test(state)) return json({ error: "This sign-in request is invalid or expired." }, 400);
   // Consume the state atomically, including cancelled requests, to prevent callback replay.
   const flow = await env.RULES_DB.prepare(`DELETE FROM account_oauth_flows
-    WHERE state_hash = ? AND provider = ? AND expires_at > ? RETURNING *`)
-    .bind(await hash(state), provider, new Date().toISOString()).first<Flow>();
+    WHERE state_hash = ? AND provider = ? AND return_uri != ? AND expires_at > ? RETURNING *`)
+    .bind(await hash(state), provider, nativeAppleFlow, new Date().toISOString()).first<Flow>();
   if (!flow) return json({ error: "This sign-in request is invalid or expired. Please start again." }, 400);
   if (params.has("error")) return returnToApp(flow, "oauth_error", "cancelled");
   const code = params.get("code");
@@ -215,14 +245,14 @@ async function callback(request: Request, env: SocialAuthEnv, provider: Provider
     const body = new URLSearchParams({
       grant_type: "authorization_code", code, redirect_uri: callbackUri(request, env, provider),
       client_id: provider === "google" ? env.GOOGLE_CLIENT_ID! : env.APPLE_CLIENT_ID!,
-      client_secret: provider === "google" ? env.GOOGLE_CLIENT_SECRET! : await appleClientSecret(env),
+      client_secret: provider === "google" ? env.GOOGLE_CLIENT_SECRET! : await appleClientSecret(env, env.APPLE_CLIENT_ID!),
     });
     if (provider === "google") body.set("code_verifier", flow.pkce_verifier);
     const response = await fetch(providers[provider].token, { method: "POST", body, signal: AbortSignal.timeout(10_000) });
-    const result = await response.json() as { id_token?: string };
+    const result = await response.json() as { id_token?: string; refresh_token?: string };
     if (!response.ok || typeof result.id_token !== "string") throw new Error("Provider rejected sign-in.");
     const claims = await verifyIdentityToken(result.id_token, provider, env, flow.nonce);
-    const userId = await resolveAccount(env, flow, claims, params.get("user"));
+    const userId = await resolveAccountKeepingAppleToken(env, flow, claims, params.get("user"), env.APPLE_CLIENT_ID!, result.refresh_token);
     const grant = randomSecret();
     await env.RULES_DB.prepare(`INSERT INTO account_oauth_grants (code_hash, exchange_secret_hash, user_id, linked, expires_at)
       VALUES (?, ?, ?, ?, ?)`)
@@ -243,10 +273,91 @@ async function exchange(request: Request, env: SocialAuthEnv, hooks: Hooks): Pro
     WHERE code_hash = ? AND exchange_secret_hash = ? AND expires_at > ? RETURNING user_id, linked`)
     .bind(await hash(body.code), await hash(body.exchange_secret), new Date().toISOString()).first<{ user_id: string; linked: number }>();
   if (!grant) return json({ error: "This sign-in request is invalid or expired. Please start again." }, 401);
+  return session(env, hooks, grant.user_id, grant.linked === 1);
+}
+
+async function session(env: SocialAuthEnv, hooks: Hooks, userId: string, linked: boolean): Promise<Response> {
   const account = await env.RULES_DB.prepare(`SELECT ${accountColumns} FROM account_users WHERE id = ? AND email_verified = 1`)
-    .bind(grant.user_id).first<Account>();
+    .bind(userId).first<Account>();
   if (!account) return json({ error: "Account is unavailable." }, 401);
   const response = await hooks.createSessionResponse(env, account, 200);
   const result = await response.json() as object;
-  return json({ ...result, linked: grant.linked === 1 });
+  return json({ ...result, linked });
+}
+
+/**
+ * resolveAccount for Apple, keeping the refresh token so account deletion can revoke it.
+ * A sign-in without one fails; when no account results, the new token is revoked straight away.
+ */
+async function resolveAccountKeepingAppleToken(env: SocialAuthEnv, flow: Flow, claims: JWTPayload, appleUser: string | null,
+  clientId: string, refreshToken: unknown): Promise<string> {
+  if (flow.provider !== "apple") return resolveAccount(env, flow, claims, appleUser);
+  if (typeof refreshToken !== "string" || !refreshToken || refreshToken.length > 4096) throw new Error("Apple sent no refresh token.");
+  try {
+    const userId = await resolveAccount(env, flow, claims, appleUser);
+    await env.RULES_DB.prepare(`UPDATE account_oauth_identities SET refresh_token = ?, token_client_id = ?
+      WHERE provider = 'apple' AND subject = ?`).bind(refreshToken, clientId, claims.sub!).run();
+    return userId;
+  } catch (error) {
+    await revokeAppleToken(env, clientId, refreshToken);
+    throw error;
+  }
+}
+
+/** Step 1 of the iPhone's native Sign in with Apple: a single-use nonce for the Apple sheet. */
+async function startNativeApple(request: Request, env: SocialAuthEnv, hooks: Hooks): Promise<Response> {
+  const body = await readBody(request);
+  if (!body) return json({ error: "Send a JSON object." }, 400);
+  if (!nativeAppleEnabled(env)) return json({ error: "Apple sign-in is not available yet.", code: "provider_unavailable" }, 503);
+  const auth = body.link === true ? await hooks.authenticate(request, env) : null;
+  if (body.link === true && !auth) return json({ error: "Sign in before connecting another account." }, 401);
+  const state = randomSecret(), nonce = randomSecret();
+  const now = new Date().toISOString();
+  await env.RULES_DB.batch([
+    env.RULES_DB.prepare("DELETE FROM account_oauth_flows WHERE expires_at <= ?").bind(now),
+    env.RULES_DB.prepare(`INSERT INTO account_oauth_flows
+      (state_hash, provider, nonce, pkce_verifier, exchange_secret_hash, return_uri, link_user_id, expires_at)
+      VALUES (?, 'apple', ?, '', '', ?, ?, ?)`)
+      .bind(await hash(state), nonce, nativeAppleFlow, auth?.account.id || null, new Date(Date.now() + 600_000).toISOString()),
+  ]);
+  return json({ state, nonce });
+}
+
+/** Step 2: the sheet's identity token (bound to the nonce) and authorization code become a session. */
+async function finishNativeApple(request: Request, env: SocialAuthEnv, hooks: Hooks): Promise<Response> {
+  const body = await readBody(request);
+  const name = body?.name && typeof body.name === "object" ? body.name as Record<string, unknown> : {};
+  if (!body || typeof body.state !== "string" || !/^[a-f0-9]{64}$/.test(body.state)
+    || typeof body.identity_token !== "string" || body.identity_token.length > 8192
+    || typeof body.authorization_code !== "string" || !body.authorization_code || body.authorization_code.length > 4096
+    || [name.given, name.family].some((part) => part !== undefined && (typeof part !== "string" || part.length > 80))) {
+    return json({ error: "This sign-in request is invalid. Please start again." }, 400);
+  }
+  if (!nativeAppleEnabled(env)) return json({ error: "Apple sign-in is not available yet.", code: "provider_unavailable" }, 503);
+  // Consume the nonce first, so a token can be presented once.
+  const flow = await env.RULES_DB.prepare(`DELETE FROM account_oauth_flows
+    WHERE state_hash = ? AND provider = 'apple' AND return_uri = ? AND expires_at > ? RETURNING *`)
+    .bind(await hash(body.state), nativeAppleFlow, new Date().toISOString()).first<Flow>();
+  if (!flow) return json({ error: "This sign-in request is invalid or expired. Please start again." }, 400);
+  const bundleId = env.APPLE_BUNDLE_ID!;
+  try {
+    const claims = await verifyIdentityToken(body.identity_token, "apple", env, flow.nonce, bundleId);
+    const response = await fetch(providers.apple.token, {
+      method: "POST", signal: AbortSignal.timeout(10_000),
+      body: new URLSearchParams({ grant_type: "authorization_code", code: body.authorization_code,
+        client_id: bundleId, client_secret: await appleClientSecret(env, bundleId) }),
+    });
+    const result = await response.json() as { id_token?: string; refresh_token?: string };
+    if (!response.ok || typeof result.id_token !== "string" || decodeJwt(result.id_token).sub !== claims.sub) {
+      throw new Error("Apple rejected the authorization code.");
+    }
+    // Apple gives the name to the app, on the first authorization only.
+    const appleUser = JSON.stringify({ name: { firstName: name.given, lastName: name.family } });
+    const userId = await resolveAccountKeepingAppleToken(env, flow, claims, appleUser, bundleId, result.refresh_token);
+    return session(env, hooks, userId, Boolean(flow.link_user_id));
+  } catch (error) {
+    return error instanceof AccountConflict
+      ? json({ error: "This account already exists or is connected elsewhere. Sign in with your usual method, then connect Apple from your profile.", code: "account_exists" }, 409)
+      : json({ error: "Could not finish Apple sign-in. Please try again.", code: "failed" }, 400);
+  }
 }

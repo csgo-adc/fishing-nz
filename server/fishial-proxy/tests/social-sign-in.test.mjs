@@ -18,9 +18,17 @@ test("Google and Apple sign-in with signed provider tokens and real D1", { timeo
     AUTH_BASE_URL: "https://fishing.test",
     GOOGLE_CLIENT_ID: "test-google-client", GOOGLE_CLIENT_SECRET: "test-google-secret",
     APPLE_CLIENT_ID: "nz.fishingnz.web", APPLE_TEAM_ID: "TESTTEAM01", APPLE_KEY_ID: "TESTKEY001",
-    APPLE_PRIVATE_KEY: await exportPKCS8(appleKey.privateKey),
+    APPLE_PRIVATE_KEY: await exportPKCS8(appleKey.privateKey), APPLE_BUNDLE_ID: "nz.fishingnz.catchcheck",
   };
   let tokenExchanges = 0;
+  const revoked = [];
+  async function appleSecretFor(clientSecret) {
+    const secret = await jwtVerify(clientSecret, appleKey.publicKey, {
+      issuer: bindings.APPLE_TEAM_ID, audience: "https://appleid.apple.com", algorithms: ["ES256"],
+    });
+    assert.equal(secret.protectedHeader.kid, bindings.APPLE_KEY_ID);
+    return secret.payload.sub;
+  }
   const mf = new Miniflare({
     modules: true, script: await bundleWorker(), compatibilityDate: "2024-09-23",
     d1Databases: { RULES_DB: "social-sign-in-tests" }, bindings,
@@ -28,23 +36,31 @@ test("Google and Apple sign-in with signed provider tokens and real D1", { timeo
       const url = new URL(request.url);
       if (url.pathname === "/oauth2/v3/certs" || url.pathname === "/auth/keys") return Response.json({ keys: [jwk] });
       assert.ok(["oauth2.googleapis.com", "appleid.apple.com"].includes(url.hostname));
-      tokenExchanges++;
       const body = new URLSearchParams(await request.text());
+      if (url.pathname === "/auth/revoke") {
+        assert.equal(body.get("token_type_hint"), "refresh_token");
+        assert.equal(await appleSecretFor(body.get("client_secret")), body.get("client_id"));
+        revoked.push({ client_id: body.get("client_id"), token: body.get("token") });
+        return new Response(null, { status: 200 });
+      }
+      tokenExchanges++;
       const entry = codes.get(body.get("code"));
       if (!entry) return Response.json({ error: "invalid_grant" }, { status: 400 });
       assert.equal(body.get("grant_type"), "authorization_code");
-      assert.equal(body.get("redirect_uri"), `https://fishing.test/v1/auth/oauth/${entry.provider}/callback`);
+      if (entry.native) {
+        assert.equal(body.has("redirect_uri"), false, "the native sheet's code has no redirect URI");
+        assert.equal(await appleSecretFor(body.get("client_secret")), bindings.APPLE_BUNDLE_ID);
+        assert.equal(body.get("client_id"), bindings.APPLE_BUNDLE_ID);
+      } else {
+        assert.equal(body.get("redirect_uri"), `https://fishing.test/v1/auth/oauth/${entry.provider}/callback`);
+      }
       if (entry.provider === "google") {
         assert.equal(body.get("client_secret"), bindings.GOOGLE_CLIENT_SECRET);
         assert.equal(createHash("sha256").update(body.get("code_verifier")).digest("base64url"), entry.challenge);
-      } else {
-        const secret = await jwtVerify(body.get("client_secret"), appleKey.publicKey, {
-          issuer: bindings.APPLE_TEAM_ID, audience: "https://appleid.apple.com", algorithms: ["ES256"],
-        });
-        assert.equal(secret.payload.sub, bindings.APPLE_CLIENT_ID);
-        assert.equal(secret.protectedHeader.kid, bindings.APPLE_KEY_ID);
+      } else if (!entry.native) {
+        assert.equal(await appleSecretFor(body.get("client_secret")), bindings.APPLE_CLIENT_ID);
       }
-      return Response.json({ id_token: entry.token });
+      return Response.json({ id_token: entry.token, ...(entry.provider === "apple" ? { refresh_token: `refresh-${body.get("code")}` } : {}) });
     },
   });
   try {
@@ -54,9 +70,9 @@ test("Google and Apple sign-in with signed provider tokens and real D1", { timeo
       const sql = readFileSync(new URL(file, migrations), "utf8");
       for (const statement of sql.split(";").filter((value) => value.trim())) await db.prepare(statement).run();
     }
-    async function call(path, body, token) {
+    async function call(path, body, token, method = body ? "POST" : "GET") {
       const response = await mf.dispatchFetch(`https://fishing.test${path}`, {
-        method: body ? "POST" : "GET", redirect: "manual",
+        method, redirect: "manual",
         headers: { ...(body ? { "content-type": "application/json" } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -102,7 +118,7 @@ test("Google and Apple sign-in with signed provider tokens and real D1", { timeo
     }
     let googleSession;
     await t.test("rejects unexpected return URLs and requires authentication for linking", async () => {
-      assert.deepEqual((await call("/v1/auth/providers")).data, { google: true, apple: true, connected: [] });
+      assert.deepEqual((await call("/v1/auth/providers")).data, { google: true, apple: true, apple_native: true, connected: [] });
       for (const return_uri of ["https://evil.example/account", "https://cms.test/account", "http://localhost:3000/account", "nz.fishingnz.app://auth/callback?next=evil", "nz.fishingnz.app://evil/callback"]) {
         assert.equal((await call("/v1/auth/oauth/start", { provider: "google", return_uri })).response.status, 400);
       }
@@ -178,6 +194,56 @@ test("Google and Apple sign-in with signed provider tokens and real D1", { timeo
       const code = new URL(grantResponse.headers.get("location")).searchParams.get("oauth_code");
       await db.prepare("UPDATE account_oauth_grants SET expires_at = '2000-01-01' WHERE code_hash = ?").bind(hash(code)).run();
       assert.equal((await call("/v1/auth/oauth/exchange", { code, exchange_secret: grantFlow.secret })).response.status, 401);
+    });
+    async function nativeApple(overrides = {}, { name, token, link = false, audience = bindings.APPLE_BUNDLE_ID } = {}) {
+      const begun = await call("/v1/auth/apple/start", { link }, token);
+      assert.equal(begun.response.status, 200);
+      assert.match(begun.data.state, /^[a-f0-9]{64}$/);
+      const claims = { sub: "native-apple-person", email: "native@privaterelay.appleid.com", email_verified: "true", nonce: begun.data.nonce, ...overrides };
+      const sign = (aud) => new SignJWT(claims).setProtectedHeader({ alg: "RS256", kid: "provider-key" })
+        .setIssuer("https://appleid.apple.com").setAudience(aud).setIssuedAt().setExpirationTime("5m").sign(rsa.privateKey);
+      const code = crypto.randomUUID();
+      codes.set(code, { token: await sign(bindings.APPLE_BUNDLE_ID), provider: "apple", native: true });
+      const body = { state: begun.data.state, identity_token: await sign(audience), authorization_code: code, ...(name ? { name } : {}) };
+      return { ...await call("/v1/auth/apple/native", body, token), body, code };
+    }
+    let nativeSession;
+    await t.test("signs in with the iPhone's native Apple sheet and keeps the token for revocation", async () => {
+      const first = await nativeApple({}, { name: { given: "Native", family: "Angler" } });
+      assert.equal(first.response.status, 200, JSON.stringify(first.data));
+      nativeSession = first.data;
+      assert.equal(nativeSession.user.email, "native@privaterelay.appleid.com");
+      assert.equal(nativeSession.user.display_name, "Native Angler");
+      assert.equal(nativeSession.linked, false);
+      assert.equal((await call("/v1/auth/apple/native", first.body)).response.status, 400, "a nonce is single use");
+      const stored = await db.prepare("SELECT refresh_token, token_client_id FROM account_oauth_identities WHERE subject = 'native-apple-person'").first();
+      assert.deepEqual({ ...stored }, { refresh_token: `refresh-${first.code}`, token_client_id: bindings.APPLE_BUNDLE_ID });
+      const returning = await nativeApple({ email: undefined, email_verified: undefined });
+      assert.equal(returning.data.user.id, nativeSession.user.id);
+      assert.equal(returning.data.user.display_name, "Native Angler", "Apple sends the name only the first time");
+      assert.deepEqual((await call("/v1/auth/providers", undefined, returning.data.token)).data.connected, ["apple"]);
+    });
+    await t.test("rejects native Apple tokens with the wrong nonce or audience, and linking without a session", async () => {
+      assert.equal((await nativeApple({ nonce: "f".repeat(64) })).response.status, 400);
+      assert.equal((await nativeApple({}, { audience: bindings.APPLE_CLIENT_ID })).response.status, 400);
+      assert.equal((await call("/v1/auth/apple/start", { link: true })).response.status, 401);
+      const invalid = await call("/v1/auth/apple/native", { state: "a".repeat(64), identity_token: "x", authorization_code: "y" });
+      assert.equal(invalid.response.status, 400);
+    });
+    await t.test("revokes Apple's token when a native sign-in finds an existing email account", async () => {
+      const before = revoked.length;
+      const conflict = await nativeApple({ sub: "another-native-person", email: googleSession.user.email });
+      assert.equal(conflict.response.status, 409);
+      assert.equal(conflict.data.code, "account_exists");
+      assert.deepEqual(revoked.slice(before), [{ client_id: bindings.APPLE_BUNDLE_ID, token: `refresh-${conflict.code}` }]);
+    });
+    await t.test("deleting an Apple account revokes its Apple token", async () => {
+      const stored = await db.prepare("SELECT refresh_token FROM account_oauth_identities WHERE subject = 'native-apple-person'").first();
+      const before = revoked.length;
+      const deleted = await call("/v1/me", { confirm: true }, nativeSession.token, "DELETE");
+      assert.equal(deleted.response.status, 200);
+      assert.deepEqual(revoked.slice(before), [{ client_id: bindings.APPLE_BUNDLE_ID, token: stored.refresh_token }]);
+      assert.equal(await db.prepare("SELECT 1 FROM account_oauth_identities WHERE subject = 'native-apple-person'").first(), null);
     });
     await t.test("requires explicit linking instead of claiming an existing email account", async () => {
       const conflict = await callback(await start(), { sub: "second-google-person", email: googleSession.user.email });

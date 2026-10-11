@@ -540,7 +540,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (shareResponse) return shareResponse;
     const passwordResponse = await handlePasswordRoute(request, env);
     if (passwordResponse) return passwordResponse;
-    if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/")) {
+    if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/") || pathname.startsWith("/v1/auth/apple/")) {
       return await handleSocialAuth(request, env, { authenticate, createSessionResponse });
     }
     if (pathname === "/v1/rules/status" && request.method === "GET") return await getCrawlStatus(env);

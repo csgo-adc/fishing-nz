@@ -87,7 +87,7 @@ migrations_dir = "migrations"
     const password = "Eight123";
     assert.equal((await call("/v1/auth/register", "POST", { email, password: "short12" })).status, 400);
     assert.equal((await call("/v1/auth/register", "POST", { email, password: "x".repeat(129) })).status, 400);
-    assert.deepEqual((await call("/v1/auth/providers")).data, { google: false, apple: false, connected: [] });
+    assert.deepEqual((await call("/v1/auth/providers")).data, { google: false, apple: false, apple_native: false, connected: [] });
     assert.equal((await call("/v1/auth/oauth/start", "POST", { provider: "google", return_uri: "nz.fishingnz.app://auth/callback" })).status, 503);
     assert.equal((await call("/v1/auth/oauth/start", "POST", { provider: "apple", return_uri: "https://evil.example/account" })).status, 400);
     const registration = await call("/v1/auth/register", "POST", { email, password, display_name: "Workflow Tester" });

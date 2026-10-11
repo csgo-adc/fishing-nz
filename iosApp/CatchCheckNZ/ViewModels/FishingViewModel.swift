@@ -139,6 +139,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     private let repository = FishingRepository()
     private let socialSignInBrowser = SocialSignInBrowser()
+    private let appleSignInSheet = AppleSignInSheet()
     private let scoringService = FishingScoringService()
     private let locationManager = CLLocationManager()
     private var pendingFishPhoto: UIImage?
@@ -790,23 +791,14 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         accountBusy = true; accountError = nil; accountNotice = nil
         defer { if version == accountRequestVersion { accountBusy = false } }
         do {
-            let flow = try await repository.startSocialSignIn(provider: provider, link: linking)
-            let callback = try await socialSignInBrowser.authenticate(url: flow.url)
-            guard callback.scheme == "nz.fishingnz.catchcheck", callback.host == "auth", callback.path == "/callback",
-                  let components = URLComponents(url: callback, resolvingAgainstBaseURL: false) else {
-                throw AccountAPIError(message: "Invalid sign-in response. Please try again.", status: 400, code: nil)
+            let snapshot: AccountSnapshot
+            if provider == "apple" && signInProviders.appleNative {
+                let flow = try await repository.startAppleSignIn(link: linking)
+                let credential = try await appleSignInSheet.authorize(nonce: flow.nonce)
+                snapshot = try await repository.completeAppleSignIn(state: flow.state, credential: credential)
+            } else {
+                snapshot = try await browserSignIn(provider: provider, linking: linking)
             }
-            let items = components.queryItems ?? []
-            if let error = items.first(where: { $0.name == "oauth_error" })?.value {
-                let message = error == "cancelled" ? "Sign-in was cancelled. You can try again." : error == "account_exists"
-                    ? "This account already exists or is connected elsewhere. Sign in with your usual method, then connect Google or Apple from your profile."
-                    : "Could not finish sign-in. Please try again."
-                throw AccountAPIError(message: message, status: 400, code: nil)
-            }
-            guard let code = items.first(where: { $0.name == "oauth_code" })?.value else {
-                throw AccountAPIError(message: "Could not finish sign-in. Please try again.", status: 400, code: nil)
-            }
-            let snapshot = try await repository.completeSocialSignIn(code: code, secret: flow.secret)
             guard version == accountRequestVersion else { return }
             Analytics.track("sign_in_succeeded", ["method": .text("social")])
             account = snapshot.user; fishIdentityQuota = snapshot.permissions?.fishIdentityQuota; hasStoredSession = true; verificationPending = false
@@ -814,10 +806,33 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             await refreshSignInProviders()
         } catch {
             guard version == accountRequestVersion else { return }
-            if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+            if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin || (error as? ASAuthorizationError)?.code == .canceled {
                 accountNotice = "Sign-in was cancelled. You can try again."
+            } else if error is ASAuthorizationError {
+                accountError = "Could not finish Apple sign-in. Please try again."
             } else { accountError = error.localizedDescription }
         }
+    }
+
+    /// Google, or Apple on a service without the native flow: the system browser and the service's callback.
+    private func browserSignIn(provider: String, linking: Bool) async throws -> AccountSnapshot {
+        let flow = try await repository.startSocialSignIn(provider: provider, link: linking)
+        let callback = try await socialSignInBrowser.authenticate(url: flow.url)
+        guard callback.scheme == "nz.fishingnz.catchcheck", callback.host == "auth", callback.path == "/callback",
+              let components = URLComponents(url: callback, resolvingAgainstBaseURL: false) else {
+            throw AccountAPIError(message: "Invalid sign-in response. Please try again.", status: 400, code: nil)
+        }
+        let items = components.queryItems ?? []
+        if let error = items.first(where: { $0.name == "oauth_error" })?.value {
+            let message = error == "cancelled" ? "Sign-in was cancelled. You can try again." : error == "account_exists"
+                ? "This account already exists or is connected elsewhere. Sign in with your usual method, then connect Google or Apple from your profile."
+                : "Could not finish sign-in. Please try again."
+            throw AccountAPIError(message: message, status: 400, code: nil)
+        }
+        guard let code = items.first(where: { $0.name == "oauth_code" })?.value else {
+            throw AccountAPIError(message: "Could not finish sign-in. Please try again.", status: 400, code: nil)
+        }
+        return try await repository.completeSocialSignIn(code: code, secret: flow.secret)
     }
     func saveAccountProfile(displayName: String, countryCode: String) {
         accountBusy = true; accountError = nil; accountNotice = nil

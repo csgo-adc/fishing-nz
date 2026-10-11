@@ -2,6 +2,7 @@ import SwiftUI
 import MapKit
 import PhotosUI
 import UIKit
+import AuthenticationServices
 
 enum CatchCheckColor {
     private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
@@ -1104,8 +1105,8 @@ struct AccountView: View {
 
     /// App Review guideline 4.8: Google sign-in may only be offered together with Sign in with Apple.
     private var offeredSignInProviders: [String] {
-        guard vm.signInProviders.apple else { return [] }
-        return vm.signInProviders.google ? ["google", "apple"] : ["apple"]
+        guard vm.signInProviders.apple || vm.signInProviders.appleNative else { return [] }
+        return vm.signInProviders.google ? ["apple", "google"] : ["apple"]
     }
 
     private var socialSignInButtons: some View {
@@ -1113,15 +1114,21 @@ struct AccountView: View {
             ForEach(offeredSignInProviders, id: \.self) { provider in
                 let name = provider == "google" ? "Google" : "Apple"
                 let connected = vm.account != nil && vm.signInProviders.connected.contains(provider)
-                Button {
-                    Task { await vm.signInWithProvider(provider) }
-                } label: {
-                    HStack(spacing: 10) {
-                        if provider == "apple" { Image(systemName: "apple.logo") }
-                        Text(connected ? "\(name) connected" : vm.account == nil ? "Continue with \(name)" : "Connect \(name)")
-                    }.frame(maxWidth: .infinity).padding(.vertical, 6)
+                if provider == "apple" && !connected {
+                    AppleIDButton { Task { await vm.signInWithProvider("apple") } }
+                        .frame(height: 48).disabled(vm.accountBusy)
+                        .accessibilityLabel(vm.account == nil ? "Continue with Apple" : "Connect Apple")
+                } else {
+                    Button {
+                        Task { await vm.signInWithProvider(provider) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            if provider == "apple" { Image(systemName: "apple.logo") }
+                            Text(connected ? "\(name) connected" : vm.account == nil ? "Continue with \(name)" : "Connect \(name)")
+                        }.frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.bordered).disabled(vm.accountBusy || connected)
                 }
-                .buttonStyle(.bordered).disabled(vm.accountBusy || connected)
             }
         }
     }
@@ -1140,6 +1147,43 @@ struct AccountView: View {
         .padding(18)
         .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(CatchCheckColor.outline, lineWidth: 1))
+    }
+}
+
+/// Apple's own Sign in with Apple button, as its Human Interface Guidelines require. A tap runs the app's flow.
+private struct AppleIDButton: View {
+    let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        // The button's style is fixed when it is made, so a new one follows a light/dark change.
+        Representable(style: colorScheme == .dark ? .white : .black, action: action).id(colorScheme)
+    }
+
+    private struct Representable: UIViewRepresentable {
+        let style: ASAuthorizationAppleIDButton.Style
+        let action: () -> Void
+
+        func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+        func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
+            let button = ASAuthorizationAppleIDButton(authorizationButtonType: .continue, authorizationButtonStyle: style)
+            button.cornerRadius = 12
+            button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
+            return button
+        }
+
+        func updateUIView(_ button: ASAuthorizationAppleIDButton, context: Context) {
+            context.coordinator.action = action
+            button.isEnabled = context.environment.isEnabled
+            button.alpha = context.environment.isEnabled ? 1 : 0.5
+        }
+
+        final class Coordinator: NSObject {
+            var action: () -> Void
+            init(action: @escaping () -> Void) { self.action = action }
+            @objc func tapped() { action() }
+        }
     }
 }
 
