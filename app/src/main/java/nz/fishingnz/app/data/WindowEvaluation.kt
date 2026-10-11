@@ -265,12 +265,26 @@ internal fun landTradeoff(selected: Recommendation, pool: List<Recommendation>):
     return drier?.let { "Drier alternative" to it }
 }
 
-internal class WindowSelection(private val onePerDay: Boolean) {
+/** The best window on each selected day, so a multi-day plan shows every day that has one. */
+internal class WindowSelection {
     private val bestByDay = mutableMapOf<LocalDate, Recommendation>()
     fun consider(startDay: LocalDate, candidate: Recommendation) {
-        val key = if (onePerDay) startDay else LocalDate.MIN
-        val current = bestByDay[key]
-        if (current == null || windowOrder.compare(candidate, current) < 0) bestByDay[key] = candidate
+        val current = bestByDay[startDay]
+        if (current == null || windowOrder.compare(candidate, current) < 0) bestByDay[startDay] = candidate
     }
     fun windows(): List<Recommendation> = bestByDay.values.sortedBy { it.startsAtEpochSeconds }
+}
+
+/** The most windows a radius search lists on one day: the best few spots, not every nearby spot. */
+internal const val WINDOWS_PER_DAY = 3
+
+/** Keeps the first [WINDOWS_PER_DAY] windows of each day from a list already in planning order. */
+internal fun limitPerDay(ranked: List<Recommendation>): List<Recommendation> {
+    val shown = mutableMapOf<LocalDate, Int>()
+    return ranked.filter {
+        val day = Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(WindowEvaluation.zone).toLocalDate()
+        val count = (shown[day] ?: 0) + 1
+        shown[day] = count
+        count <= WINDOWS_PER_DAY
+    }
 }

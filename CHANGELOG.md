@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.29 — 2026-10-11 (build code 30)
+
+- **A multi-day plan now lists a window for each day.** Before, a search kept only one window per
+  spot for the whole date range, so "Next 7 days" near Hamilton showed just two cards (Manu Bay
+  Coast and Raglan, both Monday 10 AM). Each spot now offers its best window on every selected
+  day, and the list keeps the best three spots on each day, best first. The same search now shows
+  ten windows from Monday to Saturday. Android and iPhone.
+- When two windows are equally good, the nearer spot is listed first on iPhone too, as on Android.
+
 ## 1.0.28 — 2026-10-11 (build code 29)
 
 Fixes found while recording Apple's physical-iPhone review video of 1.0.27.

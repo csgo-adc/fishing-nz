@@ -124,6 +124,17 @@ import Foundation
         try expect(later?.conditions.contains(where: { $0.contains("1:23") }) == true, "Explanation must use LINZ high")
         try expect(early?.alternative != nil, "Real tide alternative should be offered")
         try expect(later?.alternative != nil, "Real weather alternative should be offered")
+        let nearby = Candidate(spot: spot, distanceKm: 12, isTideStation: false, tideStation: station)
+        let twoDays = FishingScoringService.bestWindows(for: nearby, weather: weather, marine: marine, tides: tides,
+            days: [at(29, 0), at(30, 0)], now: at(27, 0), calendar: calendar, preferredHours: nil, priority: .weather).windows
+        try expect(twoDays.map { calendar.startOfDay(for: $0.start) } == [at(29, 0), at(30, 0)], "A radius search must keep the best window on each selected day")
+        func ranked(_ name: String, _ day: Int, _ hour: Int) -> ScoredFishingWindow {
+            ScoredFishingWindow(id: name, spotName: name, area: "Waikato", boat: false, score: 80, start: at(day, hour),
+                                end: at(day, hour + 2), distanceKm: 1, reasons: [], warnings: [])
+        }
+        let perDay = FishingScoringService.limitPerDay([ranked("A", 29, 8), ranked("B", 29, 8), ranked("C", 29, 9), ranked("D", 29, 8),
+                                                       ranked("A", 30, 10), ranked("E", 29, 17)], calendar: calendar)
+        try expect(perDay.map(\.spotName) == ["A", "B", "C", "A"], "Radius results keep the best three spots on each day, in order")
         let noTides = FishingScoringService.bestWindows(for: candidate, weather: weather, marine: marine, tides: [], days: [at(30, 0)], now: at(27, 0), calendar: calendar, preferredHours: nil, priority: .lateIncoming)
         try expect(noTides.windows.isEmpty, "Cannot fabricate late incoming without LINZ")
         var badUnits = try JSONSerialization.jsonObject(with: Data(contentsOf: fixture.appendingPathComponent("weather.json"))) as! [String: Any]

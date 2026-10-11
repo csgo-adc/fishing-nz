@@ -35,6 +35,8 @@ Candidates keep the two-hour fishing session, but evaluate known arrival/return 
 
 Selection first prefers complete weather/temperature assessments, then those meeting the chosen comfort limit, then more daylight, a lower worst band, fewer demanding hours, fewer hours with any discomfort, the chosen casting/rain tie-break, and an earlier start. Exposure duration is a union of hourly discomfort, not a sum that counts several factors twice. Anytime permits darkness, with daylight still preferred within the allowed candidates. Known setup/return time is included in daylight; unknown time is not treated as a verified daylight return.
 
+**Result list (since 1.0.29).** Each spot offers its best window on every selected day, not one window for the whole date range, so a seven-day plan shows each day that has a window. A radius search lists the best three spots on each day at most, ranked across days by the order above; when two windows tie, the nearer spot comes first. A selected tide location lists its best window per day in date order.
+
 The same-day tide/comfort alternative is retained. In balanced mode, when that alternative is not distinct, a real calmer-but-wetter or drier-but-gustier peer may be shown. These peers must meet the comfort limit, have no worse band and at least as much daylight, and use the same fetched data and allowed hours.
 
 Tide/wave coverage does not override land weather comfort. It remains part of the independent checks and confidence explanation. Broad exclusions remain wind ≥55 km/h, gust ≥70 km/h, offshore significant wave height ≥3 m, or a known thunderstorm code 95–99, including known arrival/return conditions. Passing these exclusions does not establish safe local access.

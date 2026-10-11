@@ -279,11 +279,12 @@ struct FishingScoringService: Sendable {
         if selectedStation != nil {
             sorted = windows.sorted { $0.start < $1.start }
         } else {
-            sorted = windows.sorted {
+            sorted = Self.limitPerDay(windows.sorted {
                 if Self.isBetter($0, than: $1) { return true }
                 if Self.isBetter($1, than: $0) { return false }
+                if $0.distanceKm != $1.distanceKm { return $0.distanceKm < $1.distanceKm }
                 return $0.spotName.localizedStandardCompare($1.spotName) == .orderedAscending
-            }
+            }, calendar: calendar)
         }
         return FishingWindowSearch(windows: sorted, failedSpots: byDistance(failed),
                                    spotsWithoutWindows: selectedStation == nil ? byDistance(withoutWindows) : [])
@@ -369,8 +370,21 @@ struct FishingScoringService: Sendable {
             }
             return selected
         }
-        if candidate.isTideStation { return (best, hasUsableWeather) }
-        return (best.sorted(by: { isBetter($0, than: $1) }).first.map { [$0] } ?? [], hasUsableWeather)
+        // The best window on each selected day, so a multi-day plan shows every day that has one.
+        return (best.sorted { $0.start < $1.start }, hasUsableWeather)
+    }
+
+    /// The most windows a radius search lists on one day: the best few spots, not every nearby spot.
+    static let windowsPerDay = 3
+
+    /// Keeps the first `windowsPerDay` windows of each day from a list already in planning order.
+    static func limitPerDay(_ ranked: [ScoredFishingWindow], calendar: Calendar) -> [ScoredFishingWindow] {
+        var shown: [Date: Int] = [:]
+        return ranked.filter { window in
+            let day = calendar.startOfDay(for: window.start)
+            shown[day, default: 0] += 1
+            return shown[day]! <= windowsPerDay
+        }
     }
 
     static func isBetter(_ candidate: ScoredFishingWindow, than current: ScoredFishingWindow) -> Bool {

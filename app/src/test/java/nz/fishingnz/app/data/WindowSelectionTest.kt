@@ -10,8 +10,8 @@ class WindowSelectionTest {
     private val zone = ZoneId.of("Pacific/Auckland")
     private val firstDay = LocalDate.of(2026, 9, 26)
 
-    @Test fun stationSearchKeepsOneBestWindowForEveryDayInDateOrder() {
-        val selection = WindowSelection(onePerDay = true)
+    @Test fun keepsOneBestWindowForEveryDayInDateOrder() {
+        val selection = WindowSelection()
         val lastDay = firstDay.plusDays(6)
         selection.consider(lastDay, recommendation(lastDay, 17, rating = 90))
         (0L..5L).forEach { offset ->
@@ -29,7 +29,7 @@ class WindowSelectionTest {
     }
 
     @Test fun equalConditionsPreferEarlierWindowWithoutDurationBonus() {
-        val selection = WindowSelection(onePerDay = true)
+        val selection = WindowSelection()
         selection.consider(firstDay, recommendation(firstDay, 17, rating = 80, duration = 2))
         selection.consider(firstDay, recommendation(firstDay, 19, rating = 80, duration = 3))
         selection.consider(firstDay, recommendation(firstDay, 7, rating = 80, duration = 2))
@@ -37,16 +37,29 @@ class WindowSelectionTest {
         assertEquals(recommendation(firstDay, 7, rating = 80, duration = 2), selection.windows().single())
     }
 
-    @Test fun radiusSearchStillKeepsOneBestWindowAcrossDays() {
-        val selection = WindowSelection(onePerDay = false)
+    @Test fun aSevenDayPlanKeepsAWindowOnEachDay() {
+        val selection = WindowSelection()
         selection.consider(firstDay, recommendation(firstDay, 8, rating = 70))
         selection.consider(firstDay.plusDays(1), recommendation(firstDay.plusDays(1), 8, rating = 85))
 
-        assertEquals(listOf(85), selection.windows().map { it.rating })
+        assertEquals(listOf(70, 85), selection.windows().map { it.rating })
     }
 
-    private fun recommendation(day: LocalDate, hour: Int, rating: Int, duration: Int = 2) = Recommendation(
-        name = "Raglan",
+    @Test fun radiusResultsKeepTheBestThreeSpotsOnEachDayInOrder() {
+        val nextDay = firstDay.plusDays(1)
+        val ranked = listOf("A", "B", "C", "D").map { recommendation(firstDay, 8, rating = 80, name = it) } +
+            listOf("A", "B").map { recommendation(nextDay, 10, rating = 70, name = it) } +
+            recommendation(firstDay, 17, rating = 60, name = "E")
+
+        val shown = limitPerDay(ranked)
+        assertEquals(listOf("A", "B", "C", "A", "B"), shown.map { it.name })
+        assertEquals(listOf(firstDay, firstDay, firstDay, nextDay, nextDay), shown.map {
+            java.time.Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(zone).toLocalDate()
+        })
+    }
+
+    private fun recommendation(day: LocalDate, hour: Int, rating: Int, duration: Int = 2, name: String = "Raglan") = Recommendation(
+        name = name,
         area = "Waikato",
         rating = rating,
         time = "",

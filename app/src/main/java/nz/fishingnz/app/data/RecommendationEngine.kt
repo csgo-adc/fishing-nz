@@ -67,7 +67,7 @@ class RecommendationEngine {
                 if (specificStation == null) it else it.copy(distance = "Selected tide location · access not verified")
             }.let {
                 if (specificStation != null) it.sortedBy { item -> item.startsAtEpochSeconds }
-                else it.sortedWith(windowOrder.thenBy { item -> item.distanceKm }.thenBy { item -> item.name })
+                else limitPerDay(it.sortedWith(windowOrder.thenBy { item -> item.distanceKm }.thenBy { item -> item.name }))
             }, nearby.size, outcomes.count { it.isFailure }, spotsWithoutWindows = spotsWithoutWindows
         )
     }
@@ -108,7 +108,7 @@ class RecommendationEngine {
                     tides, station, now, source, priority, land, weather.hours, weather.retrievedAt)?.let { add(it) }
             }
         }
-        val selection = WindowSelection(selectedStation != null)
+        val selection = WindowSelection()
         evaluated.filter { priority != WindowPriority.LATE_INCOMING || it.tidePreferenceFit >= .8 }.forEach {
             selection.consider(Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(zone).toLocalDate(), it)
         }
