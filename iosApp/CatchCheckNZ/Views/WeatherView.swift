@@ -212,7 +212,7 @@ private struct WeatherForecastPage: View {
                                 .frame(maxWidth: .infinity, minHeight: 100)
                         }
                     }
-                    if isLoading && forecast == nil {
+                    if forecast == nil && !isLocating && locationMessage == nil && weatherMessage == nil {
                         ProgressView("Loading your forecast…")
                             .frame(maxWidth: .infinity, minHeight: 130)
                     }
@@ -293,12 +293,18 @@ private struct WeatherForecastPage: View {
 
     private func requestLocation() {
         // A prior app session may still have a coordinate in the view model.
-        // Only a fix timestamped after this request can drive this forecast.
+        // Only a fix delivered after this request, or in the last minute (as
+        // on Android), can drive this forecast.
         freshPoint = nil
         forecast = nil
         requestKey = UUID()
         weatherMessage = nil
         locationMessage = nil
+        if vm.hasDeviceLocation, let updatedAt = vm.deviceLocationUpdatedAt, Date.now.timeIntervalSince(updatedAt) < 60 {
+            freshPoint = vm.location
+            isLocating = false
+            return
+        }
         isLocating = true
         locationRequestStartedAt = .now
         vm.requestLocation()

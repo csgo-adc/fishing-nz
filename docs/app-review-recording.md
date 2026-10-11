@@ -1,17 +1,18 @@
 # App Review physical-iPhone checklist
 
-For Apple's 10 October 2026 Guideline 2.1 request for Fishdays - NZ 1.0.20 (21).
+For Apple's 10 October 2026 Guideline 2.1 request. The version under review now carries 1.0.28 (29); 1.0.20 (21) and 1.0.27 (28) were replaced.
 
 ## Before recording
 
-1. Borrow an iPhone or arrange a tester. Install the latest iOS available to that device and record its model and exact iOS version. Use a device able to run the latest release requested by Apple.
-2. Install the submitted build **1.0.20 (21)** through TestFlight. Confirm the version; do not substitute a simulator or a different build.
-3. Have a working internet connection, a fish photo containing no people/private information, and a disposable email inbox for registration and deletion. Keep the App Review demo account intact.
-4. Test launch, forecast loading, map, tides, rules, photo consent and identification, login persistence after relaunch, and deletion. Record any failure and fix it before claiming the build is ready.
+1. Borrow an iPhone or arrange a tester. Record its model and exact iOS version. The 11 October recording used an iPhone 16 Pro on iOS 26.6.2.
+2. Install the build that is on the version page. TestFlight is not needed: register the phone with a device build (`xcodebuild build -destination id=<UDID> -allowProvisioningUpdates -allowProvisioningDeviceRegistration`), archive, export the same archive once with method `debugging` for `xcrun devicectl device install app` and once with `build/ios/AppStoreUploadOptions.plist` for the upload.
+3. Have a working internet connection, a fish photo with **no people** and no private information, and a disposable email inbox for registration and deletion. Keep the App Review demo account intact.
+4. Turn on Do Not Disturb. On a borrowed phone the keyboard's AutoFill bar shows the owner's email in the account form, and the photo picker shows their library; blur those in the video or ask the owner first.
+5. Test launch, forecast loading, map, tides, rules, photo consent and identification, login persistence after relaunch, and deletion. Record any failure and fix it before claiming the build is ready.
 
 ## Record one clear typical flow
 
-Start iPhone screen recording before launching the app. Avoid notifications and unrelated private information.
+Start iPhone screen recording before launching the app. Avoid notifications and unrelated private information. Stop the recording from Control Center or the red status indicator, not by locking the phone, which records the Lock Screen and its notifications.
 
 1. Launch from the Home Screen. Show initial notices and location choices.
 2. Choose Auckland manually; search a land-fishing window and open its explanation/conditions. Show sharing without messaging anyone.

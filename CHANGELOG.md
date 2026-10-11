@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.28 — 2026-10-11 (build code 29)
+
+Fixes found while recording Apple's physical-iPhone review video of 1.0.27.
+
+- **iPhone Weather no longer gets stuck on "Finding a fresh location…".** A real iPhone often
+  answers a location request with a recent cached fix whose timestamp is older than the request,
+  and the Weather tab ignored it. The app now counts a fix from when it arrives, and Weather uses
+  a fix from the last minute straight away, as Android does. The simulator always gives fresh
+  timestamps, so earlier testing missed this. A place's page now shows "Loading your forecast…"
+  instead of a blank moment before its forecast appears.
+- **Fishing rules no longer show "Saved rules are unavailable" above rules that loaded.** When a
+  rules download was interrupted and restarted, the interrupted one reported an error after the
+  new one had succeeded. Only the newest load can now update the screen. Android and iPhone.
+- 1.0.27 (28) was uploaded to App Store Connect and replaced 1.0.20 (21) on the version under
+  review. 1.0.28 (29) replaces it before the review reply is sent.
+
 ## 1.0.27 — 2026-10-11 (build code 28)
 
 - **The shared-window web page uses the app's layout.**

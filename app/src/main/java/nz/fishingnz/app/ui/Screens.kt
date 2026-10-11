@@ -90,7 +90,9 @@ import nz.fishingnz.app.viewmodel.SearchLocationMode
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.ShareService
 import kotlinx.coroutines.withContext
@@ -1287,9 +1289,11 @@ internal val fishingRulesAreas = listOf(
         loading = false
         val id = selectedAreaId ?: return@LaunchedEffect
         loading = true
+        // A newer area or reload cancels this load; it must not overwrite the newer result.
         try { page = repository.load(id) }
+        catch (cancelled: CancellationException) { throw cancelled }
         catch (exception: Exception) { error = exception.message ?: "Saved rules are unavailable right now." }
-        finally { loading = false }
+        finally { if (isActive) loading = false }
     }
 
     if (showAreas) ModalBottomSheet(onDismissRequest = { showAreas = false }) {

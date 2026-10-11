@@ -625,7 +625,10 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         guard let point = locations.last, CLLocationCoordinate2DIsValid(point.coordinate) else { return }
         location = GeoPoint(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude)
         hasDeviceLocation = true
-        deviceLocationUpdatedAt = point.timestamp
+        // When the fix arrived, not when it was measured: on a real iPhone
+        // requestLocation() often answers with a recent cached fix whose
+        // timestamp predates the request.
+        deviceLocationUpdatedAt = .now
         tideLocationIssue = nil
         let nearestStation = tideStations.min {
             point.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <

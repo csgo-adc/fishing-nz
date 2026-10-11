@@ -1001,6 +1001,7 @@ struct RulesView: View {
     @State private var page: SavedRulesPage?
     @State private var loadError: String?
     @State private var loading = false
+    @State private var loadToken = UUID()
     private var nearRaglanWest: Bool {
         selectedArea?.id == "auckland-kermadec" && vm.isNearRaglan && !vm.rulesAreaSelectionIsManual
     }
@@ -1146,11 +1147,15 @@ struct RulesView: View {
     }
 
     @MainActor private func loadRules() async {
-        guard let selectedArea else { page = nil; loadError = nil; return }
+        // Only the newest load may update the screen. An older one that was
+        // cancelled or superseded must not overwrite rules already shown.
+        let token = UUID()
+        loadToken = token
+        guard let selectedArea else { page = nil; loadError = nil; loading = false; return }
         loading = true
         loadError = nil
         page = nil
-        defer { loading = false }
+        defer { if loadToken == token { loading = false } }
         let baseURL = ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space")
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(baseURL)/v1/rules?area=\(selectedArea.id)") else { loadError = "Rules service URL is unavailable."; return }
@@ -1163,15 +1168,18 @@ struct RulesView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
             let envelope = try JSONDecoder().decode(SavedRulesEnvelope.self, from: data)
-            guard self.selectedArea?.id == selectedArea.id else { return }
+            guard loadToken == token, self.selectedArea?.id == selectedArea.id else { return }
             let officialPath = selectedArea.officialURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             page = envelope.rules.first(where: {
                 $0.areaID == selectedArea.id &&
                 $0.sourceURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == officialPath
             })
             if page == nil { loadError = "Saved rules do not match this fishing area. Open the official MPI page instead." }
-        } catch is CancellationError { return }
-        catch { loadError = "Saved rules are unavailable right now. Try again shortly." }
+        } catch {
+            // URLSession reports a cancelled task as URLError.cancelled, not CancellationError.
+            guard loadToken == token, !Task.isCancelled else { return }
+            loadError = "Saved rules are unavailable right now. Try again shortly."
+        }
     }
 }
 
