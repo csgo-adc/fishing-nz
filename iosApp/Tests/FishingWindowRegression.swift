@@ -352,6 +352,18 @@ import Foundation
                    && WindowHighlights.tone("Needs more data") == .unknown, "Outlook colours")
         try expect(window(land).forecastNote == "Planning forecast · local checks needed" && !window(land, hours: 0).hasHighlights, "Forecast note and eligibility")
         try plainWordChecks()
+        try planChoiceChecks()
+    }
+
+    /// Saved plan choices from before 1.0.32 move onto the simpler plan page, the same as Android's PlanChoicesTest.
+    static func planChoiceChecks() throws {
+        try expect(searchRadiiKm == [10, 25, 50, 100, 200] && [10, 30, 50, 100, 300, 400, 500].map(nearestSearchRadius) == [10, 25, 50, 100, 200, 200, 200], "Radius choices")
+        try expect(ShoreSetting.saved("Harbour bank") == .wharf && ShoreSetting.saved("Wharf") == .wharf && ShoreSetting.saved("Not set") == .unknown
+                   && ShoreSetting.saved("Rocks") == .rocks, "Saved shore settings")
+        try expect(ShoreSetting.allCases.map(\.rawValue) == ["Not sure", "Wharf or harbour", "Beach", "Rocks"], "Shore labels")
+        try expect(LandPriority.saved("Easier casting") == .casting && LandPriority.saved(nil) == .balanced && LandPriority.casting.rawValue == "Less wind", "Saved priority")
+        try expect(roughnessChoices.map(\.label) == ["Calm only", "A bit of wind or rain", "I don't mind rough"] && walkChoices.map(\.minutes) == [0, 15, 30, 60], "Plain choices")
+        try expect(WindowPriority.weather.title(boat: true) == "Calm water", "Boat priority label")
     }
 
     /// Condition rows in plain words, the same as Android's PlainConditionsTest.
@@ -373,7 +385,10 @@ import Foundation
             ("Daylight", "100% session", "All in daylight"), ("Daylight", "75% session", "75% in daylight"),
             ("Daylight", "100% visit", "Whole visit in daylight"), ("Daylight", "0% known time", "All after dark"),
             ("Shore plan", "Beach · before 20 min · return 15 min", "Beach · 20 min walk in · 15 min back"),
-            ("Shore plan", "Not set · before — · return —", "Shore type not set · walk-in time not set · return time not set"),
+            ("Shore plan", "Not set · before — · return —", "Shore type not set · walk time not set"),
+            ("Shore plan", "Not sure · before 0 min · return 0 min", "Shore type not set · short walk"),
+            ("Shore plan", "Rocks · before 30 min · return 30 min", "Rocks · 30 min walk each way"),
+            ("Shore plan", "Wharf or harbour · before 15 min · return —", "Wharf or harbour · 15 min walk in · return time not set"),
             ("Wind", "14 km/h · gust 22 · SW and a few more…", "14 km/h · gust 22 · SW and a few more…"),
             ("Feels like", "14–16°C", "14–16°C")]
         for (title, value, expected) in cases { try expect(plain(title, value) == expected, "Plain \(title): \(plain(title, value))") }

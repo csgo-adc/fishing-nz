@@ -144,7 +144,7 @@ internal object LandAssessment {
             ConditionItem("Shore plan", "${preferences.setting.label} · before ${arrival?.let { "$it min" } ?: "—"} · return ${returning?.let { "$it min" } ?: "—"}", WindowMood("🔎", "Access unchecked"))
         )
         val details = buildList {
-            add(when (preferences.setting) { ShoreSetting.ROCKS -> "Check footing, surge and a way off the rocks."; ShoreSetting.BEACH -> "Check surf, wading depth and beach access."; ShoreSetting.WHARF -> "Check wharf access and exposure."; ShoreSetting.BANK -> "Check bank footing and tide access."; else -> "Check the shore type and access." })
+            add(when (preferences.setting) { ShoreSetting.ROCKS -> "Check footing, surge and a way off the rocks."; ShoreSetting.BEACH -> "Check surf, wading depth and beach access."; ShoreSetting.WHARF -> "Check access, footing and exposure at the wharf or harbour."; else -> "Check the shore type and access." })
             add("Check official marine warnings before you go.")
             if (!visitKnown) add("Set walk-in and return times to check the whole trip.")
             if (!completeWeather) add("Some hourly weather is missing; totals may be low.")

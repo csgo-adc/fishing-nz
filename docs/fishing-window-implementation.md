@@ -10,7 +10,9 @@ The comfort labels are **😌 Comfortable**, **🙂 Okay**, **😕 Demanding**, 
 
 Comfort, **🔎 Local checks needed**, and forecast confidence are separate. The current single-model inputs do not justify “Supported” confidence or “Local checks complete.” Near-term results show **⏱️ Short-range forecast** (renamed from “Limited confidence” in 1.0.23; it is a time band, not a higher confidence claim); starts more than 48 hours away show **🗓️ Planning forecast**, and starts more than five days away show **🔭 Early outlook**. Details record incomplete coverage, unknown access/return time, forecasts fetched more than three hours ago, missing source timing/model agreement and unchecked official warnings. Fetch time is not model issue time. These time bands and freshness defaults are provisional product choices.
 
-Search preferences are **Comfort** for land, **Wave comfort** for boats, or **Late incoming tide**. Tide is descriptive unless the user selects the tide preference. The late-incoming target is still 150 minutes before high water to 30 minutes afterwards, with at least 80% of the two-hour session inside that target and verified LINZ coverage. It is a timing preference, not a claim about catches or current speed.
+The plan page (1.0.32) asks only where (a place and a distance, or just one spot or tide station), land or boat, when and what time. **Daytime**, the default time, keeps the whole visit, including the walk, between each day's sunrise and sunset; Morning is 5 AM–12 PM, Evening 3 PM–10 PM, and Any time allows darkness while still preferring daylight. Everything else sits under **More options** with recommended defaults: What matters most, How rough is OK (the comfort limit: Calm only, A bit of wind or rain, I don't mind rough), Where do you fish, and one walk time used for both ways (default a few minutes, so the visit is always known).
+
+Search preferences are **Comfort** for land (with **Less wind** and **Less rain** as land tie-breaks), **Calm water** for boats, or **Late incoming tide**. Tide is descriptive unless the user selects the tide preference. The late-incoming target is still 150 minutes before high water to 30 minutes afterwards, with at least 80% of the two-hour session inside that target and verified LINZ coverage. It is a timing preference, not a claim about catches or current speed.
 
 ## Land comfort
 
@@ -24,12 +26,12 @@ The former 60% wind / 40% rain average is replaced by a worst-factor comfort ban
 
 These are trial human-comfort preferences, not official safety limits or calibrated catch predictions. The overall band is the worst of the three factors. Missing temperature or incomplete visit weather coverage produces **Needs more data**, rather than a comfortable result. Rain probability is shown as the maximum **hourly** likelihood and does not change the land physical-comfort band. Rain rows show the total and wettest hourly interval; temperatures show their range; wind shows the maximum sustained wind, maximum gust and available directions.
 
-**Shore options** persist between launches:
+**More options** persist between launches (before 1.0.32 they were "Shore options"):
 
-- A planned shore setting: wharf, harbour bank, beach, rocks, or not set. This is user intent, not a verified site profile. Each setting gets appropriate outstanding access/exposure checks; offshore waves never become a calculated wharf, surf or surge height.
-- A comfort limit, defaulting to Comfortable or Okay. Known options outside the limit are explicitly marked; partial options are not described as meeting it. If none qualifies, the results explain that the listed windows are alternatives or need more data.
-- Comfort, Easier casting, or Less rain preference. The latter two break comfort ties using gust/wind or accumulated rain.
-- Access/setup and return time, each unset or 0–180 minutes. Zero must be selected explicitly. Known buffers extend the assessed visit; unknown buffers are shown as unknown. A known access start cannot be in the past. The whole-visit daylight option requires both times and full solar coverage.
+- Where you fish: wharf or harbour, beach, rocks, or not sure. This is user intent, not a verified site profile. Each setting gets appropriate outstanding access/exposure checks; offshore waves never become a calculated wharf, surf or surge height.
+- How rough is OK (the comfort limit): Calm only, A bit of wind or rain (the default) or I don't mind rough. Known options outside the limit are explicitly marked; partial options are not described as meeting it. If none qualifies, the results explain that the listed windows are alternatives or need more data.
+- Comfort, Less wind, or Less rain under What matters most. The latter two break comfort ties using gust/wind or accumulated rain.
+- A walk to the spot, each way: a few minutes (0), 15, 30 or 60 minutes. It extends the assessed visit at both ends. A known start cannot be in the past. Daytime requires the whole visit, including the walk, to be in daylight.
 
 Candidates keep the two-hour fishing session, but evaluate known arrival/return buffers as well. Instantaneous wind, temperature and waves include start, end and interior forecast hours. Non-hourly boundaries use linear interpolation only between valid adjacent hourly values. Gust/rain intervals are clipped to the visit; the wettest intersecting hour is retained. Known adverse marine hours remain visible even when weather coverage has a gap. Interpolation and interval assumptions do not promise minute-level accuracy.
 

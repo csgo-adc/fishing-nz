@@ -206,11 +206,17 @@ struct FishingScoringService: Sendable {
     }
 
     /// The ranked windows, plus the spots whose forecast could not be loaded, so the results can say so.
-    func search(origin: GeoPoint, radiusKm: Double, selectedStation: TideStation? = nil, days: [Date], boat: Bool,
-                preferredHours: PreferredFishingHours?, priority: WindowPriority = .weather,
-                land: LandPreferences = LandPreferences()) async throws -> FishingWindowSearch {
-        if !boat && land.daylightOnly && (land.arrivalMinutes == nil || land.returnMinutes == nil) { throw ScoringError.missingAccessTime }
-        if selectedStation == nil {
+    func search(origin: GeoPoint, radiusKm: Double, selectedStation: TideStation? = nil, selectedSpot: FishingSpot? = nil,
+                days: [Date], boat: Bool, preferredHours: PreferredFishingHours?, priority: WindowPriority = .weather,
+                land: LandPreferences = LandPreferences(), daylightOnly: Bool = false) async throws -> FishingWindowSearch {
+        // Daytime covers the whole visit; a walk that was never set counts as none. Boat windows check their own daylight.
+        let plan = daylightOnly
+            ? LandPreferences(setting: land.setting, priority: land.priority, maxBand: land.maxBand,
+                              arrivalMinutes: land.arrivalMinutes ?? 0, returnMinutes: land.returnMinutes ?? 0, daylightOnly: true)
+            : land
+        if !boat && plan.daylightOnly && (plan.arrivalMinutes == nil || plan.returnMinutes == nil) { throw ScoringError.missingAccessTime }
+        let single = selectedStation != nil || selectedSpot != nil
+        if !single {
             guard radiusKm.isFinite, radiusKm > 0 else { throw ScoringError.invalidRadius }
         }
         var configuredCalendar = Calendar(identifier: .gregorian)
@@ -221,13 +227,16 @@ struct FishingScoringService: Sendable {
         let lastDay = calendar.date(byAdding: .day, value: 15, to: today)!
         let selectedDays = Set(days.map { calendar.startOfDay(for: $0) }.filter { $0 >= today && $0 <= lastDay })
         guard !selectedDays.isEmpty else { throw ScoringError.datesOutsideForecast }
-        let mayCrossMidnight = (preferredHours.map { $0.startMinute >= $0.endMinute } ?? true) || (!boat && (land.returnMinutes ?? 0) > 0)
+        let mayCrossMidnight = (preferredHours.map { $0.startMinute >= $0.endMinute } ?? true) || (!boat && (plan.returnMinutes ?? 0) > 0)
         let forecastDays = min(16, 1 + selectedDays.compactMap { calendar.dateComponents([.day], from: today, to: $0).day }.max()! + (mayCrossMidnight ? 1 : 0))
         let candidates: [Candidate]
         if let station = selectedStation {
             let spot = FishingSpot(name: station.name, area: station.region,
                                    coordinate: .init(latitude: station.latitude, longitude: station.longitude), boat: boat)
             candidates = [.init(spot: spot, distanceKm: 0, isTideStation: true, tideStation: station)]
+        } else if let selectedSpot {
+            let spot = FishingSpot(name: selectedSpot.name, area: selectedSpot.area, coordinate: selectedSpot.coordinate, boat: boat)
+            candidates = [.init(spot: spot, distanceKm: 0, isTideStation: false, tideStation: Self.matchingStation(for: spot))]
         } else {
             candidates = fishingSpots.compactMap { spot in
                 guard spot.boat == boat else { return nil }
@@ -247,7 +256,7 @@ struct FishingScoringService: Sendable {
             for _ in 0..<min(Self.maximumConcurrentSpots, candidates.count) {
                 let candidate = candidates[next]; next += 1
                 group.addTask { (candidate.spot.name, await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
-                                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land)) }
+                                                     now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: plan)) }
             }
             while let (name, outcome) = await group.next() {
                 if Task.isCancelled { group.cancelAll(); break }
@@ -262,7 +271,7 @@ struct FishingScoringService: Sendable {
                 if next < candidates.count {
                     let candidate = candidates[next]; next += 1
                     group.addTask { (candidate.spot.name, await Self.scoreSpot(candidate, days: selectedDays, forecastDays: forecastDays,
-                                                         now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: land)) }
+                                                         now: now, calendar: calendar, preferredHours: preferredHours, priority: priority, land: plan)) }
                 }
             }
         }
@@ -276,7 +285,7 @@ struct FishingScoringService: Sendable {
                 .filter { names.contains($0) && seen.insert($0).inserted }
         }
         let sorted: [ScoredFishingWindow]
-        if selectedStation != nil {
+        if single {
             sorted = windows.sorted { $0.start < $1.start }
         } else {
             sorted = Self.limitPerDay(windows.sorted {
@@ -287,7 +296,7 @@ struct FishingScoringService: Sendable {
             }, calendar: calendar)
         }
         return FishingWindowSearch(windows: sorted, failedSpots: byDistance(failed),
-                                   spotsWithoutWindows: selectedStation == nil ? byDistance(withoutWindows) : [])
+                                   spotsWithoutWindows: single ? [] : byDistance(withoutWindows))
     }
 
     // Finds an exact link; loadTideReference supplies automatic nearby references.
@@ -356,6 +365,8 @@ struct FishingScoringService: Sendable {
                                         priority: priority, sourceNote: sourceNote(spot: candidate.spot, weather: weather, marine: marine,
                                                                                 station: tides.isEmpty ? nil : candidate.tideStation),
                                         land: land, allHours: hours, retrievedAt: weather.retrievedAt) else { continue }
+            // Daytime: land checks the whole visit itself; boat windows keep to sunrise–sunset here.
+            if land.daylightOnly && result.daylightFraction < 0.9999 { continue }
             byDay[day, default: []].append(result)
         }
         let best = byDay.values.compactMap { pool -> ScoredFishingWindow? in
@@ -908,8 +919,7 @@ enum LandAssessment {
         switch preferences.setting {
         case .rocks: localReason = "Check footing, surge and a way off the rocks."
         case .beach: localReason = "Check surf, wading depth and beach access."
-        case .wharf: localReason = "Check wharf access and exposure."
-        case .bank: localReason = "Check bank footing and tide access."
+        case .wharf: localReason = "Check access, footing and exposure at the wharf or harbour."
         case .unknown: localReason = "Check the shore type and access."
         }
         var details = [localReason, "Check official marine warnings before you go."]

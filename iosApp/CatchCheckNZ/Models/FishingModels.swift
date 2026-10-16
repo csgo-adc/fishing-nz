@@ -10,12 +10,31 @@ enum WindowPriority: String, CaseIterable, Identifiable, Sendable {
     case weather, lateIncoming
     var id: String { rawValue }
     var title: String { self == .weather ? "Weather balance" : "Late incoming tide" }
-    func title(boat: Bool) -> String { self == .lateIncoming ? "Late incoming tide" : (boat ? "Wave comfort" : "Comfort") }
+    func title(boat: Bool) -> String { self == .lateIncoming ? "Late incoming tide" : (boat ? "Calm water" : "Comfort") }
 }
 enum ShoreSetting: String, CaseIterable, Sendable {
-    case unknown = "Not set", wharf = "Wharf", bank = "Harbour bank", beach = "Beach", rocks = "Rocks"
+    case unknown = "Not sure", wharf = "Wharf or harbour", beach = "Beach", rocks = "Rocks"
+    /// A saved value, including the labels before 1.0.32 and the harbour bank choice merged into the wharf.
+    static func saved(_ raw: String?) -> ShoreSetting {
+        switch raw {
+        case "Wharf", "Harbour bank": .wharf
+        default: raw.flatMap(ShoreSetting.init(rawValue:)) ?? .unknown
+        }
+    }
 }
-enum LandPriority: String, CaseIterable, Sendable { case balanced = "Comfort", casting = "Easier casting", dry = "Less rain" }
+enum LandPriority: String, CaseIterable, Sendable {
+    case balanced = "Comfort", casting = "Less wind", dry = "Less rain"
+    /// A saved value, including "Easier casting" from before 1.0.32.
+    static func saved(_ raw: String?) -> LandPriority { raw == "Easier casting" ? .casting : raw.flatMap(LandPriority.init(rawValue:)) ?? .balanced }
+}
+/// The distances a radius search offers.
+let searchRadiiKm = [10, 25, 50, 100, 200]
+/// A saved radius from before 1.0.32 (10–500 km) moved onto `searchRadiiKm`.
+func nearestSearchRadius(_ km: Int) -> Int { searchRadiiKm.min { abs($0 - km) < abs($1 - km) }! }
+/// "How rough is OK?" Each is the highest comfort band a window may have.
+let roughnessChoices: [(band: Int, label: String)] = [(0, "Calm only"), (1, "A bit of wind or rain"), (2, "I don't mind rough")]
+/// "Walk to your spot", each way, in minutes.
+let walkChoices: [(minutes: Int, label: String)] = [(0, "A few minutes"), (15, "15 min"), (30, "30 min"), (60, "1 hour")]
 struct LandPreferences: Equatable, Sendable {
     var setting: ShoreSetting = .unknown
     var priority: LandPriority = .balanced
@@ -278,14 +297,20 @@ enum PlainConditions {
             plain = groups(daylightShare, value).map { daylight($0[0], $0[1]) }
         case "Shore plan":
             plain = groups(shorePlan, value).map { parts in
-                [parts[0] == "Not set" ? "Shore type not set" : parts[0],
-                 parts[1] == "—" ? "walk-in time not set" : "\(parts[1]) walk in",
-                 parts[2] == "—" ? "return time not set" : "\(parts[2]) back"].joined(separator: " · ")
+                ([parts[0] == "Not set" || parts[0] == "Not sure" ? "Shore type not set" : parts[0]] + walk(parts[1], parts[2])).joined(separator: " · ")
             }
         default:
             plain = nil
         }
         return plain ?? value
+    }
+
+    /// "30 min walk each way", "short walk", or the two ways separately when they differ.
+    private static func walk(_ before: String, _ back: String) -> [String] {
+        if before == back && before == "—" { return ["walk time not set"] }
+        if before == back && before == "0 min" { return ["short walk"] }
+        if before == back { return ["\(before) walk each way"] }
+        return [before == "—" ? "walk-in time not set" : "\(before) walk in", back == "—" ? "return time not set" : "\(back) back"]
     }
 
     /// "Next high tide 7:12 PM, 2.4 m" and "Tide station: Auckland, 3.0 km away".

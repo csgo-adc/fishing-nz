@@ -39,7 +39,9 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -88,6 +90,9 @@ import nz.fishingnz.app.data.RulesRepository
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
 import nz.fishingnz.app.viewmodel.SearchLocationMode
+import nz.fishingnz.app.viewmodel.fishingDatePresets
+import nz.fishingnz.app.viewmodel.searchPlaceName
+import nz.fishingnz.app.viewmodel.searchesOnePlace
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -122,8 +127,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var showPlan by rememberSaveable { mutableStateOf(false) }
-    var showCities by rememberSaveable { mutableStateOf(false) }
-    var showSearchStations by rememberSaveable { mutableStateOf(false) }
+    var showWhere by rememberSaveable { mutableStateOf(false) }
     var homeLocationLoading by remember { mutableStateOf(false) }
     var switchToDeviceOriginOnGrant by remember { mutableStateOf(false) }
     val locationOnboarding = remember(context) { context.getSharedPreferences("location_onboarding", android.content.Context.MODE_PRIVATE) }
@@ -177,7 +181,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         onDispose { lifecycle.removeObserver(observer) }
     }
     fun search() {
-        if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.selectedSearchStation == null) {
+        if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.searchPlaceName == null) {
             showPlan = true
             return
         }
@@ -190,7 +194,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         item {
             Spacer(Modifier.height(18.dp))
             Text(s.account?.user?.displayName?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }?.let { "Kia ora, $it" } ?: "Kia ora", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Find your next catch", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+            Text("Plan your next catch", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
         }
         item {
             Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer), shape = RoundedCornerShape(24.dp)) {
@@ -202,35 +206,18 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                         }
                         OutlinedButton(onClick = { showPlan = true }) { Text("Edit plan") }
                     }
-                    val time = when {
-                        s.preferredTime == null -> "Anytime"
-                        s.preferredTimeIsSuggested -> "7 AM–9 PM"
-                        else -> "${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}"
-                    }
-                    val dateSummary = if (s.dateLabel == "Custom") {
-                        val dateFormat = DateTimeFormatter.ofPattern("d MMM", Locale.US)
-                        if (s.dateStart == s.dateEnd) s.dateStart.format(dateFormat)
-                        else "${s.dateStart.format(dateFormat)}–${s.dateEnd.format(dateFormat)}"
-                    } else s.dateLabel
-                    val searchScope = if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION)
-                        s.selectedSearchStation?.name ?: "Choose location" else "${s.radiusKm} km"
-                    Text("$dateSummary  ·  $time  ·  $searchScope", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
-                    Text(s.preference.label(s.boat),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
-                    Row(Modifier.fillMaxWidth().clickable {
-                        if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) showSearchStations = true
-                        else showCities = true
-                    }.padding(vertical = 4.dp),
+                    Text("${planDateSummary(s)}  ·  ${planTimeSummary(s)}  ·  ${if (s.searchesOnePlace) "This spot only" else "${s.radiusKm} km"}",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
+                    Text(planPriorityLabel(s), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
+                    Row(Modifier.fillMaxWidth().clickable { showWhere = true }.padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(s.originName?.let { "From $it" }
-                            ?: if (homeLocationLoading && s.searchLocationMode == SearchLocationMode.NEAR_ME) "Finding your location…" else "Choose location",
-                            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold)
+                        Text(whereTitle(s, homeLocationLoading), color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                         Icon(Icons.Default.ChevronRight, contentDescription = null,
                             modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                     Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.selectedSearchStation == null)
+                        Text(if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.searchPlaceName == null)
                             "Choose a fishing location" else "Find fishing windows")
                     }
                 }
@@ -252,125 +239,262 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showPlan) ModalBottomSheet(onDismissRequest = { showPlan = false }) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.85f).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Plan your fishing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Fishing from", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land") })
-                FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat") })
-            }
-            RecommendationFilters(s, vm)
-            Button(onClick = { showPlan = false; search() },
-                enabled = s.searchLocationMode != SearchLocationMode.SPECIFIC_LOCATION || s.selectedSearchStation != null,
-                modifier = Modifier.fillMaxWidth()) { Text("Find fishing windows") }
-            Spacer(Modifier.height(16.dp))
-        }
+        PlanSheet(s, vm, homeLocationLoading, onUseCurrentLocation = ::useCurrentLocation, onFind = { showPlan = false; search() })
     }
-    if (showCities) OriginPickerSheet(onDismiss = { showCities = false }, onUseCurrentLocation = {
-        showCities = false
-        useCurrentLocation()
-    }, onChoose = {
-        vm.selectManualOrigin(it)
-        showCities = false
-    })
-    if (showSearchStations) SearchStationPickerSheet(s.selectedSearchStation?.id,
-        onDismiss = { showSearchStations = false },
-        onUseCurrentLocation = { showSearchStations = false; useCurrentLocation() },
-        onChoose = { vm.selectSearchStation(it); showSearchStations = false })
+    if (showWhere) ModalBottomSheet(onDismissRequest = { showWhere = false }) {
+        WherePicker(s, onBack = null, onUseCurrentLocation = { showWhere = false; useCurrentLocation() },
+            onTown = { vm.selectManualOrigin(it); showWhere = false },
+            onSpot = { vm.selectSearchSpot(it); showWhere = false },
+            onStation = { vm.selectSearchStation(it); showWhere = false })
+    }
 }
 
-@Composable private fun RecommendationFilters(s: FishingUiState, vm: FishingViewModel) {
+private val planDayFormat = DateTimeFormatter.ofPattern("EEE d MMM", Locale.US)
+private val planDayOnlyFormat = DateTimeFormatter.ofPattern("EEE d", Locale.US)
+
+/** "Fri 16 – Sun 18 Oct", or one day. */
+internal fun planDates(s: FishingUiState): String = when {
+    s.dateStart == s.dateEnd -> s.dateStart.format(planDayFormat)
+    s.dateStart.month == s.dateEnd.month -> "${s.dateStart.format(planDayOnlyFormat)} – ${s.dateEnd.format(planDayFormat)}"
+    else -> "${s.dateStart.format(planDayFormat)} – ${s.dateEnd.format(planDayFormat)}"
+}
+
+internal fun planDateSummary(s: FishingUiState): String = if (s.dateLabel == "Custom") planDates(s) else s.dateLabel
+
+internal fun planTimeSummary(s: FishingUiState): String = if (s.timeChoice == TimeChoice.CUSTOM) s.customHours?.let {
+    "${it.start.format(preferredTimeFormatter)}–${it.end.format(preferredTimeFormatter)}"
+} ?: "Pick hours" else s.timeChoice.label
+
+private fun planTimeNote(s: FishingUiState): String = when (s.timeChoice) {
+    TimeChoice.DAYTIME -> if (s.boat) "Sunrise to sunset." else "Sunrise to sunset, including your walk."
+    TimeChoice.MORNING -> "5 AM – 12 PM."
+    TimeChoice.EVENING -> "3 PM – 10 PM."
+    TimeChoice.ANYTIME -> "Day or night. Daylight still comes first."
+    TimeChoice.CUSTOM -> s.customHours?.let {
+        "${it.start.format(preferredTimeFormatter)} – ${it.end.format(preferredTimeFormatter)}" + if (it.end.isBefore(it.start)) " (ends next day)." else "."
+    } ?: "Choose a start and end time."
+}
+
+/** The "What matters most?" choices: one list that sets the window preference and, on land, the tie-break. */
+private data class MatterChoice(val label: String, val priority: WindowPriority, val land: LandPriority, val note: String)
+
+private fun matterChoices(boat: Boolean): List<MatterChoice> = if (boat) listOf(
+    MatterChoice("Calm water", WindowPriority.WEATHER, LandPriority.BALANCED, "The smallest, smoothest waves first, then wind and rain."),
+    MatterChoice("Late incoming tide", WindowPriority.LATE_INCOMING, LandPriority.BALANCED,
+        "The last of the incoming tide, near high water. Waves still come first. Times are for the nearest LINZ station.")
+) else listOf(
+    MatterChoice("Comfort", WindowPriority.WEATHER, LandPriority.BALANCED, "The least wind, rain and cold."),
+    MatterChoice("Less wind", WindowPriority.WEATHER, LandPriority.CASTING, "Comfortable first, then the least wind for easier casting."),
+    MatterChoice("Less rain", WindowPriority.WEATHER, LandPriority.DRY, "Comfortable first, then the least rain."),
+    MatterChoice("Late incoming tide", WindowPriority.LATE_INCOMING, LandPriority.BALANCED,
+        "The last of the incoming tide, near high water. Times are for the nearest LINZ station.")
+)
+
+private fun selectedMatter(s: FishingUiState): MatterChoice? = matterChoices(s.boat).firstOrNull {
+    it.priority == s.preference && (s.boat || it.priority != WindowPriority.WEATHER || it.land == s.landPreferences.priority)
+}
+
+internal fun planPriorityLabel(s: FishingUiState): String = selectedMatter(s)?.label ?: s.preference.label(s.boat)
+
+/** "Near Auckland", or the one place searched. */
+private fun whereTitle(s: FishingUiState, loading: Boolean): String = when {
+    s.searchesOnePlace -> "At ${s.searchPlaceName}"
+    s.originName != null -> "Near ${s.originName}"
+    loading && s.searchLocationMode == SearchLocationMode.NEAR_ME -> "Finding your location…"
+    else -> "Choose a place"
+}
+
+@Composable private fun PlanQuestion(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+        content()
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun PlanChips(content: @Composable () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+}
+
+@Composable private fun PlanNote(text: String) {
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+}
+
+/** The plan page: four questions, then More options already set to recommended values. */
+@Composable private fun PlanSheet(s: FishingUiState, vm: FishingViewModel, locating: Boolean, onUseCurrentLocation: () -> Unit, onFind: () -> Unit) {
     val context = LocalContext.current
-    var showSearchStations by rememberSaveable { mutableStateOf(false) }
-    var searchStationQuery by rememberSaveable { mutableStateOf("") }
     val pickerTheme = if (MaterialTheme.colorScheme.background.luminance() < .5f)
         android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert
-    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text("When are you going?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today", "In 3 days", "Next 7 days", "This weekend").forEach { choice ->
-                FilterChip(selected = s.dateLabel == choice, onClick = { vm.setDate(choice) }, label = { Text(choice) })
-            }
-            FilterChip(selected = s.dateLabel == "Custom", onClick = {
-                showCustomDateRange(context, s.dateStart, s.dateEnd, pickerTheme) { start, end -> vm.setCustomDates(start, end) }
-            }, label = { Text("Choose dates") })
-        }
-        Text("${s.dateStart} to ${s.dateEnd}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        Text("What time suits you?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = s.preferredTimeIsSuggested, onClick = { vm.setSuggestedHours() }, label = { Text("7:00 AM–9:00 PM") })
-            FilterChip(selected = s.preferredTime == null, onClick = { vm.clearPreferredHours() }, label = { Text("Anytime") })
-            FilterChip(selected = s.preferredTime != null && !s.preferredTimeIsSuggested, onClick = {
-                showCustomTimeRange(context, s.preferredTime, pickerTheme) { start, end -> vm.setPreferredHours(start, end) }
-            }, label = { Text(if (s.preferredTime != null && !s.preferredTimeIsSuggested) "Change times" else "Choose times") })
-        }
-        if (s.preferredTime != null && !s.preferredTimeIsSuggested) {
-            Text("${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}" +
-                if (s.preferredTime.end.isBefore(s.preferredTime.start)) " (ends next day)" else "",
-                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        }
-        Text("Shows 2-hour sessions that fit within these hours.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        Text("What matters most?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = s.preference == WindowPriority.WEATHER,
-                onClick = { vm.setWindowPriority(WindowPriority.WEATHER) }, label = { Text(WindowPriority.WEATHER.label(s.boat)) })
-            FilterChip(selected = s.preference == WindowPriority.LATE_INCOMING,
-                onClick = { vm.setWindowPriority(WindowPriority.LATE_INCOMING) }, label = { Text("Late incoming tide") })
-        }
-        Text(if (s.preference == WindowPriority.LATE_INCOMING)
-            "Prefers the last of the incoming tide, near high water. Times are for the nearest LINZ station." +
-                if (s.boat) " Waves still rank first." else ""
-        else if (s.boat) "Ranks by waves first, then wind and rain."
-        else "Ranks by wind, rain and feels-like temperature.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        if (!s.boat) LandOptions(s.landPreferences, vm::setLandPreferences)
-        Text("Find windows by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = s.searchLocationMode == SearchLocationMode.NEAR_ME,
-                onClick = { vm.setSearchLocationMode(SearchLocationMode.NEAR_ME); showSearchStations = false },
-                label = { Text("Search radius") })
-            FilterChip(selected = s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION,
-                onClick = {
-                    vm.setSearchLocationMode(SearchLocationMode.SPECIFIC_LOCATION)
-                    showSearchStations = s.selectedSearchStation == null
-                }, label = { Text("Choose location") })
-        }
-        if (s.searchLocationMode == SearchLocationMode.NEAR_ME) {
-            Text("Search radius", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(10, 30, 50, 100, 200, 300, 400, 500).forEach { radius ->
-                    FilterChip(selected = s.radiusKm == radius, onClick = { vm.setRadius(radius) }, label = { Text("$radius km") })
+    var picking by rememberSaveable { mutableStateOf(false) }
+    var more by rememberSaveable { mutableStateOf(false) }
+    if (picking) {
+        WherePicker(s, onBack = { picking = false }, onUseCurrentLocation = { picking = false; onUseCurrentLocation() },
+            onTown = { vm.selectManualOrigin(it); picking = false },
+            onSpot = { vm.selectSearchSpot(it); picking = false },
+            onStation = { vm.selectSearchStation(it); picking = false })
+        return
+    }
+    Column(Modifier.fillMaxWidth().fillMaxHeight(.9f)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text("Plan your fishing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            PlanQuestion("Where?") {
+                Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                    .clickable(onClickLabel = "Change place") { picking = true }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(whereTitle(s, locating), Modifier.weight(1f), color = Navy, fontWeight = FontWeight.SemiBold)
+                    Text("Change", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
-            }
-        } else {
-            OutlinedButton(onClick = { showSearchStations = !showSearchStations }, modifier = Modifier.fillMaxWidth()) {
-                Text(s.selectedSearchStation?.name ?: "Choose a tide location", modifier = Modifier.weight(1f))
-                Text(if (showSearchStations) "⌃" else "⌄")
-            }
-            if (showSearchStations) {
-                OutlinedTextField(searchStationQuery, onValueChange = { searchStationQuery = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search tide locations") }, singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Search, null) })
-                val matches = remember(searchStationQuery) {
-                    tideStations.filter { station -> station.name.contains(searchStationQuery.trim(), ignoreCase = true) ||
-                        station.region.contains(searchStationQuery.trim(), ignoreCase = true) }
-                }
-                Column(Modifier.fillMaxWidth().height(240.dp).verticalScroll(rememberScrollState())) {
-                    matches.forEach { station ->
-                        ListItem(headlineContent = { Text(station.name) },
-                            supportingContent = { if (station.region != "New Zealand") Text(station.region) },
-                            trailingContent = { if (station.id == s.selectedSearchStation?.id) Icon(Icons.Default.CheckCircle, null) },
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                vm.selectSearchStation(station)
-                                showSearchStations = false
-                                searchStationQuery = ""
-                            })
-                        HorizontalDivider()
+                PlanChips {
+                    if (s.searchPlaceName != null) FilterChip(s.searchesOnePlace, { vm.searchJustThisPlace() }, label = { Text("Just this spot") })
+                    searchRadiiKm.forEach { km ->
+                        FilterChip(!s.searchesOnePlace && s.radiusKm == km, { vm.setRadius(km) }, label = { Text("$km km") })
                     }
-                    if (matches.isEmpty()) Text("No tide locations found", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp))
                 }
+            }
+            PlanQuestion("Fishing from") {
+                PlanChips {
+                    FilterChip(selected = !s.boat, onClick = { vm.setBoat(false) }, label = { Text("Land") })
+                    FilterChip(selected = s.boat, onClick = { vm.setBoat(true) }, label = { Text("Boat") })
+                }
+            }
+            PlanQuestion("When?") {
+                PlanChips {
+                    fishingDatePresets.forEach { choice -> FilterChip(s.dateLabel == choice, { vm.setDate(choice) }, label = { Text(choice) }) }
+                    FilterChip(s.dateLabel == "Custom", {
+                        showCustomDateRange(context, s.dateStart, s.dateEnd, pickerTheme) { start, end -> vm.setCustomDates(start, end) }
+                    }, label = { Text("Pick dates") })
+                }
+                PlanNote(planDates(s))
+            }
+            PlanQuestion("What time?") {
+                PlanChips {
+                    TimeChoice.entries.filter { it != TimeChoice.CUSTOM }.forEach { choice ->
+                        FilterChip(s.timeChoice == choice, { vm.setTimeChoice(choice) }, label = { Text(choice.label) })
+                    }
+                    FilterChip(s.timeChoice == TimeChoice.CUSTOM, {
+                        showCustomTimeRange(context, s.customHours, pickerTheme) { start, end -> vm.setCustomHours(start, end) }
+                    }, label = { Text(TimeChoice.CUSTOM.label) })
+                }
+                PlanNote(planTimeNote(s))
+            }
+            Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                .clickable(onClickLabel = if (more) "Hide more options" else "Show more options") { more = !more }.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("More options", Modifier.weight(1f), color = Navy, fontWeight = FontWeight.SemiBold)
+                Text(planPriorityLabel(s), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                Icon(if (more) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
+            }
+            if (more) MoreOptions(s, vm)
+            Spacer(Modifier.height(4.dp))
+        }
+        Button(onClick = onFind, enabled = s.searchLocationMode != SearchLocationMode.SPECIFIC_LOCATION || s.searchPlaceName != null,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) { Text("Find fishing windows") }
+    }
+}
+
+/** Choices that already have recommended values, so most people never open them. */
+@Composable private fun MoreOptions(s: FishingUiState, vm: FishingViewModel) {
+    val land = s.landPreferences
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        PlanQuestion("What matters most?") {
+            val selected = selectedMatter(s)
+            PlanChips {
+                matterChoices(s.boat).forEach { choice ->
+                    FilterChip(choice == selected, { vm.setWhatMatters(choice.priority, choice.land) }, label = { Text(choice.label) })
+                }
+            }
+            selected?.let { PlanNote(it.note) }
+        }
+        if (!s.boat) {
+            PlanQuestion("How rough is OK?") {
+                PlanChips {
+                    roughnessChoices.forEach { (band, label) ->
+                        FilterChip(land.maxBand == band, { vm.setLandPreferences(land.copy(maxBand = band)) }, label = { Text(label) })
+                    }
+                }
+            }
+            PlanQuestion("Where do you fish?") {
+                PlanChips {
+                    ShoreSetting.entries.forEach { setting ->
+                        FilterChip(land.setting == setting, { vm.setLandPreferences(land.copy(setting = setting)) }, label = { Text(setting.label) })
+                    }
+                }
+            }
+            PlanQuestion("Walk to your spot (each way)") {
+                PlanChips {
+                    walkChoices.forEach { (minutes, label) ->
+                        FilterChip((land.arrivalMinutes ?: 0) == minutes,
+                            { vm.setLandPreferences(land.copy(arrivalMinutes = minutes, returnMinutes = minutes)) }, label = { Text(label) })
+                    }
+                }
+                PlanNote("Daytime then means getting back before dark too.")
+            }
+        }
+        TextButton(onClick = vm::resetMoreOptions, contentPadding = PaddingValues(0.dp)) { Text("Reset to recommended") }
+    }
+}
+
+/** One place picker for the plan: the phone's location, a town, a fishing spot or a tide station. */
+@Composable private fun WherePicker(s: FishingUiState, onBack: (() -> Unit)?, onUseCurrentLocation: () -> Unit,
+    onTown: (SearchOrigin) -> Unit, onSpot: (FishingSpot) -> Unit, onStation: (TideStation) -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val text = query.trim()
+    val towns = remember(text) { searchOrigins.filter { it.name.contains(text, ignoreCase = true) }.sortedBy { it.name } }
+    val spots = remember(text, s.boat) {
+        fishingSpots.filter { it.boat == s.boat && (it.name.contains(text, ignoreCase = true) || it.area.contains(text, ignoreCase = true)) }.sortedBy { it.name }
+    }
+    val stations = remember(text) {
+        tideStations.filter { it.name.contains(text, ignoreCase = true) || it.region.contains(text, ignoreCase = true) }.sortedBy { it.name }
+    }
+    Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to your plan") }
+            Text("Where are you fishing?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+        ListItem(headlineContent = { Text("Use current location") },
+            leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
+            trailingContent = { if (s.searchLocationMode == SearchLocationMode.NEAR_ME && !s.manualOriginSelected) Icon(Icons.Default.CheckCircle, null) },
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onUseCurrentLocation))
+        OutlinedTextField(query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+            label = { Text("Search towns, spots or tide locations") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
+        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+            fun header(title: String, note: String) = item(key = "header:$title") {
+                Column(Modifier.padding(top = 14.dp, bottom = 4.dp)) {
+                    Text(title, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                    Text(note, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (towns.isNotEmpty()) {
+                header("Towns", "Search within a distance of the town.")
+                items(towns, key = { "town:${it.name}" }) { town ->
+                    ListItem(headlineContent = { Text(town.name) },
+                        trailingContent = { if (s.manualOriginSelected && s.searchPlaceName == null && s.originName == town.name) Icon(Icons.Default.CheckCircle, null) },
+                        modifier = Modifier.fillMaxWidth().clickable { onTown(town) })
+                    HorizontalDivider()
+                }
+            }
+            if (spots.isNotEmpty()) {
+                header(if (s.boat) "Boat fishing areas" else "Fishing spots", "Search just this spot, or around it.")
+                items(spots, key = { "spot:${it.name}" }) { spot ->
+                    ListItem(headlineContent = { Text(spot.name) }, supportingContent = { Text(spot.area) },
+                        trailingContent = { if (s.selectedSearchSpot?.name == spot.name) Icon(Icons.Default.CheckCircle, null) },
+                        modifier = Modifier.fillMaxWidth().clickable { onSpot(spot) })
+                    HorizontalDivider()
+                }
+            }
+            if (stations.isNotEmpty()) {
+                header("Tide locations", "Search just this place, or around it.")
+                items(stations, key = { "station:${it.id}" }) { station ->
+                    ListItem(headlineContent = { Text(station.name) },
+                        supportingContent = { if (station.region != "New Zealand") Text(station.region) },
+                        trailingContent = { if (s.selectedSearchStation?.id == station.id) Icon(Icons.Default.CheckCircle, null) },
+                        modifier = Modifier.fillMaxWidth().clickable { onStation(station) })
+                    HorizontalDivider()
+                }
+            }
+            if (towns.isEmpty() && spots.isEmpty() && stations.isEmpty()) item {
+                Text("Nothing found. Try another name.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
             }
         }
     }
@@ -922,41 +1046,6 @@ private fun mapAction(item: Recommendation, vm: FishingViewModel): (() -> Unit)?
     }
 }
 
-@Composable private fun LandOptions(value: LandPreferences, change: (LandPreferences) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { Text(if (expanded) "Hide shore options" else "Shore options") }
-    if (!expanded) return
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text("Your shore setting", fontWeight = FontWeight.SemiBold)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ShoreSetting.entries.forEach { setting -> FilterChip(value.setting == setting, { change(value.copy(setting = setting)) }, label = { Text(setting.label) }) }
-        }
-        Text("Comfort limit", fontWeight = FontWeight.SemiBold)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (0..3).forEach { band -> FilterChip(value.maxBand == band, { change(value.copy(maxBand = band)) }, label = { Text("${comfortMood(band).emoji} ${comfortMood(band).label}") }) }
-        }
-        Text("Prefer", fontWeight = FontWeight.SemiBold)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            LandPriority.entries.forEach { priority -> FilterChip(value.priority == priority, { change(value.copy(priority = priority)) }, label = { Text(priority.label) }) }
-        }
-        listOf("Access + setup" to value.arrivalMinutes, "Return" to value.returnMinutes).forEachIndexed { index, (title, selected) ->
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(null, 0, 15, 30, 60, 120, 180).forEach { minutes ->
-                    FilterChip(selected == minutes, {
-                        change(if (index == 0) value.copy(arrivalMinutes = minutes) else value.copy(returnMinutes = minutes))
-                    }, label = { Text(minutes?.let { "$it min" } ?: "Not set") })
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Whole visit in daylight", Modifier.weight(1f))
-            Switch(value.daylightOnly, { change(value.copy(daylightOnly = it)) })
-        }
-        if (value.daylightOnly && (value.arrivalMinutes == null || value.returnMinutes == null))
-            Text("Set access/setup and return time.", style = MaterialTheme.typography.bodySmall)
-    }
-}
 @Composable private fun Metric(label: String, value: String) { Column { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall); Text(value, color = Navy, fontWeight = FontWeight.SemiBold) } }
 
 private suspend fun resolvedCity(context: android.content.Context, point: GeoPoint): String? = withContext(Dispatchers.IO) {
@@ -965,61 +1054,6 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
         val address = Geocoder(context, Locale.getDefault()).getFromLocation(point.latitude, point.longitude, 1)?.firstOrNull()
         address?.locality?.takeIf { it.isNotBlank() } ?: address?.subAdminArea?.takeIf { it.isNotBlank() }
     }.getOrNull()
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun OriginPickerSheet(onDismiss: () -> Unit, onUseCurrentLocation: () -> Unit, onChoose: (SearchOrigin) -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val matches = remember(query) { searchOrigins.filter { it.name.contains(query.trim(), ignoreCase = true) }.sortedBy { it.name } }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Choose a location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            ListItem(headlineContent = { Text("Use current location") },
-                leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onUseCurrentLocation))
-            HorizontalDivider()
-            OutlinedTextField(query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search cities") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
-            LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.72f)) {
-                items(matches, key = { it.name }) { origin ->
-                    ListItem(headlineContent = { Text(origin.name) }, modifier = Modifier.fillMaxWidth().clickable { onChoose(origin) })
-                    HorizontalDivider()
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun SearchStationPickerSheet(selectedId: String?, onDismiss: () -> Unit,
-    onUseCurrentLocation: () -> Unit, onChoose: (TideStation) -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val matches = remember(query) {
-        tideStations.filter { it.name.contains(query.trim(), ignoreCase = true) || it.region.contains(query.trim(), ignoreCase = true) }
-            .sortedBy { it.name }
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Choose a tide location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            ListItem(headlineContent = { Text("Use current location") },
-                leadingContent = { Icon(Icons.Default.NearMe, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onUseCurrentLocation))
-            HorizontalDivider()
-            OutlinedTextField(query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search tide locations") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
-            LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.72f)) {
-                items(matches, key = { it.id }) { station ->
-                    ListItem(headlineContent = { Text(station.name) },
-                        supportingContent = { if (station.region != "New Zealand") Text(station.region) },
-                        trailingContent = { if (station.id == selectedId) Icon(Icons.Default.CheckCircle, null) },
-                        modifier = Modifier.fillMaxWidth().clickable { onChoose(station) })
-                    HorizontalDivider()
-                }
-                if (matches.isEmpty()) item { Text("No tide locations found", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp)) }
-            }
-        }
-    }
 }
 
 @Composable fun ResultsScreen(s: FishingUiState, vm: FishingViewModel) {
@@ -1033,15 +1067,10 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(s.originName?.let { if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION) "At $it" else "Near $it" }
                         ?: "Finding your location", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
-                    Text("${if (s.boat) "Boat" else "Land"} fishing · ${s.dateLabel}" +
-                        if (s.searchLocationMode == SearchLocationMode.NEAR_ME) " · ${s.radiusKm} km radius" else " · selected location",
+                    Text("${if (s.boat) "Boat" else "Land"} fishing · ${planDateSummary(s)}" +
+                        if (s.searchLocationMode == SearchLocationMode.NEAR_ME) " · ${s.radiusKm} km radius" else " · this spot only",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    val hours = when {
-                        s.preferredTime == null -> "Anytime"
-                        s.preferredTimeIsSuggested -> "7 AM–9 PM"
-                        else -> "${s.preferredTime.start.format(preferredTimeFormatter)}–${s.preferredTime.end.format(preferredTimeFormatter)}"
-                    }
-                    Text("$hours · ${s.preference.label(s.boat)}",
+                    Text("${planTimeSummary(s)} · ${planPriorityLabel(s)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             } }

@@ -57,6 +57,14 @@ function daylight(percent: string, of: string): string {
   return `${percent}% in daylight`;
 }
 
+/** "30 min walk each way", "short walk", or the two ways separately when they differ. */
+function walk(before: string, back: string): string[] {
+  if (before === back && before === "—") return ["walk time not set"];
+  if (before === back && before === "0 min") return ["short walk"];
+  if (before === back) return [`${before} walk each way`];
+  return [before === "—" ? "walk-in time not set" : `${before} walk in`, back === "—" ? "return time not set" : `${back} back`];
+}
+
 /** A shared condition row in plain words. Text it does not recognise, such as a cut-off row, stays as it is. */
 export function plainValue(title: string, raw: string): string {
   const value = raw.trim();
@@ -91,8 +99,7 @@ export function plainValue(title: string, raw: string): string {
       const match = value.match(SHORE);
       if (!match) return value;
       const [, setting, before, back] = match;
-      return [setting === "Not set" ? "Shore type not set" : setting, before === "—" ? "walk-in time not set" : `${before} walk in`,
-        back === "—" ? "return time not set" : `${back} back`].join(" · ");
+      return [setting === "Not set" || setting === "Not sure" ? "Shore type not set" : setting, ...walk(before, back)].join(" · ");
     }
     default:
       return value;

@@ -448,6 +448,7 @@ struct HomeView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var showingPlan = false
+    @State private var findAfterPlan = false
     let openAccount: () -> Void
 
     var body: some View {
@@ -472,10 +473,10 @@ struct HomeView: View {
                                     Spacer()
                                     Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
                                 }
-                                Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary)\(vm.selectedSearchStationID == nil ? " · \(vm.radiusKm) km" : "")")
+                                Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary) · \(vm.searchesOnePlace ? "this spot only" : "\(vm.radiusKm) km")")
                                     .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
                                     .lineLimit(2)
-                                Text(vm.preference.title(boat: vm.isBoatFishing))
+                                Text(vm.whatMattersLabel)
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -503,8 +504,11 @@ struct HomeView: View {
                     }
                 }.padding(20)
             }.background(CatchCheckColor.cream)
-            .sheet(isPresented: $showingPlan) {
-                PlanningSheet()
+            // Searching waits for the plan sheet to close, so the results can open in its place.
+            .sheet(isPresented: $showingPlan, onDismiss: {
+                if findAfterPlan { findAfterPlan = false; vm.showRecommendations() }
+            }) {
+                PlanningSheet(onFind: { findAfterPlan = true; showingPlan = false })
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
@@ -512,115 +516,217 @@ struct HomeView: View {
     }
 }
 
+/// Chips that wrap onto more lines instead of scrolling sideways, so every choice is visible.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(subviews, width: proposal.width ?? .infinity)
+        return CGSize(width: proposal.width ?? rows.map(\.width).max() ?? 0, height: rows.last.map { $0.y + $0.height } ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for row in arrange(subviews, width: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+        }
+    }
+
+    private struct Row { var indices: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0; var y: CGFloat = 0 }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var row = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            if !row.indices.isEmpty && row.width + spacing + size.width > width {
+                rows.append(row)
+                row = Row(y: row.y + row.height + spacing)
+            }
+            row.width += (row.indices.isEmpty ? 0 : spacing) + size.width
+            row.height = max(row.height, size.height)
+            row.indices.append(index)
+        }
+        if !row.indices.isEmpty { rows.append(row) }
+        return rows
+    }
+}
+
+private struct PlanQuestion<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline).foregroundStyle(CatchCheckColor.navy)
+            content
+        }
+    }
+}
+
+/// The plan page: four questions, then More options already set to recommended values.
 private struct PlanningSheet: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
-    private let radii = [10, 30, 50, 100, 200, 300, 400, 500]
+    @State private var showMore = false
+    let onFind: () -> Void
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Card {
-                        Text("Fishing from").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        Picker("Fishing type", selection: $vm.isBoatFishing) {
-                            Text("Land").tag(false)
-                            Text("Boat").tag(true)
-                        }.pickerStyle(.segmented)
+                        PlanQuestion(title: "Where?") {
+                            SearchPlaceMenu()
+                            FlowLayout {
+                                if vm.searchPlace != nil {
+                                    Button("Just this spot") { vm.chooseJustThisPlace() }
+                                        .buttonStyle(ChoiceButton(selected: vm.searchesOnePlace))
+                                }
+                                ForEach(searchRadiiKm, id: \.self) { km in
+                                    Button("\(km) km") { vm.chooseRadius(km) }
+                                        .buttonStyle(ChoiceButton(selected: !vm.searchesOnePlace && vm.radiusKm == km))
+                                }
+                            }
+                        }
                     }
                     Card {
-                        Text("When").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
+                        PlanQuestion(title: "Fishing from") {
+                            Picker("Fishing from", selection: $vm.isBoatFishing) {
+                                Text("Land").tag(false)
+                                Text("Boat").tag(true)
+                            }.pickerStyle(.segmented)
+                        }
+                    }
+                    Card {
+                        PlanQuestion(title: "When?") {
+                            FlowLayout {
                                 ForEach(FishingDatePreset.allCases, id: \.self) { preset in
                                     Button(preset.rawValue) { vm.datePreset = preset }
                                         .buttonStyle(ChoiceButton(selected: vm.datePreset == preset))
                                 }
                             }
-                        }
-                        if vm.datePreset == .custom {
-                            DatePicker("From", selection: $vm.customStartDate,
-                                       in: vm.firstSelectableDate...vm.latestSelectableDate,
-                                       displayedComponents: .date)
-                                .environment(\.timeZone, TimeZone(identifier: "Pacific/Auckland")!)
-                                .onChange(of: vm.customStartDate) { _, start in
-                                    if vm.customEndDate < start { vm.customEndDate = start }
-                                }
-                            DatePicker("To", selection: $vm.customEndDate,
-                                       in: vm.customStartDate...vm.latestSelectableDate,
-                                       displayedComponents: .date)
-                                .environment(\.timeZone, TimeZone(identifier: "Pacific/Auckland")!)
-                        }
-                        Text("Choose dates within the next 16 days.").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Card {
-                        Text("Preferred time").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        Picker("Preferred time", selection: $vm.timeMode) {
-                            ForEach(FishingTimeMode.allCases, id: \.self) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }.pickerStyle(.segmented)
-                        if vm.timeMode == .custom {
-                            Picker("From", selection: $vm.preferredStartMinute) {
-                                ForEach(0..<48, id: \.self) { step in
-                                    Text(FishingViewModel.clockLabel(minutes: step * 30)).tag(step * 30)
-                                }
-                            }.pickerStyle(.menu)
-                            Picker("Until", selection: $vm.preferredEndMinute) {
-                                ForEach(0..<48, id: \.self) { step in
-                                    Text(FishingViewModel.clockLabel(minutes: step * 30)).tag(step * 30)
-                                }
-                            }.pickerStyle(.menu)
-                            Text(vm.preferredStartMinute > vm.preferredEndMinute
-                                 ? "This range continues after midnight."
-                                 : "Shows 2-hour sessions that fit within these hours.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        } else if vm.timeMode == .comfortable {
-                            Text("Suggestions fit between 7 AM and 9 PM.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Card {
-                        Text("What matters most?").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        Picker("Window preference", selection: $vm.preference) {
-                            Text(WindowPriority.weather.title(boat: vm.isBoatFishing)).tag(WindowPriority.weather)
-                            Text("Late incoming tide").tag(WindowPriority.lateIncoming)
-                        }.pickerStyle(.segmented)
-                        Text(vm.preference == .lateIncoming
-                             ? "Prefers the last of the incoming tide, near high water. Times are for the nearest LINZ station." + (vm.isBoatFishing ? " Waves still rank first." : "")
-                             : (vm.isBoatFishing
-                                ? "Ranks by waves first, then wind and rain."
-                                : "Ranks by wind, rain and feels-like temperature."))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if !vm.isBoatFishing { Card { LandOptions() } }
-                    Card {
-                        Text("Search from").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                        SearchPlaceMenu()
-                        Text(vm.selectedSearchStationID == nil
-                             ? "Search within a radius of your current location or a town, or select one tide location."
-                             : "Fishing windows are calculated at this tide location. The search radius does not apply.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if vm.selectedSearchStationID == nil {
-                        Card {
-                            Text("Search radius").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(radii, id: \.self) { radius in
-                                        Button("\(radius) km") { vm.radiusKm = radius }
-                                            .buttonStyle(ChoiceButton(selected: vm.radiusKm == radius))
+                            if vm.datePreset == .custom {
+                                DatePicker("From", selection: $vm.customStartDate,
+                                           in: vm.firstSelectableDate...vm.latestSelectableDate,
+                                           displayedComponents: .date)
+                                    .environment(\.timeZone, TimeZone(identifier: "Pacific/Auckland")!)
+                                    .onChange(of: vm.customStartDate) { _, start in
+                                        if vm.customEndDate < start { vm.customEndDate = start }
                                     }
+                                DatePicker("To", selection: $vm.customEndDate,
+                                           in: vm.customStartDate...vm.latestSelectableDate,
+                                           displayedComponents: .date)
+                                    .environment(\.timeZone, TimeZone(identifier: "Pacific/Auckland")!)
+                            }
+                            Text(vm.dateRangeNote).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Card {
+                        PlanQuestion(title: "What time?") {
+                            FlowLayout {
+                                ForEach(FishingTimeMode.allCases, id: \.self) { mode in
+                                    Button(mode.rawValue) { vm.timeMode = mode }
+                                        .buttonStyle(ChoiceButton(selected: vm.timeMode == mode))
                                 }
                             }
+                            if vm.timeMode == .custom {
+                                Picker("From", selection: $vm.preferredStartMinute) {
+                                    ForEach(0..<48, id: \.self) { step in
+                                        Text(FishingViewModel.clockLabel(minutes: step * 30)).tag(step * 30)
+                                    }
+                                }.pickerStyle(.menu)
+                                Picker("Until", selection: $vm.preferredEndMinute) {
+                                    ForEach(0..<48, id: \.self) { step in
+                                        Text(FishingViewModel.clockLabel(minutes: step * 30)).tag(step * 30)
+                                    }
+                                }.pickerStyle(.menu)
+                            }
+                            Text(vm.timeNote).font(.caption).foregroundStyle(.secondary)
                         }
+                    }
+                    Card {
+                        DisclosureGroup(isExpanded: $showMore) {
+                            MoreOptions().padding(.top, 12)
+                        } label: {
+                            HStack {
+                                Text("More options").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                                Spacer()
+                                Text(vm.whatMattersLabel).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.tint(CatchCheckColor.accent)
                     }
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
-            .navigationTitle("Fishing plan")
+            .safeAreaInset(edge: .bottom) {
+                Button(action: onFind) {
+                    Text("Find fishing windows").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 5)
+                }
+                .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+                .padding(.horizontal, 20).padding(.vertical, 10)
+                .background(.bar)
+            }
+            .navigationTitle("Plan your fishing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+/// Choices that already have recommended values, so most people never open them.
+private struct MoreOptions: View {
+    @EnvironmentObject private var vm: FishingViewModel
+
+    private func setWalk(_ minutes: Int) {
+        var preferences = vm.landPreferences
+        preferences.arrivalMinutes = minutes
+        preferences.returnMinutes = minutes
+        vm.landPreferences = preferences
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            PlanQuestion(title: "What matters most?") {
+                FlowLayout {
+                    ForEach(PlanMatter.choices(boat: vm.isBoatFishing)) { matter in
+                        Button(matter.label) { vm.setWhatMatters(matter.priority, land: matter.land) }
+                            .buttonStyle(ChoiceButton(selected: vm.selectedMatter == matter))
+                    }
+                }
+                if let note = vm.selectedMatter?.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+            }
+            if !vm.isBoatFishing {
+                PlanQuestion(title: "How rough is OK?") {
+                    FlowLayout {
+                        ForEach(roughnessChoices, id: \.band) { choice in
+                            Button(choice.label) { vm.landPreferences.maxBand = choice.band }
+                                .buttonStyle(ChoiceButton(selected: vm.landPreferences.maxBand == choice.band))
+                        }
+                    }
+                }
+                PlanQuestion(title: "Where do you fish?") {
+                    FlowLayout {
+                        ForEach(ShoreSetting.allCases, id: \.self) { setting in
+                            Button(setting.rawValue) { vm.landPreferences.setting = setting }
+                                .buttonStyle(ChoiceButton(selected: vm.landPreferences.setting == setting))
+                        }
+                    }
+                }
+                PlanQuestion(title: "Walk to your spot (each way)") {
+                    FlowLayout {
+                        ForEach(walkChoices, id: \.minutes) { choice in
+                            Button(choice.label) { setWalk(choice.minutes) }
+                                .buttonStyle(ChoiceButton(selected: (vm.landPreferences.arrivalMinutes ?? 0) == choice.minutes))
+                        }
+                    }
+                    Text("Daytime then means getting back before dark too.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Button("Reset to recommended") { vm.resetMoreOptions() }.font(.subheadline)
         }
     }
 }
@@ -1283,13 +1389,13 @@ struct ResultsView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("\(vm.isBoatFishing ? "Boat" : "Land") fishing · \(vm.dateSummary)").font(.headline)
-                        Text(vm.selectedSearchStationID == nil
-                             ? "\(vm.timeSummary) · within \(vm.radiusKm) km"
-                             : vm.timeSummary)
+                        Text(vm.searchesOnePlace
+                             ? "\(vm.timeSummary) · this spot only"
+                             : "\(vm.timeSummary) · within \(vm.radiusKm) km")
                         Text(vm.locationSummary)
-                        Text(vm.preference.title(boat: vm.isBoatFishing))
+                        Text(vm.whatMattersLabel)
                     }.font(.subheadline).foregroundStyle(.secondary)
-                    if vm.selectedSearchStationID != nil, vm.hasSearchedRecommendations,
+                    if vm.searchesOnePlace, vm.hasSearchedRecommendations,
                        !vm.isResolvingRecommendationLocation, !vm.isLoadingRecommendations,
                        vm.recommendationError == nil {
                         Text("Planning windows on \(vm.recommendations.count) of \(vm.recommendationDays().count) selected days. Local site checks are still needed.")
@@ -1380,8 +1486,7 @@ private struct SearchPlaceMenu: View {
         Button { showingPicker = true } label: {
             if compact {
                 HStack(spacing: 6) {
-                    Text(vm.hasDeviceLocation || !vm.searchesFromDeviceLocation
-                         ? "From \(vm.homeCityLabel)" : vm.homeCityLabel)
+                    Text(vm.locationSummary)
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption.bold())
@@ -1391,19 +1496,18 @@ private struct SearchPlaceMenu: View {
                 .contentShape(Rectangle())
             } else {
                 HStack(spacing: 10) {
-                    Image(systemName: "location.fill")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Search from").font(.caption).foregroundStyle(.secondary)
-                        Text(vm.homeCityLabel).font(.headline).foregroundStyle(CatchCheckColor.navy)
-                    }
+                    Image(systemName: "mappin.and.ellipse").foregroundStyle(CatchCheckColor.accent)
+                    Text(vm.locationSummary).font(.headline).foregroundStyle(CatchCheckColor.navy)
                     Spacer()
-                    Image(systemName: "chevron.down").font(.caption.bold())
+                    Text("Change").font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.accent)
                 }
+                .padding(12)
+                .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Search location: \(vm.homeCityLabel). Change location")
+        .accessibilityLabel("\(vm.locationSummary). Change place")
         .sheet(isPresented: $showingPicker) { SearchStationPicker() }
     }
 }
@@ -1417,6 +1521,12 @@ private struct SearchStationPicker: View {
         let sorted = tideStations.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         guard !query.isEmpty else { return sorted }
         return sorted.filter { $0.name.localizedStandardContains(query) || $0.region.localizedStandardContains(query) }
+    }
+
+    private var matchingSpots: [FishingSpot] {
+        let sorted = fishingSpots.filter { $0.boat == vm.isBoatFishing }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        guard !query.isEmpty else { return sorted }
+        return sorted.filter { $0.name.localizedStandardContains(query) || $0.area.localizedStandardContains(query) }
     }
 
     private var matchingTowns: [SearchOrigin] {
@@ -1440,7 +1550,7 @@ private struct SearchStationPicker: View {
                         }
                     }
                 } footer: {
-                    Text("Search within your radius of your current location or a town, or choose one tide location. You can change it any time.")
+                    Text("Search near you or a town, or pick one fishing spot or tide location. You can change it any time.")
                 }
                 if !matchingTowns.isEmpty {
                     Section {
@@ -1459,10 +1569,33 @@ private struct SearchStationPicker: View {
                     } header: {
                         Text("Towns")
                     } footer: {
-                        Text("Fishing windows are found within your search radius of the town.")
+                        Text("Search within a distance of the town.")
                     }
                 }
-                Section("Tide locations") {
+                if !matchingSpots.isEmpty {
+                    Section {
+                        ForEach(matchingSpots, id: \.id) { spot in
+                            Button {
+                                vm.selectSearchSpot(spot)
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(spot.name)
+                                        Text(spot.area).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if vm.selectedSearchSpotName == spot.name { Image(systemName: "checkmark") }
+                                }
+                            }
+                        }
+                    } header: {
+                        Text(vm.isBoatFishing ? "Boat fishing areas" : "Fishing spots")
+                    } footer: {
+                        Text("Search just this spot, or around it.")
+                    }
+                }
+                if !matchingStations.isEmpty { Section("Tide locations") {
                     ForEach(matchingStations) { station in
                         Button {
                             vm.selectSearchStation(station)
@@ -1478,11 +1611,11 @@ private struct SearchStationPicker: View {
                             }
                         }
                     }
-                }
+                } }
             }
-            .searchable(text: $query, prompt: "Search towns or tide locations")
+            .searchable(text: $query, prompt: "Search towns, spots or tide locations")
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Search location")
+            .navigationTitle("Where are you fishing?")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }
@@ -1918,37 +2051,6 @@ private struct WindowChecks: View {
                     }
                 }
             }.font(.caption)
-        }
-    }
-}
-
-private struct LandOptions: View {
-    @EnvironmentObject private var vm: FishingViewModel
-    var body: some View {
-        DisclosureGroup("Shore options") {
-            VStack(alignment: .leading, spacing: 10) {
-                Picker("Your shore setting", selection: $vm.landPreferences.setting) {
-                    ForEach(ShoreSetting.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                Picker("Comfort limit", selection: $vm.landPreferences.maxBand) {
-                    ForEach(0...3, id: \.self) { Text("\(comfortMood($0).emoji) \(comfortMood($0).label)").tag($0) }
-                }
-                Picker("Prefer", selection: $vm.landPreferences.priority) {
-                    ForEach(LandPriority.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                Picker("Access + setup", selection: $vm.landPreferences.arrivalMinutes) {
-                    Text("Not set").tag(Optional<Int>.none)
-                    ForEach([0, 15, 30, 60, 120, 180], id: \.self) { Text("\($0) min").tag(Optional($0)) }
-                }
-                Picker("Return", selection: $vm.landPreferences.returnMinutes) {
-                    Text("Not set").tag(Optional<Int>.none)
-                    ForEach([0, 15, 30, 60, 120, 180], id: \.self) { Text("\($0) min").tag(Optional($0)) }
-                }
-                Toggle("Whole visit in daylight", isOn: $vm.landPreferences.daylightOnly)
-                if vm.landPreferences.daylightOnly && (vm.landPreferences.arrivalMinutes == nil || vm.landPreferences.returnMinutes == nil) {
-                    Text("Set access/setup and return time.").font(.caption).foregroundStyle(.secondary)
-                }
-            }.padding(.top, 8)
         }
     }
 }

@@ -28,7 +28,10 @@ test("shared condition rows read in plain words", () => {
     ["Daylight", "100% session", "All in daylight"], ["Daylight", "75% session", "75% in daylight"],
     ["Daylight", "100% visit", "Whole visit in daylight"], ["Daylight", "0% known time", "All after dark"],
     ["Shore plan", "Beach · before 20 min · return 15 min", "Beach · 20 min walk in · 15 min back"],
-    ["Shore plan", "Not set · before — · return —", "Shore type not set · walk-in time not set · return time not set"],
+    ["Shore plan", "Not set · before — · return —", "Shore type not set · walk time not set"],
+    ["Shore plan", "Not sure · before 0 min · return 0 min", "Shore type not set · short walk"],
+    ["Shore plan", "Rocks · before 30 min · return 30 min", "Rocks · 30 min walk each way"],
+    ["Shore plan", "Wharf or harbour · before 15 min · return —", "Wharf or harbour · 15 min walk in · return time not set"],
     ["Wind", "14 km/h · gust 22 · SW and a few more…", "14 km/h · gust 22 · SW and a few more…"],
     ["Feels like", "14–16°C", "14–16°C"],
   ];

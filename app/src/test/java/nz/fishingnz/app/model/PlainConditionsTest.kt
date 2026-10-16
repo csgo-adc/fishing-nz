@@ -44,7 +44,10 @@ class PlainConditionsTest {
         assertEquals("Whole visit in daylight", plain("Daylight", "100% visit"))
         assertEquals("All after dark", plain("Daylight", "0% known time"))
         assertEquals("Beach · 20 min walk in · 15 min back", plain("Shore plan", "Beach · before 20 min · return 15 min"))
-        assertEquals("Shore type not set · walk-in time not set · return time not set", plain("Shore plan", "Not set · before — · return —"))
+        assertEquals("Shore type not set · walk time not set", plain("Shore plan", "Not set · before — · return —"))
+        assertEquals("Shore type not set · short walk", plain("Shore plan", "Not sure · before 0 min · return 0 min"))
+        assertEquals("Rocks · 30 min walk each way", plain("Shore plan", "Rocks · before 30 min · return 30 min"))
+        assertEquals("Wharf or harbour · 15 min walk in · return time not set", plain("Shore plan", "Wharf or harbour · before 15 min · return —"))
     }
 
     @Test fun windTileNamesWhereTheWindStartsAndEnds() {

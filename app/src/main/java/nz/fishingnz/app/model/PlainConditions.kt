@@ -83,11 +83,17 @@ object PlainConditions {
             "Tide" -> tide(value)
             "Daylight" -> daylightShare.find(value)?.destructured?.let { (percent, of) -> daylight(percent, of) }
             "Shore plan" -> shorePlan.find(value)?.destructured?.let { (setting, before, back) ->
-                listOf(if (setting == "Not set") "Shore type not set" else setting,
-                    if (before == "—") "walk-in time not set" else "$before walk in",
-                    if (back == "—") "return time not set" else "$back back").joinToString(" · ") }
+                (listOf(if (setting == "Not set" || setting == "Not sure") "Shore type not set" else setting) + walk(before, back)).joinToString(" · ") }
             else -> null
         } ?: value
+    }
+
+    /** "30 min walk each way", "short walk", or the two ways separately when they differ. */
+    private fun walk(before: String, back: String): List<String> = when {
+        before == back && before == "—" -> listOf("walk time not set")
+        before == back && before == "0 min" -> listOf("short walk")
+        before == back -> listOf("$before walk each way")
+        else -> listOf(if (before == "—") "walk-in time not set" else "$before walk in", if (back == "—") "return time not set" else "$back back")
     }
 
     /** "Next high tide 7:12 PM, 2.4 m" and "Tide station: Auckland, 3.0 km away". */

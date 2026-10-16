@@ -14,10 +14,31 @@ data class SearchOrigin(val name: String, val point: GeoPoint)
 data class PreferredTimeRange(val start: LocalTime, val end: LocalTime)
 enum class WindowPriority {
     WEATHER, LATE_INCOMING;
-    fun label(boat: Boolean) = if (this == LATE_INCOMING) "Late incoming tide" else if (boat) "Wave comfort" else "Comfort"
+    fun label(boat: Boolean) = if (this == LATE_INCOMING) "Late incoming tide" else if (boat) "Calm water" else "Comfort"
 }
-enum class ShoreSetting(val label: String) { UNKNOWN("Not set"), WHARF("Wharf"), BANK("Harbour bank"), BEACH("Beach"), ROCKS("Rocks") }
-enum class LandPriority(val label: String) { BALANCED("Comfort"), CASTING("Easier casting"), DRY("Less rain") }
+/** When in the day someone can fish. Daytime follows each day's sunrise and sunset; the others are fixed hours. */
+enum class TimeChoice(val label: String, val hours: PreferredTimeRange?) {
+    DAYTIME("Daytime", null),
+    MORNING("Morning", PreferredTimeRange(LocalTime.of(5, 0), LocalTime.of(12, 0))),
+    EVENING("Evening", PreferredTimeRange(LocalTime.of(15, 0), LocalTime.of(22, 0))),
+    ANYTIME("Any time", null),
+    CUSTOM("Pick hours", null)
+}
+/** The distances a radius search offers. */
+val searchRadiiKm = listOf(10, 25, 50, 100, 200)
+/** A saved radius from before 1.0.32 (10–500 km) moved onto [searchRadiiKm]. */
+fun nearestSearchRadius(km: Int): Int = searchRadiiKm.minBy { kotlin.math.abs(it - km) }
+/** "How rough is OK?" Each is the highest comfort band a window may have. */
+val roughnessChoices = listOf(0 to "Calm only", 1 to "A bit of wind or rain", 2 to "I don't mind rough")
+/** "Walk to your spot", each way, in minutes. */
+val walkChoices = listOf(0 to "A few minutes", 15 to "15 min", 30 to "30 min", 60 to "1 hour")
+enum class ShoreSetting(val label: String) { UNKNOWN("Not sure"), WHARF("Wharf or harbour"), BEACH("Beach"), ROCKS("Rocks");
+    companion object {
+        /** A saved name, including the harbour bank choice that 1.0.32 merged into the wharf. */
+        fun saved(name: String?): ShoreSetting = if (name == "BANK") WHARF else entries.firstOrNull { it.name == name } ?: UNKNOWN
+    }
+}
+enum class LandPriority(val label: String) { BALANCED("Comfort"), CASTING("Less wind"), DRY("Less rain") }
 data class LandPreferences(
     val setting: ShoreSetting = ShoreSetting.UNKNOWN,
     val priority: LandPriority = LandPriority.BALANCED,

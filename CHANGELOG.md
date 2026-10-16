@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.0.32 — 2026-10-16 (build code 33)
+
+- **A simpler fishing plan page.** It now asks four things: **Where?** (a place and a distance),
+  **Fishing from** (land or boat), **When?** and **What time?**. Everything else moves under
+  **More options**, already set to recommended values, with **Reset to recommended**. Android and
+  iPhone; iPhone also gets a **Find fishing windows** button on the plan page.
+- **Where?** is one place picker for your location, a town, a fishing spot or a tide station.
+  Picking a spot or station searches **just this spot**; a distance searches around it instead.
+  Distances are 10, 25, 50 (new default), 100 and 200 km.
+- **When?** offers Today, Tomorrow, This weekend, Next 3 days (new default) and Next 7 days, plus
+  Pick dates, and shows the dates (for example "Fri 16 – Sun 18 Oct"). "In 3 days", which meant
+  only the single day three days away, is gone; saved plans move to Next 3 days.
+- **What time?** offers **Daytime** (the new default: each day's real sunrise to sunset, including
+  your walk), Morning (5 AM–12 PM), Evening (3 PM–10 PM), Any time and Pick hours. It replaces the
+  fixed 7 AM–9 PM and the separate "Whole visit in daylight" switch.
+- **More options:** **What matters most?** (Comfort, Less wind, Less rain or Late incoming tide;
+  boats: Calm water or Late incoming tide), **How rough is OK?** (Calm only, A bit of wind or rain,
+  I don't mind rough), **Where do you fish?** (Not sure, Wharf or harbour, Beach, Rocks) and **Walk to
+  your spot**, one time for each way that defaults to a few minutes. Harbour bank merged into Wharf
+  or harbour; separate walk-in and return times became one. Saved choices carry over.
+- Window conditions say "short walk" or "30 min walk each way" for the walk.
+
 ## 1.0.31 — 2026-10-16 (build code 32)
 
 - **Show on map.** Every fishing window card has a "Show on map" link next to "All conditions",

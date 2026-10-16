@@ -11,6 +11,9 @@ object SearchPreferencesStore {
     private const val MODE_KEY = "location_mode"
     private const val STATION_KEY = "station_id"
     private const val MANUAL_ORIGIN_KEY = "manual_origin"
+    private const val MANUAL_LATITUDE_KEY = "manual_origin_latitude"
+    private const val MANUAL_LONGITUDE_KEY = "manual_origin_longitude"
+    private const val SPOT_KEY = "spot_name"
     private const val RADIUS_KEY = "radius_km"
     private const val BOAT_KEY = "boat_fishing"
     private const val DATE_LABEL_KEY = "date_label"
@@ -30,8 +33,25 @@ object SearchPreferencesStore {
 
     fun savedManualOriginName(): String? = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getString(MANUAL_ORIGIN_KEY, null)
 
+    /** A town, or a spot or tide station searched around. Older saves have only a town name. */
+    fun savedManualOrigin(): SearchOrigin? {
+        val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return null
+        val name = prefs.getString(MANUAL_ORIGIN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
+        val latitude = prefs.getFloat(MANUAL_LATITUDE_KEY, Float.NaN).toDouble()
+        val longitude = prefs.getFloat(MANUAL_LONGITUDE_KEY, Float.NaN).toDouble()
+        if (latitude in -90.0..90.0 && longitude in -180.0..180.0) return SearchOrigin(name, GeoPoint(latitude, longitude))
+        return searchOrigins.firstOrNull { it.name == name }
+    }
+
+    /** The fishing spot picked as the search place, if any. */
+    fun savedSpotName(): String? = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getString(SPOT_KEY, null)
+
+    fun saveSpot(name: String?) {
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.putString(SPOT_KEY, name)?.apply()
+    }
+
     fun savedRadiusKm(): Int? = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        ?.getInt(RADIUS_KEY, 100)?.takeIf { it in listOf(10, 30, 50, 100, 200, 300, 400, 500) }
+        ?.getInt(RADIUS_KEY, -1)?.takeIf { it > 0 }
 
     fun savedBoat(): Boolean = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         ?.getBoolean(BOAT_KEY, false) ?: false
@@ -61,13 +81,14 @@ object SearchPreferencesStore {
 
     fun savedLandPreferences(): LandPreferences {
         val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return LandPreferences()
+        // 1.0.32 has one walk time for both ways (none when never set) and three roughness choices.
+        val walk = (prefs.getInt("arrival_minutes", -1).takeIf { it in 0..180 } ?: prefs.getInt("return_minutes", -1).takeIf { it in 0..180 } ?: 0)
+            .let { minutes -> walkChoices.map { it.first }.minBy { kotlin.math.abs(it - minutes) } }
         return LandPreferences(
-            setting = runCatching { ShoreSetting.valueOf(prefs.getString("shore_setting", "UNKNOWN")!!) }.getOrDefault(ShoreSetting.UNKNOWN),
+            setting = ShoreSetting.saved(prefs.getString("shore_setting", null)),
             priority = runCatching { LandPriority.valueOf(prefs.getString("land_priority", "BALANCED")!!) }.getOrDefault(LandPriority.BALANCED),
-            maxBand = prefs.getInt("comfort_band", 1).coerceIn(0, 3),
-            arrivalMinutes = prefs.getInt("arrival_minutes", -1).takeIf { it in 0..180 },
-            returnMinutes = prefs.getInt("return_minutes", -1).takeIf { it in 0..180 },
-            daylightOnly = prefs.getBoolean("daylight_only", false)
+            maxBand = prefs.getInt("comfort_band", 1).coerceIn(0, 2),
+            arrivalMinutes = walk, returnMinutes = walk
         )
     }
     fun saveLandPreferences(value: LandPreferences) {
@@ -105,9 +126,11 @@ object SearchPreferencesStore {
             ?.apply()
     }
 
-    fun saveManualOrigin(name: String?) {
+    fun saveManualOrigin(origin: SearchOrigin?) {
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
-            ?.putString(MANUAL_ORIGIN_KEY, name)
+            ?.putString(MANUAL_ORIGIN_KEY, origin?.name)
+            ?.putFloat(MANUAL_LATITUDE_KEY, origin?.point?.latitude?.toFloat() ?: Float.NaN)
+            ?.putFloat(MANUAL_LONGITUDE_KEY, origin?.point?.longitude?.toFloat() ?: Float.NaN)
             ?.apply()
     }
 

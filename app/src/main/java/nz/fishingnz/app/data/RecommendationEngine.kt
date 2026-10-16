@@ -26,20 +26,27 @@ class RecommendationEngine {
     suspend fun search(
         origin: GeoPoint, radiusKm: Int, start: LocalDate, end: LocalDate, boat: Boolean,
         preferredTime: PreferredTimeRange?, specificStation: TideStation? = null,
-        priority: WindowPriority = WindowPriority.WEATHER, land: LandPreferences = LandPreferences()
+        priority: WindowPriority = WindowPriority.WEATHER, land: LandPreferences = LandPreferences(),
+        daylightOnly: Boolean = false, specificSpot: FishingSpot? = null
     ): RecommendationSearch = coroutineScope {
         val today = LocalDate.now(zone)
         require(!start.isBefore(today) && !end.isBefore(start) && !end.isAfter(today.plusDays(15))) {
             "Choose dates within the next 16 days."
         }
         val now = Instant.now()
-        require(boat || !land.daylightOnly || (land.arrivalMinutes != null && land.returnMinutes != null)) { "Set access/setup and return time for daylight only." }
-        val mayCrossMidnight = preferredTime == null || preferredTime.end.isBefore(preferredTime.start) || (!boat && (land.returnMinutes ?: 0) > 0)
+        // Daytime covers the whole visit; a walk that was never set counts as none.
+        val plan = if (daylightOnly) land.copy(daylightOnly = true, arrivalMinutes = land.arrivalMinutes ?: 0,
+            returnMinutes = land.returnMinutes ?: 0) else land
+        val single = specificStation != null || specificSpot != null
+        require(boat || !plan.daylightOnly || (plan.arrivalMinutes != null && plan.returnMinutes != null)) { "Set access/setup and return time for daylight only." }
+        val mayCrossMidnight = preferredTime == null || preferredTime.end.isBefore(preferredTime.start) || (!boat && (plan.returnMinutes ?: 0) > 0)
         val forecastDays = min(16, ChronoUnit.DAYS.between(today, end).toInt() + 1 + if (mayCrossMidnight) 1 else 0)
-        val candidates = if (specificStation != null) {
-            listOf(FishingSpot(specificStation.name, specificStation.region, specificStation.latitude, specificStation.longitude, boat) to 0.0)
-        } else fishingSpots.filter { it.boat == boat }.map { it to distanceKm(origin, GeoPoint(it.latitude, it.longitude)) }
-        val nearby = if (specificStation != null) candidates else candidates.filter { it.second <= radiusKm }
+        val candidates = when {
+            specificStation != null -> listOf(FishingSpot(specificStation.name, specificStation.region, specificStation.latitude, specificStation.longitude, boat) to 0.0)
+            specificSpot != null -> listOf(specificSpot.copy(boat = boat) to 0.0)
+            else -> fishingSpots.filter { it.boat == boat }.map { it to distanceKm(origin, GeoPoint(it.latitude, it.longitude)) }
+        }
+        val nearby = if (single) candidates else candidates.filter { it.second <= radiusKm }
         if (nearby.isEmpty()) {
             val closest = candidates.minByOrNull { it.second }
             return@coroutineScope RecommendationSearch(emptyList(), 0, 0, closest?.first?.name, closest?.second?.roundToInt())
@@ -48,7 +55,7 @@ class RecommendationEngine {
         val outcomes = nearby.map { (spot, distance) ->
             async(Dispatchers.IO) {
                 limiter.withPermit {
-                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation, priority, land)) }
+                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation, priority, plan, daylightOnly)) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) { Result.failure<SpotOutcome>(error) }
                 }
@@ -57,16 +64,20 @@ class RecommendationEngine {
         val succeeded = outcomes.mapNotNull { it.getOrNull() }
         if (succeeded.isEmpty()) error("Weather forecasts are unavailable for nearby spots. Please try again later.")
         if (succeeded.none { it.usableWeather }) error("No usable hourly weather forecast was available for the selected days.")
-        val spotsWithoutWindows = if (specificStation != null) emptyList() else nearby.zip(outcomes)
+        val spotsWithoutWindows = if (single) emptyList() else nearby.zip(outcomes)
             .filter { (_, outcome) -> outcome.getOrNull()?.windows?.isEmpty() == true }
             .sortedBy { (candidate, _) -> candidate.second }
             .map { (candidate, _) -> candidate.first.name }
             .distinct()
         RecommendationSearch(
             succeeded.flatMap { it.windows }.map {
-                if (specificStation == null) it else it.copy(distance = "Selected tide location · access not verified")
+                when {
+                    specificStation != null -> it.copy(distance = "Selected tide location · access not verified")
+                    specificSpot != null -> it.copy(distance = "Selected spot")
+                    else -> it
+                }
             }.let {
-                if (specificStation != null) it.sortedBy { item -> item.startsAtEpochSeconds }
+                if (single) it.sortedBy { item -> item.startsAtEpochSeconds }
                 else limitPerDay(it.sortedWith(windowOrder.thenBy { item -> item.distanceKm }.thenBy { item -> item.name }))
             }, nearby.size, outcomes.count { it.isFailure }, spotsWithoutWindows = spotsWithoutWindows
         )
@@ -75,7 +86,7 @@ class RecommendationEngine {
     private suspend fun bestWindows(
         spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int,
         now: Instant, preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean,
-        selectedStation: TideStation?, priority: WindowPriority, land: LandPreferences
+        selectedStation: TideStation?, priority: WindowPriority, land: LandPreferences, daylightOnly: Boolean
     ): SpotOutcome {
         val weather = weather(spot, forecastDays)
         val marine = try { marine(spot, forecastDays) }
@@ -105,7 +116,8 @@ class RecommendationEngine {
                 if (startDay !in start..end) continue
                 if (!withinPreferredTime(samples.first().time, samples.last().time, startDay, preferredTime)) continue
                 WindowEvaluation.evaluate(spot, distance, samples, marine?.hours.orEmpty(), weather.solar,
-                    tides, station, now, source, priority, land, weather.hours, weather.retrievedAt)?.let { add(it) }
+                    tides, station, now, source, priority, land, weather.hours, weather.retrievedAt)
+                    ?.takeIf { !daylightOnly || it.daylightFraction >= .9999 }?.let { add(it) }
             }
         }
         val selection = WindowSelection()
