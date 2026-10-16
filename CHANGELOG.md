@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.33 — 2026-10-16 (build code 34)
+
+Better fishing-window rules, on Android and iPhone.
+
+- **Rocks and beaches now count the waves.** On rocks, offshore waves up to 1 m are Comfortable,
+  1.5 m Okay, 2 m Demanding and more Uncomfortable (beaches up to 2.5 m before Uncomfortable). A
+  long-period swell of 1 m or more counts one step worse because it surges. Before, a 2.5 m swell
+  at rocks could still say "Comfortable". Wharves, harbours and "Not sure" are unchanged.
+- **Tide choices.** "What matters most?" offers **Tide** with Incoming, Around high (2 hours before
+  to 1 hour after high; replaces "late incoming"), Outgoing or Around low, all timed from the
+  official LINZ highs and lows. Saved "late incoming" plans become Around high.
+- **Sunrise or sunset.** A new choice that looks for the hour either side of sunrise or sunset.
+  These windows are partly dark by design, so they are not ranked down for it, and the daylight
+  row says "Around sunrise" or "Around sunset".
+- **How long will you fish?** 1, 2, 3 or 4 hours (was always 2). Every hour of the session counts.
+- **Nearer first.** When two spots are equally good, the nearer one is listed first, before an
+  earlier start further away.
+- **Cool mornings.** Feels like 6–12°C is now Okay and 2–6°C Demanding (before: 8 and 5°C), since
+  warm clothes cover them; most winter mornings were falling outside the default comfort limit.
+- **Boats get "How rough is OK?"** (Calm only, A little chop, I don't mind rough), the same as land.
+- **Results by day.** A plan over several days shows each day under its own heading, in date
+  order, and marks the **Best pick** overall.
+
 ## 1.0.32 — 2026-10-16 (build code 33)
 
 - **A simpler fishing plan page.** It now asks four things: **Where?** (a place and a distance),

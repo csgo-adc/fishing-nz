@@ -29,20 +29,47 @@ struct PlanMatter: Identifiable, Equatable {
     let note: String
     var id: String { label }
 
+    private static let tideNote = "Windows that mostly fall in the part of the tide you choose. Times are for the nearest LINZ station."
+    private static let sunNote = "The hour either side of sunrise or sunset. Part of the window can be dark."
+
     static func choices(boat: Bool) -> [PlanMatter] {
         boat ? [
             PlanMatter(label: "Calm water", priority: .weather, land: .balanced, note: "The smallest, smoothest waves first, then wind and rain."),
-            PlanMatter(label: "Late incoming tide", priority: .lateIncoming, land: .balanced,
-                       note: "The last of the incoming tide, near high water. Waves still come first. Times are for the nearest LINZ station.")
+            PlanMatter(label: "Tide", priority: .tide, land: .balanced, note: tideNote + " Waves still come first."),
+            PlanMatter(label: "Sunrise or sunset", priority: .sun, land: .balanced, note: sunNote + " Waves still come first.")
         ] : [
             PlanMatter(label: "Comfort", priority: .weather, land: .balanced, note: "The least wind, rain and cold."),
             PlanMatter(label: "Less wind", priority: .weather, land: .casting, note: "Comfortable first, then the least wind for easier casting."),
             PlanMatter(label: "Less rain", priority: .weather, land: .dry, note: "Comfortable first, then the least rain."),
-            PlanMatter(label: "Late incoming tide", priority: .lateIncoming, land: .balanced,
-                       note: "The last of the incoming tide, near high water. Times are for the nearest LINZ station.")
+            PlanMatter(label: "Tide", priority: .tide, land: .balanced, note: tideNote),
+            PlanMatter(label: "Sunrise or sunset", priority: .sun, land: .balanced, note: sunNote)
         ]
     }
 }
+
+extension TidePhase {
+    /// What each tide choice covers, timed from the official highs and lows.
+    var note: String {
+        switch self {
+        case .incoming: "From low tide up to high tide."
+        case .aroundHigh: "From 2 hours before high tide to 1 hour after."
+        case .outgoing: "From high tide down to low tide."
+        case .aroundLow: "From 1.5 hours before low tide to 1.5 hours after."
+        }
+    }
+    /// "around high tide", for sentences.
+    var words: String {
+        switch self {
+        case .incoming: "on the incoming tide"
+        case .aroundHigh: "around high tide"
+        case .outgoing: "on the outgoing tide"
+        case .aroundLow: "around low tide"
+        }
+    }
+}
+
+/// "2 hours", or "1 hour".
+func hoursLabel(_ hours: Int) -> String { hours == 1 ? "1 hour" : "\(hours) hours" }
 
 /// When in the day someone can fish. Daytime follows each day's sunrise and sunset; the others are fixed hours.
 enum FishingTimeMode: String, CaseIterable, Hashable {
@@ -90,6 +117,13 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
     @Published var preference: WindowPriority = .weather {
         didSet { if oldValue != preference { UserDefaults.standard.set(preference.rawValue, forKey: Self.planPriorityKey); invalidateRecommendations() } }
+    }
+    @Published var tidePhase: TidePhase = .aroundHigh {
+        didSet { if oldValue != tidePhase { UserDefaults.standard.set(tidePhase.rawValue, forKey: "fishingPlanTidePhase"); invalidateRecommendations() } }
+    }
+    /// How long the person fishes, 1 to 4 hours.
+    @Published var sessionHours = 2 {
+        didSet { if oldValue != sessionHours { UserDefaults.standard.set(sessionHours, forKey: "fishingPlanSessionHours"); invalidateRecommendations() } }
     }
     @Published var landPreferences = LandPreferences() {
         didSet {
@@ -270,7 +304,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         }
     }
 
-    var whatMattersLabel: String { selectedMatter?.label ?? preference.title(boat: isBoatFishing) }
+    var whatMattersLabel: String { preference == .tide ? "\(tidePhase.label) tide" : selectedMatter?.label ?? preference.title(boat: isBoatFishing) }
 
     /// The line under the time choices on the plan page.
     var timeNote: String {
@@ -370,6 +404,24 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 assessment: window.assessment,
                 coordinate: window.coordinate
             )
+        }
+    }
+
+    /// The best window overall: first in planning order, the nearer spot first when two are equally good.
+    var bestRecommendation: Recommendation? {
+        guard let best = scoredWindows.min(by: FishingScoringService.searchOrder) else { return nil }
+        return recommendations.first { $0.name == best.spotName && $0.startsAt == best.start }
+    }
+
+    /// The results by day in date order, keeping the planning order within each day.
+    var recommendationsByDay: [(label: String, windows: [Recommendation])] {
+        let grouped = Dictionary(grouping: recommendations) { nzCalendar.startOfDay(for: $0.startsAt ?? .distantPast) }
+        return grouped.keys.sorted().map { day in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "Pacific/Auckland")
+            formatter.dateFormat = "EEEE d MMMM"
+            return (formatter.string(from: day), grouped[day]!)
         }
     }
 
@@ -512,6 +564,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     func resetMoreOptions() {
         landPreferences = LandPreferences(arrivalMinutes: 0, returnMinutes: 0)
         preference = .weather
+        tidePhase = .aroundHigh
+        sessionHours = 2
     }
 
     /// Search within the radius around a town, or around a spot chosen on the map.
@@ -650,6 +704,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         let station = searchesOnePlace ? selectedSearchStation : nil
         let spot = searchesOnePlace ? selectedSearchSpot : nil
         let daylightOnly = timeMode == .daytime
+        let phase = tidePhase, session = sessionHours
         let days = recommendationDays()
         let boat = isBoatFishing
         let hours = preferredHours
@@ -663,7 +718,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             do {
                 let result = try await scoringService.search(origin: origin, radiusKm: radius, selectedStation: station, selectedSpot: spot,
                                                              days: days, boat: boat, preferredHours: hours, priority: priority, land: land,
-                                                             daylightOnly: daylightOnly)
+                                                             daylightOnly: daylightOnly, tidePhase: phase, sessionHours: session)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
                 let windows = result.windows
                 scoredWindows = windows
@@ -717,9 +772,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         if let mode = FishingTimeMode.saved(defaults.string(forKey: Self.planTimeModeKey)) {
             timeMode = mode
         }
-        if let stored = defaults.string(forKey: Self.planPriorityKey), let priority = WindowPriority(rawValue: stored) {
-            preference = priority
-        }
+        preference = WindowPriority.saved(defaults.string(forKey: Self.planPriorityKey))
+        if let phase = defaults.string(forKey: "fishingPlanTidePhase").flatMap(TidePhase.init(rawValue:)) { tidePhase = phase }
+        if sessionLengths.contains(defaults.integer(forKey: "fishingPlanSessionHours")) { sessionHours = defaults.integer(forKey: "fishingPlanSessionHours") }
         let storedStartMinute = defaults.integer(forKey: Self.planStartMinuteKey)
         if defaults.object(forKey: Self.planStartMinuteKey) != nil, (0..<1440).contains(storedStartMinute), storedStartMinute % 30 == 0 {
             preferredStartMinute = storedStartMinute

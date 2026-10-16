@@ -27,7 +27,7 @@ class LandAssessmentTest {
         assertTrue(windowOrder.compare(wet, gusty) < 0)
     }
     @Test fun coldCannotEarnPerfectComfortAndMissingTemperatureCannotImproveOrder() {
-        val cold = checkNotNull(evaluate(hours(temp = 4.0)))
+        val cold = checkNotNull(evaluate(hours(temp = 1.0)))
         val mild = checkNotNull(evaluate(hours(14.0, 25.0)))
         val unknown = checkNotNull(evaluate(hours(temp = null)))
         assertEquals("Uncomfortable", cold.windowMood.label)
@@ -36,10 +36,44 @@ class LandAssessmentTest {
         assertFalse(unknown.assessment!!.matchesComfort)
         assertTrue(windowOrder.compare(cold, unknown) < 0)
     }
+    @Test fun warmClothesCoverCoolMornings() {
+        // 1.0.33: "Okay" reaches down to 6°C feels-like and "Demanding" to 2°C.
+        assertEquals(listOf(0, 1, 1, 2, 2, 3), listOf(12.0, 8.0, 6.0, 5.0, 2.0, 1.0).map(LandAssessment::temperatureBand))
+        assertEquals("Okay", checkNotNull(evaluate(hours(temp = 7.0))).windowMood.label)
+        assertEquals("Demanding", checkNotNull(evaluate(hours(temp = 4.0))).windowMood.label)
+    }
+    @Test fun rocksAndBeachesCountTheWaves() {
+        fun sea(height: Double, period: Double = 8.0) = hours().associate { it.time to MarineSample(height, period) }
+        val rocks = LandPreferences(setting = ShoreSetting.ROCKS, arrivalMinutes = 0, returnMinutes = 0)
+        val beach = rocks.copy(setting = ShoreSetting.BEACH)
+        val unsure = rocks.copy(setting = ShoreSetting.UNKNOWN)
+        assertEquals("Comfortable", checkNotNull(evaluate(prefs = rocks, waves = sea(.8))).windowMood.label)
+        assertEquals("Okay", checkNotNull(evaluate(prefs = rocks, waves = sea(1.2))).windowMood.label)
+        assertEquals("Demanding", checkNotNull(evaluate(prefs = rocks, waves = sea(1.8))).windowMood.label)
+        assertEquals("Uncomfortable", checkNotNull(evaluate(prefs = rocks, waves = sea(2.2))).windowMood.label)
+        assertEquals("Okay", checkNotNull(evaluate(prefs = beach, waves = sea(1.4))).windowMood.label)
+        assertEquals("Demanding", checkNotNull(evaluate(prefs = beach, waves = sea(2.2))).windowMood.label)
+        // A long-period swell of 1 m or more surges: one band worse.
+        assertEquals("Demanding", checkNotNull(evaluate(prefs = rocks, waves = sea(1.2, 13.0))).windowMood.label)
+        // Not sure and wharves leave waves out of comfort, as before.
+        assertEquals("Comfortable", checkNotNull(evaluate(prefs = unsure, waves = sea(2.2))).windowMood.label)
+        val highWaves = checkNotNull(evaluate(prefs = rocks, waves = sea(2.2))).assessment!!
+        assertFalse(highWaves.matchesComfort)
+        assertEquals("High waves", highWaves.conditions.first { it.title == "Offshore waves" }.mood.label)
+        // Rocks need the waves: missing waves cannot look comfortable.
+        assertEquals("Needs more data", checkNotNull(evaluate(prefs = rocks, waves = emptyMap())).windowMood.label)
+    }
+    @Test fun longerSessionsUseEveryHour() {
+        val four = (8..12).map { ForecastHour(at(it), 10.0, 18.0, 0.0, 80.0, 0, feelsLike = 16.0) }
+        val result = checkNotNull(evaluate(four))
+        assertEquals(4, result.durationHours)
+        val windyLastHour = four.mapIndexed { i, h -> if (i == 4) h.copy(wind = 25.0, gust = 35.0) else h }
+        assertEquals("Demanding", checkNotNull(evaluate(windyLastHour)).windowMood.label)
+    }
     @Test fun wettestHourAndFinalTemperatureAreNotAveragedAway() {
         val burst = hours().mapIndexed { i, h -> h.copy(rain = if (i == 2) 2.0 else 0.0) }
         assertEquals("Uncomfortable", checkNotNull(evaluate(burst)).windowMood.label)
-        val endpointCold = hours().mapIndexed { i, h -> if (i == 2) h.copy(feelsLike = 4.0) else h }
+        val endpointCold = hours().mapIndexed { i, h -> if (i == 2) h.copy(feelsLike = 1.0) else h }
         assertEquals("Uncomfortable", checkNotNull(evaluate(endpointCold)).windowMood.label)
     }
     @Test fun rainLikelihoodChangesDescriptionWithoutChangingPhysicalComfort() {

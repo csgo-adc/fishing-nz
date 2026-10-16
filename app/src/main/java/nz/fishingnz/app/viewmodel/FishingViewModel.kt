@@ -51,6 +51,7 @@ data class FishingUiState(
     val tab: Int = 0, val boat: Boolean = false, val dateLabel: String = "Next 3 days", val dateStart: LocalDate = LocalDate.now(nzZone), val dateEnd: LocalDate = LocalDate.now(nzZone).plusDays(2),
     val radiusKm: Int = 50, val timeChoice: TimeChoice = TimeChoice.DAYTIME, val customHours: PreferredTimeRange? = null,
     val preference: WindowPriority = WindowPriority.WEATHER,
+    val tidePhase: TidePhase = TidePhase.AROUND_HIGH, val sessionHours: Int = 2,
     val landPreferences: LandPreferences = LandPreferences(),
     /** NEAR_ME searches the radius around the origin; SPECIFIC_LOCATION searches just the chosen tide station or spot. */
     val searchLocationMode: SearchLocationMode = SearchLocationMode.NEAR_ME, val selectedSearchStation: TideStation? = null,
@@ -128,7 +129,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         dateLabel = savedDateLabel, dateStart = savedDates.first, dateEnd = savedDates.second,
         radiusKm = SearchPreferencesStore.savedRadiusKm()?.let(::nearestSearchRadius) ?: 50,
         timeChoice = savedTimeChoice, customHours = savedCustomHours,
-        preference = runCatching { WindowPriority.valueOf(SearchPreferencesStore.savedPriority() ?: "WEATHER") }.getOrDefault(WindowPriority.WEATHER),
+        preference = WindowPriority.saved(SearchPreferencesStore.savedPriority()),
+        tidePhase = TidePhase.saved(SearchPreferencesStore.savedTidePhase()), sessionHours = SearchPreferencesStore.savedSessionHours(),
         landPreferences = SearchPreferencesStore.savedLandPreferences(),
         searchLocationMode = savedSearchMode,
         selectedSearchStation = savedSearchStation.takeIf { keepsPlace }, selectedSearchSpot = savedSearchSpot.takeIf { keepsPlace },
@@ -229,10 +231,23 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         if (old.landPreferences.priority != land) setLandPreferences(old.landPreferences.copy(priority = land))
         if (old.preference != priority) setWindowPriority(priority)
     }
+    fun setTidePhase(value: TidePhase) {
+        _state.value = _state.value.copy(tidePhase = value, recommendationSearch = null)
+        SearchPreferencesStore.saveTidePhase(value.name)
+        if (_state.value.showResults) refreshRecommendations()
+    }
+    fun setSessionHours(value: Int) {
+        if (value !in sessionLengths) return
+        _state.value = _state.value.copy(sessionHours = value, recommendationSearch = null)
+        SearchPreferencesStore.saveSessionHours(value)
+        if (_state.value.showResults) refreshRecommendations()
+    }
     /** "Reset to recommended" for everything under More options. */
     fun resetMoreOptions() {
         setLandPreferences(LandPreferences(arrivalMinutes = 0, returnMinutes = 0))
         setWindowPriority(WindowPriority.WEATHER)
+        setTidePhase(TidePhase.AROUND_HIGH)
+        setSessionHours(2)
     }
     fun selectSearchStation(station: TideStation) = selectSearchPlace(station.name, GeoPoint(station.latitude, station.longitude), station, null)
     fun selectSearchSpot(spot: FishingSpot) = selectSearchPlace(spot.name, GeoPoint(spot.latitude, spot.longitude), null, spot)
@@ -411,7 +426,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                 val result = recommendationEngine.search(query.location, query.radiusKm, query.dateStart, query.dateEnd, query.boat,
                     query.searchHours, query.selectedSearchStation.takeIf { single },
                     priority = query.preference, land = query.landPreferences,
-                    daylightOnly = query.timeChoice == TimeChoice.DAYTIME, specificSpot = query.selectedSearchSpot.takeIf { single })
+                    daylightOnly = query.timeChoice == TimeChoice.DAYTIME, specificSpot = query.selectedSearchSpot.takeIf { single },
+                    tidePhase = query.tidePhase, sessionHours = query.sessionHours)
                 _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false)
                 Analytics.track("search_run", "mode" to if (query.boat) "boat" else "land", "radius_km" to query.radiusKm,
                     "date_preset" to query.dateLabel, "result_count" to result.items.size)

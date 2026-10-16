@@ -30,10 +30,40 @@ internal object WindowEvaluation {
         if (at.atZone(zone).toLocalDate() == start.atZone(zone).toLocalDate()) clock else datedClock
     )
 
-    fun tideFit(start: Instant, end: Instant, tides: List<LinzPrediction>): Double {
+    /**
+     * How well the session fits a tide phase, from 0 to 1: around high is 2 hours before to 1 hour after each high,
+     * around low 1.5 hours either side of each low, incoming and outgoing the whole rise or fall between them.
+     */
+    fun tideFit(start: Instant, end: Instant, tides: List<LinzPrediction>, phase: TidePhase = TidePhase.AROUND_HIGH): Double {
         if (!tideCovered(start, end, tides)) return 0.0
-        val bands = tides.filter { it.high }.map { it.at.minusSeconds(150 * 60L) to it.at.plusSeconds(30 * 60L) }
-        return overlapSeconds(start, end, bands) / Duration.between(start, end).seconds
+        val sorted = tides.sortedBy { it.at }
+        val bands = when (phase) {
+            TidePhase.AROUND_HIGH -> sorted.filter { it.high }.map { it.at.minusSeconds(120 * 60L) to it.at.plusSeconds(60 * 60L) }
+            TidePhase.AROUND_LOW -> sorted.filter { !it.high }.map { it.at.minusSeconds(90 * 60L) to it.at.plusSeconds(90 * 60L) }
+            TidePhase.INCOMING -> sorted.zipWithNext().filter { (a, b) -> !a.high && b.high }.map { (a, b) -> a.at to b.at }
+            TidePhase.OUTGOING -> sorted.zipWithNext().filter { (a, b) -> a.high && !b.high }.map { (a, b) -> a.at to b.at }
+        }
+        return fit(start, end, bands)
+    }
+
+    /** How well the session fits the hour either side of sunrise or sunset, from 0 to 1. */
+    fun sunFit(start: Instant, end: Instant, solar: Map<LocalDate, DaylightPeriod>): Double = fit(start, end,
+        solar.values.flatMap { listOf(it.sunrise.minusSeconds(3600) to it.sunrise.plusSeconds(3600), it.sunset.minusSeconds(3600) to it.sunset.plusSeconds(3600)) })
+
+    /** "Around sunrise" or "Around sunset", whichever the session is nearer, for a Sunrise or sunset window. */
+    fun sunMood(start: Instant, end: Instant, solar: Map<LocalDate, DaylightPeriod>): WindowMood? {
+        val middle = start.plusSeconds(Duration.between(start, end).seconds / 2)
+        val day = solar[middle.atZone(zone).toLocalDate()] ?: return null
+        val sunrise = Duration.between(day.sunrise, middle).abs() < Duration.between(day.sunset, middle).abs()
+        return if (sunrise) WindowMood("🌅", "Around sunrise") else WindowMood("🌇", "Around sunset")
+    }
+
+    /** Overlap with the target, out of the shorter of the session and the longest target it touches, so long sessions can still fit. */
+    private fun fit(start: Instant, end: Instant, bands: List<Pair<Instant, Instant>>): Double {
+        val touching = bands.filter { it.second > start && it.first < end }
+        if (touching.isEmpty()) return 0.0
+        val target = minOf(Duration.between(start, end).seconds, touching.maxOf { Duration.between(it.first, it.second).seconds })
+        return (overlapSeconds(start, end, bands) / target).coerceAtMost(1.0)
     }
 
     fun daylightFraction(start: Instant, end: Instant, solar: Map<LocalDate, DaylightPeriod>): Double? {
@@ -80,12 +110,12 @@ internal object WindowEvaluation {
         marine: Map<Instant, MarineSample>, solar: Map<LocalDate, DaylightPeriod>,
         tides: List<LinzPrediction>, station: TideStation?, now: Instant, sourceNote: String,
         priority: WindowPriority, land: LandPreferences = LandPreferences(),
-        allHours: List<ForecastHour> = samples, retrievedAt: Instant? = null
+        allHours: List<ForecastHour> = samples, retrievedAt: Instant? = null, tidePhase: TidePhase = TidePhase.AROUND_HIGH
     ): Recommendation? {
-        // Two-hour core: instantaneous values at start, middle AND end.
-        if (samples.size != 3 || samples.zipWithNext().any { (a, b) -> Duration.between(a.time, b.time).seconds != 3_600L }) return null
+        // A core of whole hours: instantaneous values at the start, every hour between AND the end.
+        if (samples.size < 2 || samples.zipWithNext().any { (a, b) -> Duration.between(a.time, b.time).seconds != 3_600L }) return null
         if (!spot.boat) return LandAssessment.evaluate(spot, distance, samples, allHours, marine, solar,
-            tides, station, now, sourceNote, priority, land, retrievedAt)
+            tides, station, now, sourceNote, priority, land, retrievedAt, tidePhase)
         val start = samples.first().time
         val end = samples.last().time
         val windValues = samples.map { it.wind ?: return null }
@@ -122,10 +152,11 @@ internal object WindowEvaluation {
         val waveComfort = if (completeWaves) marineSamples.minOf(::boatWaveComfort) else 0.0
         val comfort = if (spot.boat) 60 * waveComfort + 30 * windComfort + 10 * rainComfort
             else 60 * windComfort + 40 * rainComfort
-        val tideFit = tideFit(start, end, tides)
+        val hours = samples.size - 1
+        val tideFit = if (priority == WindowPriority.SUN) sunFit(start, end, solar) else tideFit(start, end, tides, tidePhase)
         val tideText = tideDescription(start, end, tides, station)
         val daylightText = if (daylight >= .9999) "The fishing session is entirely in daylight."
-            else "About ${((1 - daylight) * 120).roundToInt()} minutes of the fishing session are outside sunrise–sunset."
+            else "About ${((1 - daylight) * hours * 60).roundToInt()} minutes of the fishing session are outside sunrise–sunset."
         val rainText = when {
             totalRain <= .001 && rainProbability <= 30 -> "Little or no rain is forecast (${rainProbability.roundToInt()}% maximum hourly chance)."
             totalRain <= .001 -> "No rain accumulation is forecast, but hourly rain chance reaches ${rainProbability.roundToInt()}%."
@@ -191,28 +222,34 @@ internal object WindowEvaluation {
             ConditionItem("Wind", "${maxWind.roundToInt()} km/h · gust ${maxGust.roundToInt()}${if (windDirections.isEmpty()) "" else " · $windDirections"}", comfortMood(LandAssessment.windBand(maxWind, maxGust))),
             ConditionItem("Rain", "${"%.1f".format(Locale.US, totalRain)} mm · peak ${"%.1f".format(Locale.US, peakRain)} mm/h · ${rainProbability.roundToInt()}% hourly", WindowMood(if (peakRain > .2) "🌧️" else if (rainProbability >= 60) "🌦️" else "🌤️", if (peakRain > .8) "Wet" else if (totalRain > 0) "Light rain" else if (rainProbability >= 60) "Rain possible" else "Mostly dry")),
             ConditionItem("Feels like", if (temperature.isEmpty()) "—" else "${range(temperature, 0)}°C",
-                if (temperature.size != 3) needsDataMood else if (temperature.min() < 12) WindowMood("🥶", "Cold") else if (temperature.max() > 26) WindowMood("🥵", "Hot") else WindowMood("😌", "Mild")),
+                if (temperature.size != samples.size) needsDataMood else if (temperature.min() < 12) WindowMood("🥶", "Cold") else if (temperature.max() > 26) WindowMood("🥵", "Hot") else WindowMood("😌", "Mild")),
             ConditionItem("Tide", tideValue, if (!completeTides) needsDataMood else WindowMood("🕒", "Tide timing")),
-            ConditionItem("Daylight", "${(daylight * 100).roundToInt()}% session", WindowMood(if (daylight == 1.0) "🌞" else "🌙", if (daylight == 1.0) "Daylight" else "After dark"))
+            ConditionItem("Daylight", "${(daylight * 100).roundToInt()}% session",
+                (if (priority == WindowPriority.SUN && tideFit >= .8) sunMood(start, end, solar) else null)
+                    ?: WindowMood(if (daylight == 1.0) "🌞" else "🌙", if (daylight == 1.0) "Daylight" else "After dark"))
         )
         val age = Duration.between(now, start).seconds
         val assessment = WindowAssessment(
             if (!complete) needsDataMood else comfortMood(comfortBand),
             rows, when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("⏱️", "Short-range forecast") },
-            band = comfortBand, comfortComplete = complete,
+            band = comfortBand, comfortComplete = complete, matchesComfort = complete && comfortBand <= land.maxBand, preference = priority,
             details = warnings + buildList {
                 add("Boat windows are ranked mainly by waves. Your route and the trip back are not checked. Tide heights are above Chart Datum, the tide-table reference level.")
                 add("Rain chance is the highest for any single hour, not for the whole session. Offshore waves show the typical (significant) height and the average time between waves.")
                 if (completeTides) add("Tide times and heights are for the named reference station; local timing can differ.")
-                if (temperature.size != 3) add("Some feels-like temperatures are missing.")
+                if (temperature.size != samples.size) add("Some feels-like temperatures are missing.")
                 if (retrievedAt == null || Duration.between(retrievedAt, now).seconds > 3 * 3600) add("Forecast freshness unverified or older than 3 hours.")
             })
-        val briefReason = if (priority == WindowPriority.LATE_INCOMING) "Matches the late incoming tide · waves first" else "Waves first"
+        val briefReason = when (priority) {
+            WindowPriority.TIDE -> "Matches your tide choice · waves first"
+            WindowPriority.SUN -> "Near sunrise or sunset · waves first"
+            WindowPriority.WEATHER -> "Waves first"
+        }
         return Recommendation(
             name = spot.name, area = spot.area, rating = comfort.roundToInt(),
             time = formatWindow(start, end), distance = "${distance.roundToInt()} km straight line",
             reasons = listOf(briefReason), boat = spot.boat, warnings = warnings,
-            distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = 2,
+            distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = hours,
             summary = briefReason, conditions = conditions, sourceNote = sourceNote,
             rankingValue = comfort, dataComplete = complete,
             daylightFraction = daylight, tidePreferenceFit = tideFit, assessment = assessment,
@@ -233,20 +270,30 @@ internal object WindowEvaluation {
     }
 }
 
-/** Stable planning order; no rounded score, distance or dawn bonus can change it. */
-internal val windowOrder: Comparator<Recommendation> = Comparator { a, b ->
+/** More daylight ranks higher, except when the person asked for sunrise or sunset, which is partly dark by design. */
+private fun daylightRank(window: Recommendation) = if (window.assessment?.preference == WindowPriority.SUN) 0.0 else -window.daylightFraction
+
+/** Planning quality, without the start time; no rounded score, distance or dawn bonus can change it. */
+internal val windowQuality: Comparator<Recommendation> = Comparator { a, b ->
     val left = a.assessment; val right = b.assessment
     if (!a.boat && !b.boat && left != null && right != null) {
         compareValuesBy(a, b,
             { if (it.assessment!!.comfortComplete) 0 else 1 },
             { if (it.assessment!!.matchesComfort) 0 else 1 },
-            { -it.daylightFraction },
+            ::daylightRank,
             { it.assessment!!.band }, { it.assessment!!.demandingHours }, { it.assessment!!.uncomfortableHours },
             { if (it.assessment!!.priority == LandPriority.DRY) it.assessment.rainTotal else if (it.assessment.priority == LandPriority.CASTING) it.assessment.maxGust else 0.0 },
-            { if (it.assessment!!.priority == LandPriority.DRY) it.assessment.maxGust else if (it.assessment.priority == LandPriority.CASTING) it.assessment.maxWind else 0.0 },
-            { it.startsAtEpochSeconds })
-    } else compareValuesBy(a, b, { !it.dataComplete }, { -it.daylightFraction }, { -it.rankingValue }, { it.assessment?.band ?: 0 }, { it.startsAtEpochSeconds })
+            { if (it.assessment!!.priority == LandPriority.DRY) it.assessment.maxGust else if (it.assessment.priority == LandPriority.CASTING) it.assessment.maxWind else 0.0 })
+    } else compareValuesBy(a, b, { !it.dataComplete }, { if (it.assessment?.matchesComfort == false) 1 else 0 }, ::daylightRank,
+        { -it.rankingValue }, { it.assessment?.band ?: 0 })
 }
+
+/** Stable planning order within one spot: equally good windows go earliest first. */
+internal val windowOrder: Comparator<Recommendation> = windowQuality.thenBy { it.startsAtEpochSeconds }
+
+/** Order across spots: equally good windows go to the nearer spot first, then the earlier start. */
+internal val searchOrder: Comparator<Recommendation> = windowQuality.thenBy { it.distanceKm }
+    .thenBy { it.startsAtEpochSeconds }.thenBy { it.name }
 
 /** Offer a real comfort trade-off when the balanced choice has a calmer or drier peer. */
 internal fun landTradeoff(selected: Recommendation, pool: List<Recommendation>): Pair<String, Recommendation>? {

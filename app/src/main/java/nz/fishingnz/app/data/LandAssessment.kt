@@ -12,12 +12,22 @@ import kotlin.math.roundToInt
 internal object LandAssessment {
     fun band(value: Double, limits: List<Double>): Int = limits.indexOfFirst { value <= it }.let { if (it < 0) 3 else it }
     fun windBand(wind: Double, gust: Double) = maxOf(band(wind, listOf(12.0, 20.0, 30.0)), band(gust, listOf(20.0, 30.0, 45.0)))
+    /** Feels-like comfort. Warm clothes handle cool mornings, so "Okay" reaches down to 6°C and "Demanding" to 2°C. */
     fun temperatureBand(value: Double) = when {
         value in 12.0..26.0 -> 0
-        value in 8.0..30.0 -> 1
-        value in 5.0..33.0 -> 2
+        value in 6.0..30.0 -> 1
+        value in 2.0..33.0 -> 2
         else -> 3
     }
+    /** Offshore wave limits that count toward comfort on rocks and beaches (Comfortable, Okay, Demanding); null elsewhere. */
+    fun waveLimits(setting: ShoreSetting): List<Double>? = when (setting) {
+        ShoreSetting.ROCKS -> listOf(1.0, 1.5, 2.0)
+        ShoreSetting.BEACH -> listOf(1.0, 1.5, 2.5)
+        else -> null
+    }
+    /** A wave sample's band for rocks or a beach: one band worse for a long-period swell of 1 m or more, which surges. */
+    fun waveBand(height: Double, period: Double?, limits: List<Double>): Int =
+        (band(height, limits) + if (height >= 1.0 && (period ?: 0.0) >= 12) 1 else 0).coerceAtMost(3)
     private fun valid(value: Double?, temperature: Boolean = false) = value?.takeIf {
         it.isFinite() && if (temperature) it in -100.0..80.0 else it >= 0
     }
@@ -48,7 +58,8 @@ internal object LandAssessment {
     fun evaluate(spot: FishingSpot, distance: Double, core: List<ForecastHour>, hours: List<ForecastHour>,
                  marine: Map<Instant, MarineSample>, solar: Map<LocalDate, DaylightPeriod>,
                  tides: List<LinzPrediction>, station: TideStation?, now: Instant, sourceNote: String,
-                 priority: WindowPriority, preferences: LandPreferences, retrievedAt: Instant?): Recommendation? {
+                 priority: WindowPriority, preferences: LandPreferences, retrievedAt: Instant?,
+                 tidePhase: TidePhase = TidePhase.AROUND_HIGH): Recommendation? {
         val start = core.first().time; val end = core.last().time
         val arrival = preferences.arrivalMinutes; val returning = preferences.returnMinutes
         require(preferences.maxBand in 0..3 && listOfNotNull(arrival, returning).all { it in 0..180 })
@@ -82,26 +93,31 @@ internal object LandAssessment {
         val completeWeather = covered == duration && winds.all { it != null } && gusts.all { it != null } &&
             rain.all { it != null } && codes.all { it != null && it in 0..99 }
         val completeTemperature = temperatures.all { it != null }
-        val complete = completeWeather && completeTemperature
+        // On rocks and beaches the offshore waves count toward comfort, so they must be known.
+        val waveLimits = waveLimits(preferences.setting)
+        val complete = completeWeather && completeTemperature && (waveLimits == null || completeMarine)
         val totalRain = intervals.sumOf { (valid(it.rain) ?: 0.0) * overlap(it) / 3600 }
         val peakRain = rain.filterNotNull().maxOrNull() ?: return null
         val windBand = windBand(maxWind, maxGust)
         val rainBand = band(peakRain, listOf(.2, .8, 1.5))
         val tempBand = temperatures.filterNotNull().maxOfOrNull(::temperatureBand) ?: 0
-        val grade = maxOf(windBand, rainBand, tempBand)
+        val seaBand = waveLimits?.let { limits -> marineHours.mapNotNull { sample -> valid(sample.wave)?.let { waveBand(it, valid(sample.period), limits) } }.maxOrNull() } ?: 0
+        val grade = maxOf(windBand, rainBand, tempBand, seaBand)
         var demanding = 0.0; var uncomfortable = 0.0
         for (hour in intervals) {
             val left = maxOf(visitStart, hour.time.minusSeconds(3600)); val right = minOf(visitEnd, hour.time)
             val w = listOfNotNull(at(hours, left), at(hours, right)).maxOrNull() ?: continue
             val g = valid(hour.gust) ?: continue; val r = valid(hour.rain) ?: continue
             val t = listOfNotNull(at(hours, left, true), at(hours, right, true)).maxOfOrNull(::temperatureBand) ?: 0
-            val b = maxOf(windBand(w, g), band(r, listOf(.2, .8, 1.5)), t)
+            val s = waveLimits?.let { limits -> listOf(left, right).mapNotNull { point -> waveAt(marine, point)?.let { sample ->
+                valid(sample.wave)?.let { waveBand(it, valid(sample.period), limits) } } }.maxOrNull() } ?: 0
+            val b = maxOf(windBand(w, g), band(r, listOf(.2, .8, 1.5)), t, s)
             if (b >= 2) demanding += overlap(hour) / 3600
             if (b >= 1) uncomfortable += overlap(hour) / 3600
         }
         val daylight = WindowEvaluation.daylightFraction(visitStart, visitEnd, solar)
         if (preferences.daylightOnly && daylight != 1.0) return null
-        val fit = WindowEvaluation.tideFit(start, end, tides)
+        val fit = if (priority == WindowPriority.SUN) WindowEvaluation.sunFit(start, end, solar) else WindowEvaluation.tideFit(start, end, tides, tidePhase)
         val tideComplete = station != null && tides.any { it.at <= start } && tides.any { it.at >= end }
         val formatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
         fun time(at: Instant) = at.atZone(WindowEvaluation.zone).format(
@@ -112,7 +128,7 @@ internal object LandAssessment {
         val rising = tides.lastOrNull { it.at <= start }?.high == false
         val tideMood = when {
             !tideComplete -> WindowMood("❓", "Unverified")
-            priority == WindowPriority.LATE_INCOMING && fit >= .8 -> WindowMood("🎯", "Late incoming")
+            priority == WindowPriority.TIDE && fit >= .8 -> WindowMood("🎯", tidePhase.label)
             turn != null -> WindowMood("🔄", "Tide turns")
             rising -> WindowMood("↗️", "Rising")
             else -> WindowMood("↘️", "Falling")
@@ -134,9 +150,14 @@ internal object LandAssessment {
                 if (covered != duration || rain.any { it == null }) needsDataMood else WindowMood(if (peakRain > .2) "🌧️" else if ((probability ?: 0.0) >= 60) "🌦️" else "🌤️", if (peakRain > .8) "Wet" else if (peakRain > 0) "Light rain" else if ((probability ?: 0.0) >= 60) "Rain possible" else "Mostly dry")),
             ConditionItem("Feels like", if (temps.isEmpty()) "—" else "${range(temps)}°C", if (!completeTemperature) needsDataMood else if (temps.min() < 12) WindowMood("🥶", "Cold") else if (temps.max() > 26) WindowMood("🥵", "Hot") else WindowMood("😌", "Mild")),
             ConditionItem("Tide", tideValue, tideMood),
-            ConditionItem("Offshore waves", if (waves.isEmpty()) "—" else "${"%.1f".format(Locale.US, waves.max())} m · ${range(periods, 1)} s", if (!completeMarine) needsDataMood else WindowMood("🌊", when (preferences.setting) { ShoreSetting.ROCKS -> "Check surge"; ShoreSetting.BEACH -> "Check surf"; else -> "Check exposure" })),
+            ConditionItem("Offshore waves", if (waves.isEmpty()) "—" else "${"%.1f".format(Locale.US, waves.max())} m · ${range(periods, 1)} s", when {
+                !completeMarine -> needsDataMood
+                waveLimits != null -> WindowMood("🌊", when (seaBand) { 0 -> "Lower waves"; 1 -> "More motion"; else -> "High waves" })
+                else -> WindowMood("🌊", "Check exposure")
+            }),
             ConditionItem("Daylight", daylight?.let { "${(it * 100).roundToInt()}% ${if (visitKnown) "visit" else if (arrival != null || returning != null) "known time" else "session"}" } ?: "—", when {
                 daylight == null -> needsDataMood
+                priority == WindowPriority.SUN && fit >= .8 -> WindowEvaluation.sunMood(start, end, solar) ?: WindowMood("🌅", "Sunrise or sunset")
                 daylight < 1 -> WindowMood("🌙", "After dark")
                 !visitKnown -> WindowMood("🔎", "Visit times needed")
                 else -> WindowMood("🌞", "Daylight")
@@ -145,6 +166,7 @@ internal object LandAssessment {
         )
         val details = buildList {
             add(when (preferences.setting) { ShoreSetting.ROCKS -> "Check footing, surge and a way off the rocks."; ShoreSetting.BEACH -> "Check surf, wading depth and beach access."; ShoreSetting.WHARF -> "Check access, footing and exposure at the wharf or harbour."; else -> "Check the shore type and access." })
+            if (waveLimits != null) add("Offshore waves count toward comfort here; local surf and surge still need checking.")
             add("Check official marine warnings before you go.")
             if (!visitKnown) add("Set walk-in and return times to check the whole trip.")
             if (!completeWeather) add("Some hourly weather is missing; totals may be low.")
@@ -166,11 +188,15 @@ internal object LandAssessment {
         val assessment = WindowAssessment(if (complete) comfortMood(grade) else needsDataMood, rows, confidence,
             details = details, band = grade, demandingHours = demanding, uncomfortableHours = uncomfortable,
             matchesComfort = complete && grade <= preferences.maxBand, comfortComplete = complete,
-            maxWind = maxWind, maxGust = maxGust, rainTotal = totalRain, priority = preferences.priority)
-        val reason = if (!complete) "Not enough data to rate comfort" else if (grade > preferences.maxBand) "Outside your comfort preference" else if (priority == WindowPriority.LATE_INCOMING) "Matches the late incoming tide" else "Most comfortable option"
+            maxWind = maxWind, maxGust = maxGust, rainTotal = totalRain, priority = preferences.priority, preference = priority)
+        val reason = if (!complete) "Not enough data to rate comfort" else if (grade > preferences.maxBand) "Outside your comfort preference" else when (priority) {
+            WindowPriority.TIDE -> "Matches your tide choice"
+            WindowPriority.SUN -> "Near sunrise or sunset"
+            WindowPriority.WEATHER -> "Most comfortable option"
+        }
         return Recommendation(spot.name, spot.area, (100 - grade * 25), WindowEvaluation.formatWindow(start, end),
             "${distance.roundToInt()} km straight line", listOf(reason), boat = false,
-            warnings = details, distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = 2,
+            warnings = details, distanceKm = distance, startsAtEpochSeconds = start.epochSecond, durationHours = core.size - 1,
             summary = reason, conditions = rows.map { "${it.title}: ${it.value} · ${it.mood.emoji} ${it.mood.label}" },
             sourceNote = sourceNote, rankingValue = (3 - grade).toDouble(), dataComplete = complete,
             daylightFraction = daylight ?: 0.0, tidePreferenceFit = fit, assessment = assessment,

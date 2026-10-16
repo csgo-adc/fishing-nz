@@ -6,12 +6,34 @@ struct TideEvent: Identifiable { let time: String; let height: String; let type:
 struct TidePoint: Identifiable { let time: String; let level: Double; let minuteOfDay: Int; var id: Int { minuteOfDay } }
 struct TideState { let currentLevel: String; let nextEvent: String; let eventTime: String; let events: [TideEvent]; let points: [TidePoint]; let stationName: String }
 struct TideStation: Identifiable, Equatable, Sendable { let id: String; let name: String; let csvName: String; let region: String; let latitude: Double; let longitude: Double }
+/// What matters most: comfortable or calm conditions, a part of the tide, or the hours around sunrise and sunset.
 enum WindowPriority: String, CaseIterable, Identifiable, Sendable {
-    case weather, lateIncoming
+    case weather, tide, sun
     var id: String { rawValue }
-    var title: String { self == .weather ? "Weather balance" : "Late incoming tide" }
-    func title(boat: Bool) -> String { self == .lateIncoming ? "Late incoming tide" : (boat ? "Calm water" : "Comfort") }
+    func title(boat: Bool) -> String {
+        switch self {
+        case .tide: "Tide"
+        case .sun: "Sunrise or sunset"
+        case .weather: boat ? "Calm water" : "Comfort"
+        }
+    }
+    /// A saved value; "lateIncoming" from before 1.0.33 is the Tide choice, around high tide.
+    static func saved(_ raw: String?) -> WindowPriority { raw == "lateIncoming" ? .tide : raw.flatMap(WindowPriority.init(rawValue:)) ?? .weather }
 }
+/// The part of the tide a Tide preference looks for, timed from the official LINZ highs and lows.
+enum TidePhase: String, CaseIterable, Sendable {
+    case incoming, aroundHigh, outgoing, aroundLow
+    var label: String {
+        switch self {
+        case .incoming: "Incoming"
+        case .aroundHigh: "Around high"
+        case .outgoing: "Outgoing"
+        case .aroundLow: "Around low"
+        }
+    }
+}
+/// "How long will you fish?", in hours.
+let sessionLengths = [1, 2, 3, 4]
 enum ShoreSetting: String, CaseIterable, Sendable {
     case unknown = "Not sure", wharf = "Wharf or harbour", beach = "Beach", rocks = "Rocks"
     /// A saved value, including the labels before 1.0.32 and the harbour bank choice merged into the wharf.
@@ -33,6 +55,8 @@ let searchRadiiKm = [10, 25, 50, 100, 200]
 func nearestSearchRadius(_ km: Int) -> Int { searchRadiiKm.min { abs($0 - km) < abs($1 - km) }! }
 /// "How rough is OK?" Each is the highest comfort band a window may have.
 let roughnessChoices: [(band: Int, label: String)] = [(0, "Calm only"), (1, "A bit of wind or rain"), (2, "I don't mind rough")]
+/// The same choice for boats, where waves come first.
+let boatRoughnessChoices: [(band: Int, label: String)] = [(0, "Calm only"), (1, "A little chop"), (2, "I don't mind rough")]
 /// "Walk to your spot", each way, in minutes.
 let walkChoices: [(minutes: Int, label: String)] = [(0, "A few minutes"), (15, "15 min"), (30, "30 min"), (60, "1 hour")]
 struct LandPreferences: Equatable, Sendable {
@@ -59,6 +83,8 @@ struct WindowAssessment: Equatable, Sendable {
     var maxGust: Double = 0
     var rainTotal: Double = 0
     var priority: LandPriority = .balanced
+    /// What the search put first; Sunrise or sunset does not rank by daylight.
+    var preference: WindowPriority = .weather
 }
 func comfortMood(_ band: Int) -> WindowMood {
     switch band {

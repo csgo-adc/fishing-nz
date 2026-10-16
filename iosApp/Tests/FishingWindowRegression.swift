@@ -80,13 +80,13 @@ import Foundation
         }
         try expect(loadedWaitawa.station == waitawaReference, "Planner did not automatically load Waitawa's nearby tide reference")
         func waitawaAt(_ hour: Int) -> Date { calendar.date(bySettingHour: hour, minute: 0, second: 0, of: waitawaDay)! }
-        let waitawaHours = (12...14).map { WeatherHour(time: waitawaAt($0), wind: 5, gust: 10, precipitation: 0, rainProbability: 0, code: 0, feelsLike: 16) }
+        let waitawaHours = (13...15).map { WeatherHour(time: waitawaAt($0), wind: 5, gust: 10, precipitation: 0, rainProbability: 0, code: 0, feelsLike: 16) }
         let waitawaWaves = Dictionary(uniqueKeysWithValues: waitawaHours.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: 1, period: 8)) })
         let waitawaWindow = FishingScoringService.evaluate(samples: waitawaHours, spot: waitawaSpot, distanceKm: 0, isTideStation: false,
             solar: [waitawaDay: SolarDay(sunrise: waitawaAt(7), sunset: waitawaAt(19))], marineHours: waitawaWaves,
-            tides: loadedWaitawa.value, tideStation: loadedWaitawa.station, now: waitawaAt(0), calendar: calendar, priority: .lateIncoming, sourceNote: "Test")!
+            tides: loadedWaitawa.value, tideStation: loadedWaitawa.station, now: waitawaAt(0), calendar: calendar, priority: .tide, sourceNote: "Test")!
         let waitawaRow = waitawaWindow.assessment!.conditions.first { $0.title == "Tide" }!
-        try expect(waitawaRow.mood.label == "Late incoming" && waitawaWindow.tidePreferenceFit >= 0.8, "Waitawa reference was not used for late incoming selection")
+        try expect(waitawaRow.mood.label == "Around high" && waitawaWindow.tidePreferenceFit >= 0.8, "Waitawa reference was not used for the around-high selection")
         try expect(waitawaRow.value.contains("2:53 PM") && waitawaRow.value.contains("3.0 m CD"), "Waitawa window omitted published tide events")
         try expect(waitawaRow.value.contains("LINZ Man o‘War Bay · 14.5 km away"), "Waitawa window must identify the actual nearby reference")
         try expect(!waitawaWindow.assessment!.details.contains("Local tide coverage unverified."), "Loaded Waitawa tides still show unverified")
@@ -117,9 +117,24 @@ import Foundation
                 days: [at(30, 0)], now: at(27, 0), calendar: calendar, preferredHours: nil, priority: priority).windows.first
         }
         let early = selected(.weather)
-        let later = selected(.lateIncoming)
+        let later = selected(.tide)
         try expect(early?.start == at(30, 7), "Frozen weather selection should be 07:00")
-        try expect(later?.start == at(30, 11), "Frozen late-incoming selection should be 11:00")
+        try expect(later?.start == at(30, 11), "Frozen around-high selection should be 11:00")
+        // Tide phases from the official 7:02 AM low and 1:23 PM high; around high is 11:23 AM–2:23 PM.
+        func fit(_ from: Int, _ to: Int, _ phase: TidePhase) -> Double {
+            FishingScoringService.tideContext(start: at(30, from), end: at(30, to), tides: tides, station: station, phase: phase).fit
+        }
+        try expect(fit(12, 14, .aroundHigh) == 1 && abs(fit(11, 13, .aroundHigh) - 97.0 / 120) < 0.0001 && fit(7, 9, .aroundHigh) == 0
+                   && fit(11, 15, .aroundHigh) == 1, "Around high fit")
+        try expect(fit(9, 11, .incoming) == 1 && abs(fit(6, 8, .incoming) - 58.0 / 120) < 0.0001 && fit(14, 16, .outgoing) == 1
+                   && fit(9, 11, .outgoing) == 0 && fit(6, 8, .aroundLow) == 1, "Incoming, outgoing and around low fit")
+        let sunDay = [at(30, 0): SolarDay(sunrise: at(30, 7), sunset: at(30, 19))]
+        try expect(FishingScoringService.sunFit(start: at(30, 6), end: at(30, 8), solar: sunDay) == 1
+                   && FishingScoringService.sunFit(start: at(30, 18), end: at(30, 20), solar: sunDay) == 1
+                   && FishingScoringService.sunFit(start: at(30, 12), end: at(30, 14), solar: sunDay) == 0, "Sunrise or sunset fit")
+        let threeHours = FishingScoringService.bestWindows(for: candidate, weather: weather, marine: marine, tides: tides,
+            days: [at(30, 0)], now: at(27, 0), calendar: calendar, preferredHours: nil, priority: .weather, sessionHours: 3).windows.first
+        try expect(threeHours.map { $0.end.timeIntervalSince($0.start) } == 3 * 3600, "A three-hour session")
         try expect(later?.assessment?.conditions.first(where: { $0.title == "Rain" })?.value.contains("0.5 mm") == true, "Explanation must use session rain")
         try expect(later?.conditions.contains(where: { $0.contains("1:23") }) == true, "Explanation must use LINZ high")
         try expect(early?.alternative != nil, "Real tide alternative should be offered")
@@ -135,7 +150,7 @@ import Foundation
         let perDay = FishingScoringService.limitPerDay([ranked("A", 29, 8), ranked("B", 29, 8), ranked("C", 29, 9), ranked("D", 29, 8),
                                                        ranked("A", 30, 10), ranked("E", 29, 17)], calendar: calendar)
         try expect(perDay.map(\.spotName) == ["A", "B", "C", "A"], "Radius results keep the best three spots on each day, in order")
-        let noTides = FishingScoringService.bestWindows(for: candidate, weather: weather, marine: marine, tides: [], days: [at(30, 0)], now: at(27, 0), calendar: calendar, preferredHours: nil, priority: .lateIncoming)
+        let noTides = FishingScoringService.bestWindows(for: candidate, weather: weather, marine: marine, tides: [], days: [at(30, 0)], now: at(27, 0), calendar: calendar, preferredHours: nil, priority: .tide)
         try expect(noTides.windows.isEmpty, "Cannot fabricate late incoming without LINZ")
         var badUnits = try JSONSerialization.jsonObject(with: Data(contentsOf: fixture.appendingPathComponent("weather.json"))) as! [String: Any]
         var units = badUnits["hourly_units"] as! [String: String]; units["wind_speed_10m"] = "kn"; badUnits["hourly_units"] = units
@@ -184,10 +199,11 @@ import Foundation
         func boatWaves(_ height: Double, _ period: Double) -> [Int: MarineHour] {
             Dictionary(uniqueKeysWithValues: boatHours.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: height, period: period)) })
         }
-        func evaluateBoat(_ samples: [WeatherHour], _ waves: [Int: MarineHour], priority: WindowPriority = .weather) -> ScoredFishingWindow? {
+        func evaluateBoat(_ samples: [WeatherHour], _ waves: [Int: MarineHour], priority: WindowPriority = .weather,
+                          land: LandPreferences = LandPreferences()) -> ScoredFishingWindow? {
             FishingScoringService.evaluate(samples: samples, spot: boatSpot, distanceKm: 0, isTideStation: true,
                 solar: solar, marineHours: waves, tides: tides, tideStation: station, now: at(27, 0), calendar: calendar,
-                priority: priority, sourceNote: "Frozen boat test")
+                priority: priority, sourceNote: "Frozen boat test", land: land)
         }
         let breezyWetHours = (7...9).map { WeatherHour(time: at(30, $0), wind: 20, gust: 25, precipitation: 0.3, rainProbability: 50, code: 0, feelsLike: 16) }
         let calmSea = evaluateBoat(breezyWetHours, boatWaves(0.5, 8))!
@@ -212,9 +228,9 @@ import Foundation
         try expect(evaluateBoat(boatHours, missingPeriod) == nil, "Known 2 m boat wave still excludes a window when period is missing")
         let lateBoatHours = (11...13).map { WeatherHour(time: at(30, $0), wind: 5, gust: 10, precipitation: 0, rainProbability: 0, code: 0, feelsLike: 16) }
         let lateBoatWaves = Dictionary(uniqueKeysWithValues: lateBoatHours.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: 1, period: 8)) })
-        let lateBoat = evaluateBoat(lateBoatHours, lateBoatWaves, priority: .lateIncoming)!
-        try expect(lateBoat.tidePreferenceFit >= 0.8 && lateBoat.reasons == ["Matches the late incoming tide · waves first"] && lateBoat.rankingValue == evaluateBoat(lateBoatHours, lateBoatWaves)!.rankingValue, "Late incoming must retain boat wave ranking and explain it")
-        let coldBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code, feelsLike: 7) }
+        let lateBoat = evaluateBoat(lateBoatHours, lateBoatWaves, priority: .tide)!
+        try expect(lateBoat.tidePreferenceFit >= 0.8 && lateBoat.reasons == ["Matches your tide choice · waves first"] && lateBoat.rankingValue == evaluateBoat(lateBoatHours, lateBoatWaves)!.rankingValue, "Late incoming must retain boat wave ranking and explain it")
+        let coldBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code, feelsLike: 4) }
         let hotBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code, feelsLike: 34) }
         let unknownBoatHours = boatHours.map { WeatherHour(time: $0.time, wind: $0.wind, gust: $0.gust, precipitation: $0.precipitation, rainProbability: $0.rainProbability, code: $0.code) }
         let mildBoat = evaluateBoat(boatHours, boatWaves(0.3, 8))!, coldBoat = evaluateBoat(coldBoatHours, boatWaves(0.3, 8))!
@@ -222,7 +238,11 @@ import Foundation
         let unknownBoat = evaluateBoat(unknownBoatHours, boatWaves(0.3, 8))!
         try expect(unknownBoat.assessment!.mood.label == "Needs more data" && !unknownBoat.dataComplete, "Missing boat temperature must remain incomplete")
         try expect(mildBoat.rankingValue == coldBoat.rankingValue && FishingScoringService.isBetter(mildBoat, than: coldBoat), "Boat temperature must break equal wave/wind/rain comfort ties")
-        try expect(FishingScoringService.isBetter(coldBoat, than: spacedWaves), "Boat wave comfort must still lead the ordering")
+        // Within the same roughness limit calmer waves still lead, even when it is cold; with the default limit a window inside it comes first.
+        let roughOk = LandPreferences(maxBand: 2)
+        try expect(FishingScoringService.isBetter(evaluateBoat(coldBoatHours, boatWaves(0.3, 8), land: roughOk)!, than: evaluateBoat(boatHours, boatWaves(1, 8), land: roughOk)!),
+                   "Boat wave comfort must still lead the ordering")
+        try expect(FishingScoringService.isBetter(spacedWaves, than: coldBoat) && !coldBoat.assessment!.matchesComfort, "A boat window inside the roughness limit comes first")
         let landLowWaves = evaluate(boatHours, boatWaves(0.5, 8))!
         let landHighWaves = evaluate(boatHours, boatWaves(1, 4))!
         try expect(landLowWaves.rankingValue == landHighWaves.rankingValue && !landHighWaves.warnings.contains { $0.hasPrefix("Short-period waves") }, "New wave comfort policy must not change land ranking")
@@ -231,7 +251,7 @@ import Foundation
         try landChecks(calendar: calendar)
         try highlightChecks(calendar: calendar)
         print("Passed \(checks) Swift fishing-window regression checks.")
-        print("Frozen Raglan: weather 07:00–09:00; late incoming 11:00–13:00; official high 13:23.")
+        print("Frozen Raglan: weather 07:00–09:00; around high 11:00–13:00; official high 13:23.")
         if CommandLine.arguments.contains("--live") {
             let thamesStation = tideStations.first { $0.id == "thames" }!
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
@@ -274,12 +294,35 @@ import Foundation
         let gusty = evaluate(hours(wind: 20, gust: 32))!, lightRain = evaluate(hours(rain: 0.3))!
         try expect(gusty.assessment!.mood.label == "Demanding" && !gusty.assessment!.matchesComfort, "Gusty casting must exceed the default tolerance")
         try expect(lightRain.assessment!.mood.label == "Okay" && FishingScoringService.isBetter(lightRain, than: gusty), "Calm light rain should beat dry gusty weather")
-        let cold = evaluate(hours(temp: 4))!, mild = evaluate(hours(wind: 14, gust: 25))!, unknown = evaluate(hours(temp: nil))!
+        let cold = evaluate(hours(temp: 1))!, mild = evaluate(hours(wind: 14, gust: 25))!, unknown = evaluate(hours(temp: nil))!
         try expect(cold.assessment!.mood.label == "Uncomfortable" && FishingScoringService.isBetter(mild, than: cold), "Cold must not receive perfect comfort")
         try expect(unknown.assessment!.mood.label == "Needs more data" && !unknown.assessment!.matchesComfort && FishingScoringService.isBetter(cold, than: unknown), "Missing temperature must not improve comfort")
         let burst = [hour(8), hour(9), hour(10, rain: 2)]
         try expect(evaluate(burst)!.assessment!.mood.label == "Uncomfortable", "Wettest hour must not be averaged away")
-        try expect(evaluate([hour(8), hour(9), hour(10, temp: 4)])!.assessment!.mood.label == "Uncomfortable", "Final temperature endpoint matters")
+        try expect(evaluate([hour(8), hour(9), hour(10, temp: 1)])!.assessment!.mood.label == "Uncomfortable", "Final temperature endpoint matters")
+        // 1.0.33: warm clothes cover cool mornings; "Okay" reaches down to 6°C feels-like and "Demanding" to 2°C.
+        try expect([12.0, 8, 6, 5, 2, 1].map(LandAssessment.temperatureBand) == [0, 1, 1, 2, 2, 3]
+                   && evaluate(hours(temp: 7))!.assessment!.mood.label == "Okay" && evaluate(hours(temp: 4))!.assessment!.mood.label == "Demanding", "Cool-morning bands")
+        // Rocks and beaches count the offshore waves; a long-period swell of 1 m or more is one band worse.
+        func sea(_ height: Double, _ period: Double = 8) -> [Int: MarineHour] {
+            Dictionary(uniqueKeysWithValues: core.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: height, period: period)) })
+        }
+        func mood(_ setting: ShoreSetting, _ waves: [Int: MarineHour]) -> String {
+            evaluate(prefs: LandPreferences(setting: setting, arrivalMinutes: 0, returnMinutes: 0), waves: waves)!.assessment!.mood.label
+        }
+        try expect(mood(.rocks, sea(0.8)) == "Comfortable" && mood(.rocks, sea(1.2)) == "Okay" && mood(.rocks, sea(1.8)) == "Demanding"
+                   && mood(.rocks, sea(2.2)) == "Uncomfortable" && mood(.beach, sea(1.4)) == "Okay" && mood(.beach, sea(2.2)) == "Demanding"
+                   && mood(.rocks, sea(1.2, 13)) == "Demanding" && mood(.unknown, sea(2.2)) == "Comfortable" && mood(.rocks, [:]) == "Needs more data",
+                   "Rocks and beaches count the waves")
+        // Equally good windows: the nearer spot before the earlier start across spots; the earlier start within one spot.
+        func window(_ hours: [WeatherHour], distance: Double) -> ScoredFishingWindow {
+            FishingScoringService.evaluate(samples: hours, spot: spot, distanceKm: distance, isTideStation: false, solar: solar,
+                marineHours: Dictionary(uniqueKeysWithValues: hours.map { (Int($0.time.timeIntervalSince1970), MarineHour(wave: 0.5, period: 8)) }),
+                tides: [], tideStation: nil, now: at(7), calendar: calendar, priority: .weather, sourceNote: "Test",
+                land: LandPreferences(arrivalMinutes: 0, returnMinutes: 0), allHours: hours, retrievedAt: at(7))!
+        }
+        let farEarly = window([hour(8), hour(9), hour(10)], distance: 90), nearLater = window([hour(9), hour(10), hour(11)], distance: 10)
+        try expect(FishingScoringService.searchOrder(nearLater, farEarly) && FishingScoringService.isBetter(farEarly, than: nearLater), "Nearer spot first when equally good")
         let likely = evaluate(hours(rain: 0.15))!, unlikely = evaluate(hours(rain: 0.15, chance: 20))!, absent = evaluate(hours(rain: 0.15, chance: nil))!
         try expect(likely.rankingValue == unlikely.rankingValue && likely.rankingValue == absent.rankingValue, "Rain likelihood must not count as actual wetness")
         try expect(absent.assessment!.details.contains { $0.contains("Some rain chances are missing") }, "Missing likelihood must remain visible")

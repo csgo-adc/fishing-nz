@@ -27,15 +27,18 @@ class RecommendationEngine {
         origin: GeoPoint, radiusKm: Int, start: LocalDate, end: LocalDate, boat: Boolean,
         preferredTime: PreferredTimeRange?, specificStation: TideStation? = null,
         priority: WindowPriority = WindowPriority.WEATHER, land: LandPreferences = LandPreferences(),
-        daylightOnly: Boolean = false, specificSpot: FishingSpot? = null
+        daylightOnly: Boolean = false, specificSpot: FishingSpot? = null,
+        tidePhase: TidePhase = TidePhase.AROUND_HIGH, sessionHours: Int = 2
     ): RecommendationSearch = coroutineScope {
+        require(sessionHours in 1..4) { "Choose a session of 1 to 4 hours." }
         val today = LocalDate.now(zone)
         require(!start.isBefore(today) && !end.isBefore(start) && !end.isAfter(today.plusDays(15))) {
             "Choose dates within the next 16 days."
         }
         val now = Instant.now()
-        // Daytime covers the whole visit; a walk that was never set counts as none.
-        val plan = if (daylightOnly) land.copy(daylightOnly = true, arrivalMinutes = land.arrivalMinutes ?: 0,
+        // Daytime covers the whole visit; a walk that was never set counts as none. Sunrise or sunset windows are
+        // partly dark by design, so they keep within an hour of sunrise and sunset instead (see bestWindows).
+        val plan = if (daylightOnly) land.copy(daylightOnly = priority != WindowPriority.SUN, arrivalMinutes = land.arrivalMinutes ?: 0,
             returnMinutes = land.returnMinutes ?: 0) else land
         val single = specificStation != null || specificSpot != null
         require(boat || !plan.daylightOnly || (plan.arrivalMinutes != null && plan.returnMinutes != null)) { "Set access/setup and return time for daylight only." }
@@ -55,7 +58,7 @@ class RecommendationEngine {
         val outcomes = nearby.map { (spot, distance) ->
             async(Dispatchers.IO) {
                 limiter.withPermit {
-                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation, priority, plan, daylightOnly)) }
+                    try { Result.success(bestWindows(spot, distance, start, end, forecastDays, now, preferredTime, mayCrossMidnight, specificStation, priority, plan, daylightOnly, tidePhase, sessionHours)) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) { Result.failure<SpotOutcome>(error) }
                 }
@@ -78,7 +81,7 @@ class RecommendationEngine {
                 }
             }.let {
                 if (single) it.sortedBy { item -> item.startsAtEpochSeconds }
-                else limitPerDay(it.sortedWith(windowOrder.thenBy { item -> item.distanceKm }.thenBy { item -> item.name }))
+                else limitPerDay(it.sortedWith(searchOrder))
             }, nearby.size, outcomes.count { it.isFailure }, spotsWithoutWindows = spotsWithoutWindows
         )
     }
@@ -86,7 +89,8 @@ class RecommendationEngine {
     private suspend fun bestWindows(
         spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int,
         now: Instant, preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean,
-        selectedStation: TideStation?, priority: WindowPriority, land: LandPreferences, daylightOnly: Boolean
+        selectedStation: TideStation?, priority: WindowPriority, land: LandPreferences, daylightOnly: Boolean,
+        tidePhase: TidePhase, sessionHours: Int
     ): SpotOutcome {
         val weather = weather(spot, forecastDays)
         val marine = try { marine(spot, forecastDays) }
@@ -109,27 +113,37 @@ class RecommendationEngine {
             val day = it.time.atZone(zone).toLocalDate()
             day >= start && day <= end.plusDays(1) && it.time >= now
         }
+        /** Sunrise or sunset in Daytime: the whole visit within an hour before sunrise and after sunset. */
+        fun nearDaylight(window: Recommendation): Boolean {
+            val walk = if (window.boat) 0L else (land.arrivalMinutes ?: 0) * 60L
+            val visitStart = Instant.ofEpochSecond(window.startsAtEpochSeconds - walk)
+            val visitEnd = Instant.ofEpochSecond(window.startsAtEpochSeconds + window.durationHours * 3600L + walk)
+            val day = weather.solar[visitStart.atZone(zone).toLocalDate()] ?: return false
+            return visitStart >= day.sunrise.minusSeconds(3600) && visitEnd <= day.sunset.plusSeconds(3600)
+        }
         val evaluated = buildList {
-            for (index in 0 until (hours.size - 2).coerceAtLeast(0)) {
-                val samples = hours.subList(index, index + 3)
+            for (index in 0 until (hours.size - sessionHours).coerceAtLeast(0)) {
+                val samples = hours.subList(index, index + sessionHours + 1)
                 val startDay = samples.first().time.atZone(zone).toLocalDate()
                 if (startDay !in start..end) continue
                 if (!withinPreferredTime(samples.first().time, samples.last().time, startDay, preferredTime)) continue
                 WindowEvaluation.evaluate(spot, distance, samples, marine?.hours.orEmpty(), weather.solar,
-                    tides, station, now, source, priority, land, weather.hours, weather.retrievedAt)
-                    ?.takeIf { !daylightOnly || it.daylightFraction >= .9999 }?.let { add(it) }
+                    tides, station, now, source, priority, land, weather.hours, weather.retrievedAt, tidePhase)
+                    ?.takeIf { !daylightOnly || if (priority == WindowPriority.SUN) nearDaylight(it) else it.daylightFraction >= .9999 }
+                    ?.let { add(it) }
             }
         }
         val selection = WindowSelection()
-        evaluated.filter { priority != WindowPriority.LATE_INCOMING || it.tidePreferenceFit >= .8 }.forEach {
+        // Tide and Sunrise or sunset keep to windows that mostly fall in the chosen hours.
+        evaluated.filter { priority == WindowPriority.WEATHER || it.tidePreferenceFit >= .8 }.forEach {
             selection.consider(Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(zone).toLocalDate(), it)
         }
         val windows = selection.windows().map { selected ->
             val day = Instant.ofEpochSecond(selected.startsAtEpochSeconds).atZone(zone).toLocalDate()
             val pool = evaluated.filter { Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(zone).toLocalDate() == day }
-            val alternative = pool.filter { priority == WindowPriority.LATE_INCOMING || it.tidePreferenceFit >= .8 }
+            val alternative = pool.filter { priority != WindowPriority.WEATHER || it.tidePreferenceFit >= .8 }
                 .minWithOrNull(windowOrder)?.takeIf { it.startsAtEpochSeconds != selected.startsAtEpochSeconds }
-                ?.let { (if (priority == WindowPriority.WEATHER) "Late incoming" else "Comfort alternative") to it }
+                ?.let { (if (priority == WindowPriority.WEATHER) "${tidePhase.label} tide" else "Comfort alternative") to it }
                 ?: if (priority == WindowPriority.WEATHER) landTradeoff(selected, pool) else null
             selected.copy(alternative = alternative?.let { (title, other) ->
                 "$title: ${other.time} · ${other.windowOutlook}${if (other.assessment?.matchesComfort == false) " · outside comfort preference" else ""}"

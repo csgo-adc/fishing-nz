@@ -87,6 +87,8 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import nz.fishingnz.app.model.*
 import nz.fishingnz.app.data.FishingRulesPage
 import nz.fishingnz.app.data.RulesRepository
+import nz.fishingnz.app.data.searchOrder
+import java.time.Instant
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
 import nz.fishingnz.app.viewmodel.SearchLocationMode
@@ -105,6 +107,8 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 private val preferredTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+private val resultsZone = java.time.ZoneId.of("Pacific/Auckland")
+private val resultsDayFormat = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.US)
 
 private fun encodedFishPhoto(context: android.content.Context, uri: android.net.Uri?): ByteArray? {
     if (uri == null) return null
@@ -206,7 +210,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                         }
                         OutlinedButton(onClick = { showPlan = true }) { Text("Edit plan") }
                     }
-                    Text("${planDateSummary(s)}  ·  ${planTimeSummary(s)}  ·  ${if (s.searchesOnePlace) "This spot only" else "${s.radiusKm} km"}",
+                    Text("${planDateSummary(s)}  ·  ${planTimeSummary(s)}${if (s.sessionHours != 2) "  ·  ${hoursLabel(s.sessionHours)}" else ""}  ·  ${if (s.searchesOnePlace) "This spot only" else "${s.radiusKm} km"}",
                         color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
                     Text(planPriorityLabel(s), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().clickable { showWhere = true }.padding(vertical = 4.dp),
@@ -233,7 +237,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
             }
         } }
         item { Text("Your next planning window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { s.recommendationSearch?.items?.firstOrNull()?.let {
+        item { s.recommendationSearch?.items?.minWithOrNull(searchOrder)?.let {
             RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty()), showOnMap = mapAction(it, vm)) { vm.showResults() }
         } ?: Text("Choose a date and search to compare fishing conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { Spacer(Modifier.height(12.dp)) }
@@ -278,23 +282,45 @@ private fun planTimeNote(s: FishingUiState): String = when (s.timeChoice) {
 /** The "What matters most?" choices: one list that sets the window preference and, on land, the tie-break. */
 private data class MatterChoice(val label: String, val priority: WindowPriority, val land: LandPriority, val note: String)
 
+private const val tideNote = "Windows that mostly fall in the part of the tide you choose. Times are for the nearest LINZ station."
+private const val sunNote = "The hour either side of sunrise or sunset. Part of the window can be dark."
+
 private fun matterChoices(boat: Boolean): List<MatterChoice> = if (boat) listOf(
     MatterChoice("Calm water", WindowPriority.WEATHER, LandPriority.BALANCED, "The smallest, smoothest waves first, then wind and rain."),
-    MatterChoice("Late incoming tide", WindowPriority.LATE_INCOMING, LandPriority.BALANCED,
-        "The last of the incoming tide, near high water. Waves still come first. Times are for the nearest LINZ station.")
+    MatterChoice("Tide", WindowPriority.TIDE, LandPriority.BALANCED, "$tideNote Waves still come first."),
+    MatterChoice("Sunrise or sunset", WindowPriority.SUN, LandPriority.BALANCED, "$sunNote Waves still come first.")
 ) else listOf(
     MatterChoice("Comfort", WindowPriority.WEATHER, LandPriority.BALANCED, "The least wind, rain and cold."),
     MatterChoice("Less wind", WindowPriority.WEATHER, LandPriority.CASTING, "Comfortable first, then the least wind for easier casting."),
     MatterChoice("Less rain", WindowPriority.WEATHER, LandPriority.DRY, "Comfortable first, then the least rain."),
-    MatterChoice("Late incoming tide", WindowPriority.LATE_INCOMING, LandPriority.BALANCED,
-        "The last of the incoming tide, near high water. Times are for the nearest LINZ station.")
+    MatterChoice("Tide", WindowPriority.TIDE, LandPriority.BALANCED, tideNote),
+    MatterChoice("Sunrise or sunset", WindowPriority.SUN, LandPriority.BALANCED, sunNote)
 )
+
+/** What each tide choice covers, timed from the official highs and lows. */
+private fun tidePhaseNote(phase: TidePhase) = when (phase) {
+    TidePhase.INCOMING -> "From low tide up to high tide."
+    TidePhase.AROUND_HIGH -> "From 2 hours before high tide to 1 hour after."
+    TidePhase.OUTGOING -> "From high tide down to low tide."
+    TidePhase.AROUND_LOW -> "From 1.5 hours before low tide to 1.5 hours after."
+}
+
+/** "around high tide", for sentences. */
+private fun tidePhaseWords(phase: TidePhase) = when (phase) {
+    TidePhase.INCOMING -> "on the incoming tide"
+    TidePhase.AROUND_HIGH -> "around high tide"
+    TidePhase.OUTGOING -> "on the outgoing tide"
+    TidePhase.AROUND_LOW -> "around low tide"
+}
 
 private fun selectedMatter(s: FishingUiState): MatterChoice? = matterChoices(s.boat).firstOrNull {
     it.priority == s.preference && (s.boat || it.priority != WindowPriority.WEATHER || it.land == s.landPreferences.priority)
 }
 
-internal fun planPriorityLabel(s: FishingUiState): String = selectedMatter(s)?.label ?: s.preference.label(s.boat)
+internal fun planPriorityLabel(s: FishingUiState): String =
+    if (s.preference == WindowPriority.TIDE) "${s.tidePhase.label} tide" else selectedMatter(s)?.label ?: s.preference.label(s.boat)
+
+private fun hoursLabel(hours: Int) = if (hours == 1) "1 hour" else "$hours hours"
 
 /** "Near Auckland", or the one place searched. */
 private fun whereTitle(s: FishingUiState, loading: Boolean): String = when {
@@ -382,7 +408,7 @@ private fun whereTitle(s: FishingUiState, loading: Boolean): String = when {
                 .clickable(onClickLabel = if (more) "Hide more options" else "Show more options") { more = !more }.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("More options", Modifier.weight(1f), color = Navy, fontWeight = FontWeight.SemiBold)
-                Text(planPriorityLabel(s), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                Text("${planPriorityLabel(s)} · ${hoursLabel(s.sessionHours)}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                 Icon(if (more) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
             }
             if (more) MoreOptions(s, vm)
@@ -405,21 +431,33 @@ private fun whereTitle(s: FishingUiState, loading: Boolean): String = when {
                 }
             }
             selected?.let { PlanNote(it.note) }
-        }
-        if (!s.boat) {
-            PlanQuestion("How rough is OK?") {
+            if (s.preference == WindowPriority.TIDE) {
                 PlanChips {
-                    roughnessChoices.forEach { (band, label) ->
-                        FilterChip(land.maxBand == band, { vm.setLandPreferences(land.copy(maxBand = band)) }, label = { Text(label) })
-                    }
+                    TidePhase.entries.forEach { phase -> FilterChip(s.tidePhase == phase, { vm.setTidePhase(phase) }, label = { Text(phase.label) }) }
+                }
+                PlanNote(tidePhaseNote(s.tidePhase))
+            }
+        }
+        PlanQuestion("How long will you fish?") {
+            PlanChips {
+                sessionLengths.forEach { hours -> FilterChip(s.sessionHours == hours, { vm.setSessionHours(hours) }, label = { Text(hoursLabel(hours)) }) }
+            }
+        }
+        PlanQuestion("How rough is OK?") {
+            PlanChips {
+                (if (s.boat) boatRoughnessChoices else roughnessChoices).forEach { (band, label) ->
+                    FilterChip(land.maxBand == band, { vm.setLandPreferences(land.copy(maxBand = band)) }, label = { Text(label) })
                 }
             }
+        }
+        if (!s.boat) {
             PlanQuestion("Where do you fish?") {
                 PlanChips {
                     ShoreSetting.entries.forEach { setting ->
                         FilterChip(land.setting == setting, { vm.setLandPreferences(land.copy(setting = setting)) }, label = { Text(setting.label) })
                     }
                 }
+                PlanNote("Beach and rocks also check the waves.")
             }
             PlanQuestion("Walk to your spot (each way)") {
                 PlanChips {
@@ -1098,9 +1136,10 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(when {
                             s.recommendationSearch.failedSpots == s.recommendationSearch.nearbySpots -> "Forecasts could not be loaded for nearby areas. Try again."
-                            s.preference == WindowPriority.LATE_INCOMING -> "No two-hour window matches the late-incoming preference with the available tide and weather data. Try ${WindowPriority.WEATHER.label(s.boat)} or another date."
-                            s.dateLabel == "Today" -> "No two-hour planning window remains today within your selected hours and the available forecasts. Try another date or adjust your hours."
-                            else -> "No two-hour planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
+                            s.preference == WindowPriority.TIDE -> "No ${hoursLabel(s.sessionHours)} window falls ${tidePhaseWords(s.tidePhase)} with the available tide and weather data. Try another tide choice or date."
+                            s.preference == WindowPriority.SUN -> "No ${hoursLabel(s.sessionHours)} window falls around sunrise or sunset within your hours and the available forecasts. Try another time or date."
+                            s.dateLabel == "Today" -> "No ${hoursLabel(s.sessionHours)} planning window remains today within your selected hours and the available forecasts. Try another date or adjust your hours."
+                            else -> "No ${hoursLabel(s.sessionHours)} planning window matches these dates, hours and the available forecasts. Try another date or adjust your hours."
                         }, color = Navy)
                         s.recommendationSearch.spotsWithoutWindows.takeIf { it.isNotEmpty() }?.let { checked ->
                             Text("Nearby areas checked: ${checked.take(5).joinToString(", ")}.",
@@ -1110,11 +1149,29 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 }
                 else -> {
                     val results = s.recommendationSearch?.items.orEmpty()
-                    if (!s.boat && results.isNotEmpty() && results.none { it.assessment?.matchesComfort == true }) item {
+                    if (results.isNotEmpty() && results.none { it.assessment?.matchesComfort == true }) item {
                         Text(if (results.all { it.assessment?.comfortComplete == false }) "More data needed · partial options below"
                             else "No window meets your comfort preference · alternatives below", color = Orange)
                     }
-                    items(results) { RecommendationCard(it, showWhy = shouldShowWindowReason(it, results), showOnMap = mapAction(it, vm)) { vm.openSpot(it) } }
+                    // A plan over several days lists each day in date order, best first within the day; the best overall is marked.
+                    val best = results.minWithOrNull(searchOrder).takeIf { results.size > 1 }
+                    val byDay = results.groupBy { Instant.ofEpochSecond(it.startsAtEpochSeconds).atZone(resultsZone).toLocalDate() }.toSortedMap()
+                    byDay.forEach { (day, windows) ->
+                        if (byDay.size > 1) item {
+                            Text(day.format(resultsDayFormat), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                                color = Navy, modifier = Modifier.padding(top = 6.dp))
+                        }
+                        items(windows) { window ->
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (window == best) Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Best pick", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                }
+                                RecommendationCard(window, showWhy = shouldShowWindowReason(window, results), showOnMap = mapAction(window, vm)) { vm.openSpot(window) }
+                            }
+                        }
+                    }
                     s.recommendationSearch?.spotsWithoutWindows?.takeIf { it.isNotEmpty() }?.let { missing -> item {
                         Text("No planning window available at: ${missing.take(5).joinToString(", ")}.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)

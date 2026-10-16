@@ -119,6 +119,20 @@ object SearchPreferencesStore {
             ?.putString(PRIORITY_KEY, priority)?.apply()
     }
 
+    fun savedTidePhase(): String? = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getString("tide_phase", null)
+
+    fun saveTidePhase(phase: String) {
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.putString("tide_phase", phase)?.apply()
+    }
+
+    /** How long the person fishes, 1 to 4 hours; 2 when never set. */
+    fun savedSessionHours(): Int = (appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getInt("session_hours", 2) ?: 2)
+        .takeIf { it in sessionLengths } ?: 2
+
+    fun saveSessionHours(hours: Int) {
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.putInt("session_hours", hours)?.apply()
+    }
+
     fun save(mode: String, stationId: String?) {
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
             ?.putString(MODE_KEY, mode)

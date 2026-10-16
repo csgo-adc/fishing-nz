@@ -12,10 +12,22 @@ data class FishingSpot(val name: String, val area: String, val latitude: Double,
 data class SearchOrigin(val name: String, val point: GeoPoint)
 /** A daily interval; an end before the start means it continues into the next day. */
 data class PreferredTimeRange(val start: LocalTime, val end: LocalTime)
+/** What matters most: comfortable or calm conditions, a part of the tide, or the hours around sunrise and sunset. */
 enum class WindowPriority {
-    WEATHER, LATE_INCOMING;
-    fun label(boat: Boolean) = if (this == LATE_INCOMING) "Late incoming tide" else if (boat) "Calm water" else "Comfort"
+    WEATHER, TIDE, SUN;
+    fun label(boat: Boolean) = when (this) { TIDE -> "Tide"; SUN -> "Sunrise or sunset"; WEATHER -> if (boat) "Calm water" else "Comfort" }
+    companion object {
+        /** A saved name; "LATE_INCOMING" from before 1.0.33 is the Tide choice, around high tide. */
+        fun saved(name: String?): WindowPriority = if (name == "LATE_INCOMING") TIDE else entries.firstOrNull { it.name == name } ?: WEATHER
+    }
 }
+/** The part of the tide a Tide preference looks for, timed from the official LINZ highs and lows. */
+enum class TidePhase(val label: String) {
+    INCOMING("Incoming"), AROUND_HIGH("Around high"), OUTGOING("Outgoing"), AROUND_LOW("Around low");
+    companion object { fun saved(name: String?): TidePhase = entries.firstOrNull { it.name == name } ?: AROUND_HIGH }
+}
+/** "How long will you fish?", in hours. */
+val sessionLengths = listOf(1, 2, 3, 4)
 /** When in the day someone can fish. Daytime follows each day's sunrise and sunset; the others are fixed hours. */
 enum class TimeChoice(val label: String, val hours: PreferredTimeRange?) {
     DAYTIME("Daytime", null),
@@ -30,6 +42,8 @@ val searchRadiiKm = listOf(10, 25, 50, 100, 200)
 fun nearestSearchRadius(km: Int): Int = searchRadiiKm.minBy { kotlin.math.abs(it - km) }
 /** "How rough is OK?" Each is the highest comfort band a window may have. */
 val roughnessChoices = listOf(0 to "Calm only", 1 to "A bit of wind or rain", 2 to "I don't mind rough")
+/** The same choice for boats, where waves come first. */
+val boatRoughnessChoices = listOf(0 to "Calm only", 1 to "A little chop", 2 to "I don't mind rough")
 /** "Walk to your spot", each way, in minutes. */
 val walkChoices = listOf(0 to "A few minutes", 15 to "15 min", 30 to "30 min", 60 to "1 hour")
 enum class ShoreSetting(val label: String) { UNKNOWN("Not sure"), WHARF("Wharf or harbour"), BEACH("Beach"), ROCKS("Rocks");
@@ -62,7 +76,9 @@ data class WindowAssessment(
     val maxWind: Double = 0.0,
     val maxGust: Double = 0.0,
     val rainTotal: Double = 0.0,
-    val priority: LandPriority = LandPriority.BALANCED
+    val priority: LandPriority = LandPriority.BALANCED,
+    /** What the search put first; Sunrise or sunset does not rank by daylight. */
+    val preference: WindowPriority = WindowPriority.WEATHER
 )
 fun comfortMood(band: Int) = when (band) {
     0 -> WindowMood("😌", "Comfortable")

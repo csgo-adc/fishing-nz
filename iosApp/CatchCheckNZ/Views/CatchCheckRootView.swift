@@ -473,7 +473,7 @@ struct HomeView: View {
                                     Spacer()
                                     Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
                                 }
-                                Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary) · \(vm.searchesOnePlace ? "this spot only" : "\(vm.radiusKm) km")")
+                                Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary)\(vm.sessionHours != 2 ? " · \(hoursLabel(vm.sessionHours))" : "") · \(vm.searchesOnePlace ? "this spot only" : "\(vm.radiusKm) km")")
                                     .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
                                     .lineLimit(2)
                                 Text(vm.whatMattersLabel)
@@ -497,7 +497,7 @@ struct HomeView: View {
                     if let conditionsError = vm.conditionsError { Text(conditionsError).font(.caption).foregroundStyle(.secondary) }
                     FishIdentifierView(photoItem: $photoItem, showCamera: $showCamera, openAccount: openAccount)
                     Text("Your next planning window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                    if let best = vm.recommendations.first {
+                    if let best = vm.bestRecommendation {
                         RecommendationCard(spot: best, showWhy: shouldShowWindowReason(best, among: vm.recommendations)) { vm.showingResults = true }
                     } else {
                         Card { Text("Choose a distance and dates, then search for live fishing windows.").foregroundStyle(.secondary) }
@@ -655,7 +655,7 @@ private struct PlanningSheet: View {
                             HStack {
                                 Text("More options").font(.headline).foregroundStyle(CatchCheckColor.navy)
                                 Spacer()
-                                Text(vm.whatMattersLabel).font(.caption).foregroundStyle(.secondary)
+                                Text("\(vm.whatMattersLabel) · \(hoursLabel(vm.sessionHours))").font(.caption).foregroundStyle(.secondary)
                             }
                         }.tint(CatchCheckColor.accent)
                     }
@@ -698,16 +698,33 @@ private struct MoreOptions: View {
                     }
                 }
                 if let note = vm.selectedMatter?.note { Text(note).font(.caption).foregroundStyle(.secondary) }
-            }
-            if !vm.isBoatFishing {
-                PlanQuestion(title: "How rough is OK?") {
+                if vm.preference == .tide {
                     FlowLayout {
-                        ForEach(roughnessChoices, id: \.band) { choice in
-                            Button(choice.label) { vm.landPreferences.maxBand = choice.band }
-                                .buttonStyle(ChoiceButton(selected: vm.landPreferences.maxBand == choice.band))
+                        ForEach(TidePhase.allCases, id: \.self) { phase in
+                            Button(phase.label) { vm.tidePhase = phase }
+                                .buttonStyle(ChoiceButton(selected: vm.tidePhase == phase))
                         }
                     }
+                    Text(vm.tidePhase.note).font(.caption).foregroundStyle(.secondary)
                 }
+            }
+            PlanQuestion(title: "How long will you fish?") {
+                FlowLayout {
+                    ForEach(sessionLengths, id: \.self) { hours in
+                        Button(hoursLabel(hours)) { vm.sessionHours = hours }
+                            .buttonStyle(ChoiceButton(selected: vm.sessionHours == hours))
+                    }
+                }
+            }
+            PlanQuestion(title: "How rough is OK?") {
+                FlowLayout {
+                    ForEach(vm.isBoatFishing ? boatRoughnessChoices : roughnessChoices, id: \.band) { choice in
+                        Button(choice.label) { vm.landPreferences.maxBand = choice.band }
+                            .buttonStyle(ChoiceButton(selected: vm.landPreferences.maxBand == choice.band))
+                    }
+                }
+            }
+            if !vm.isBoatFishing {
                 PlanQuestion(title: "Where do you fish?") {
                     FlowLayout {
                         ForEach(ShoreSetting.allCases, id: \.self) { setting in
@@ -715,6 +732,7 @@ private struct MoreOptions: View {
                                 .buttonStyle(ChoiceButton(selected: vm.landPreferences.setting == setting))
                         }
                     }
+                    Text("Beach and rocks also check the waves.").font(.caption).foregroundStyle(.secondary)
                 }
                 PlanQuestion(title: "Walk to your spot (each way)") {
                     FlowLayout {
@@ -1420,15 +1438,17 @@ struct ResultsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(vm.nearbySpotCount == 0
                                  ? "No catalogued \(vm.isBoatFishing ? "boat" : "land") areas are within this radius."
-                                 : vm.preference == .lateIncoming
-                                 ? "No two-hour window matches the late-incoming preference with the available tide and weather data. Try \(WindowPriority.weather.title(boat: vm.isBoatFishing)) or another date."
-                                 : "No two-hour planning window matches these dates, hours and the available forecasts.")
+                                 : vm.preference == .tide
+                                 ? "No \(hoursLabel(vm.sessionHours)) window falls \(vm.tidePhase.words) with the available tide and weather data. Try another tide choice or date."
+                                 : vm.preference == .sun
+                                 ? "No \(hoursLabel(vm.sessionHours)) window falls around sunrise or sunset within your hours and the available forecasts. Try another time or date."
+                                 : "No \(hoursLabel(vm.sessionHours)) planning window matches these dates, hours and the available forecasts.")
                                 .foregroundStyle(.secondary)
                             if vm.nearbySpotCount == 0, let hint = vm.nearestSpotHint {
                                 Text(hint).font(.subheadline).foregroundStyle(.secondary)
                             }
                             if vm.nearbySpotCount > 0, vm.datePreset == .today {
-                                Text("Today may have too little time left for a two-hour session. Try another date in your fishing plan.")
+                                Text("Today may have too little time left for a \(hoursLabel(vm.sessionHours)) session. Try another date in your fishing plan.")
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                             if !vm.nearbyPlacesWithoutWindows.isEmpty {
@@ -1437,18 +1457,32 @@ struct ResultsView: View {
                             }
                         }.padding(.vertical, 14)
                     } else {
-                        if !vm.isBoatFishing && !vm.recommendations.contains(where: { $0.assessment?.matchesComfort == true }) {
+                        if !vm.recommendations.contains(where: { $0.assessment?.matchesComfort == true }) {
                             Text(vm.recommendations.allSatisfy { $0.assessment?.comfortComplete == false }
                                  ? "More data needed · partial options below"
                                  : "No window meets your comfort preference · alternatives below")
                                 .font(.subheadline).foregroundStyle(CatchCheckColor.orange)
                         }
-                        ForEach(vm.recommendations, id: \.windowID) { spot in
-                            RecommendationCard(spot: spot, showWhy: shouldShowWindowReason(spot, among: vm.recommendations)) {
-                                vm.trackSpotOpened(spot)
-                                vm.showingResults = false; vm.selectedSpot = spot
+                        // A plan over several days lists each day in date order, best first within the day; the best overall is marked.
+                        let groups = vm.recommendationsByDay
+                        let best = vm.recommendations.count > 1 ? vm.bestRecommendation?.windowID : nil
+                        ForEach(groups, id: \.label) { group in
+                            if groups.count > 1 {
+                                Text(group.label).font(.headline).foregroundStyle(CatchCheckColor.navy).padding(.top, 6)
                             }
+                            ForEach(group.windows, id: \.windowID) { spot in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if spot.windowID == best {
+                                        Label("Best pick", systemImage: "star.fill")
+                                            .font(.subheadline.bold()).foregroundStyle(CatchCheckColor.accent).padding(.leading, 16).padding(.top, 4)
+                                    }
+                                    RecommendationCard(spot: spot, showWhy: shouldShowWindowReason(spot, among: vm.recommendations)) {
+                                        vm.trackSpotOpened(spot)
+                                        vm.showingResults = false; vm.selectedSpot = spot
+                                    }
+                                }
                                 .listRowInsets(EdgeInsets())
+                            }
                         }
                         if !vm.nearbyPlacesWithoutWindows.isEmpty {
                             Text("No planning window available at: \(vm.nearbyPlacesWithoutWindows.prefix(5).joined(separator: ", ")).")
