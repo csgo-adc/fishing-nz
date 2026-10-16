@@ -32,6 +32,7 @@ private val timeOfDay = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
+    val context = LocalContext.current
     val repository = remember { PlaceConditionsRepository() }
     var data by remember(place.id) { mutableStateOf<PlaceConditions?>(null) }
     var loading by remember(place.id) { mutableStateOf(true) }
@@ -88,6 +89,12 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                 }, navigationIcon = {
                     IconButton(onClick = dismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to map") }
                 }, actions = {
+                    val snapshot = data
+                    if (day != null && snapshot != null) IconButton(onClick = {
+                        val text = PlaceConditionsShare.text(place, day, today, snapshot.rows(day), tide, station.takeIf { tide != null })
+                        if (!shareConditions(context, PlaceConditionsShare.subject(place), text))
+                            android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+                    }) { Icon(Icons.Default.Share, "Share these conditions") }
                     IconButton(onClick = { refresh++ }) { Icon(Icons.Default.Refresh, "Refresh conditions") }
                 })
             }) { padding ->
@@ -212,7 +219,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                             TextButton(onClick = { sources = !sources }, contentPadding = PaddingValues(0.dp)) { Text(if (sources) "Hide forecast details" else "Forecast details") }
                             if (sources) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("Open-Meteo model data · ${snapshot.zone.id}. Recent days use archived model output. Local exposure and official warnings need checking.")
-                                Text("Waves are offshore significant height and mean period. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
+                                Text("Waves are the offshore typical (significant) height and the average time between waves. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
                                 snapshot.weather?.let { Text("Weather updated ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)}") }
                                 snapshot.marine?.let { Text("Waves updated ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)}") }
                             }
@@ -223,6 +230,21 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
         }
     }
     if (showStations) TideReferencePicker(place.point, station, { selectedStation = it; tideRefresh++; showStations = false }, { showStations = false })
+}
+
+/** Opens the share sheet with the day's conditions. Returns false when no app can share text. */
+private fun shareConditions(context: android.content.Context, subject: String, text: String): Boolean {
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
+        putExtra(android.content.Intent.EXTRA_TEXT, text)
+    }
+    return try {
+        context.startActivity(android.content.Intent.createChooser(send, "Share these conditions"))
+        true
+    } catch (_: android.content.ActivityNotFoundException) {
+        false
+    }
 }
 
 @Composable private fun ConditionRow(row: ConditionItem, details: List<String>) {

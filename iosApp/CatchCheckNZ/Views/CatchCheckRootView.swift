@@ -63,6 +63,8 @@ struct CatchCheckRootView: View {
         .tint(CatchCheckColor.accent)
         .preferredColorScheme(preferredAppearance)
         .fullScreenCover(isPresented: $vm.showingResults) { ResultsView() }
+        // "Show on map" from a saved window under More closes that sheet too.
+        .onChange(of: vm.mapFocus?.id) { _, id in if id != nil { moreDestination = nil } }
         .sheet(item: $vm.selectedSpot) { SpotDetailView(spot: $0) }
         .alert("Shared window", isPresented: Binding(get: { vm.sharedWindowNotice != nil }, set: { if !$0 { vm.sharedWindowNotice = nil } })) {
             Button("OK", role: .cancel) {}
@@ -1494,7 +1496,7 @@ struct ShareContent: Identifiable {
 }
 
 /// The system share sheet, shown once the link is ready. `ShareLink` cannot wait for a network call.
-private struct ActivityView: UIViewControllerRepresentable {
+struct ActivityView: UIViewControllerRepresentable {
     let content: ShareContent
 
     private final class Item: NSObject, UIActivityItemSource, Sendable {
@@ -1573,6 +1575,10 @@ struct SpotDetailView: View {
                     } else {
                         Card { Text("Search from Home to compare forecast conditions and find a planning window for this spot.").foregroundStyle(.secondary) }
                     }
+                    if let place = spot.mapPlace {
+                        Button { vm.showOnMap(place); dismiss() } label: { Label("Show on map", systemImage: "map") }
+                            .buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    }
                     if SharedWindowLink.canShare(spot) {
                         Button {
                             preparingShare = true
@@ -1611,6 +1617,7 @@ struct SpotDetailView: View {
 }
 
 struct RecommendationCard: View {
+    @EnvironmentObject private var vm: FishingViewModel
     let spot: Recommendation
     var showWhy = true
     let action: () -> Void
@@ -1628,17 +1635,28 @@ struct RecommendationCard: View {
             WindowKeyTiles(spot: spot)
             WindowWatchOut(spot: spot)
             if let note = spot.forecastNote { Text(note).font(.caption).foregroundStyle(.secondary) }
-            // A tap target rather than a Button: a List fires a row's first Button when the row itself is tapped.
-            HStack(spacing: 4) {
-                Text(showAllConditions ? "Hide conditions" : "All conditions")
-                Image(systemName: showAllConditions ? "chevron.up" : "chevron.down").font(.caption.bold())
+            // Tap targets rather than Buttons: a List fires a row's first Button when the row itself is tapped.
+            HStack {
+                HStack(spacing: 4) {
+                    Text(showAllConditions ? "Hide conditions" : "All conditions")
+                    Image(systemName: showAllConditions ? "chevron.up" : "chevron.down").font(.caption.bold())
+                }
+                .padding(.vertical, 4).contentShape(Rectangle())
+                .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showAllConditions.toggle() } }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { showAllConditions.toggle() }
+                Spacer()
+                if let place = spot.mapPlace {
+                    Label("Show on map", systemImage: "map")
+                        .padding(.vertical, 4).contentShape(Rectangle())
+                        .onTapGesture { vm.showOnMap(place) }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { vm.showOnMap(place) }
+                }
             }
             .font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.accent)
-            .padding(.vertical, 4).contentShape(Rectangle())
-            .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showAllConditions.toggle() } }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { showAllConditions.toggle() }
             if showAllConditions {
                 WindowConditions(spot: spot)
                 WindowSources(spot: spot).font(.caption)
@@ -1757,7 +1775,7 @@ private struct WindowKeyTiles: View {
                     Text(tile.value).font(.headline).lineLimit(1).minimumScaleFactor(0.75)
                         .foregroundStyle(tile.concern ? CatchCheckColor.cautionText : CatchCheckColor.navy)
                     if !tile.detail.isEmpty {
-                        Text(tile.detail).font(.caption2).lineLimit(2)
+                        Text(tile.detail).font(.caption2).lineLimit(3)
                             .foregroundStyle(tile.concern ? CatchCheckColor.cautionText : CatchCheckColor.tileText)
                     }
                 }
@@ -1855,7 +1873,8 @@ private struct WindowConditions: View {
                 ForEach(Array(assessment.conditions.enumerated()), id: \.offset) { position, condition in
                     if position > 0 { Divider().padding(.vertical, 6) }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(condition.title)  \(condition.value)").font(.subheadline)
+                        Text(condition.title).font(.caption.bold()).foregroundStyle(CatchCheckColor.accent)
+                        Text(PlainConditions.windowValue(condition)).font(.subheadline)
                             .foregroundStyle(CatchCheckColor.navy).fixedSize(horizontal: false, vertical: true)
                         Text("\(condition.mood.emoji) \(condition.mood.label)").font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading)

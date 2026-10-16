@@ -109,6 +109,12 @@ import Foundation
         try expect(data.weatherHours(date).count == 23 && data.marineHours(date).count == 23, "NZ DST day must be 23 hours")
         try expect(data.rows(date).first?.mood.label == "More motion", "Complete DST day was treated as incomplete")
         try expect(data.rows(date).first { $0.title == "Daylight" }?.value == "6:30 AM–7:30 PM", "Sunrise timezone applied twice")
+        let windRow = data.rows(date).first { $0.title == "Wind" }?.value ?? ""
+        try expect(windRow.range(of: "^(Light wind|Gentle breeze|Breezy|Windy|Very windy): up to \\d+ km/h, gusts to \\d+ km/h, from the [a-z-]+$", options: .regularExpression) != nil, "Plain map wind: \(windRow)")
+        let waveRow = data.rows(date).first?.value ?? ""
+        try expect(waveRow.range(of: "^Up to \\d+\\.\\d m, \\d+(–\\d+)? seconds apart$", options: .regularExpression) != nil, "Plain map waves: \(waveRow)")
+        try expect(data.rows(date).first { $0.title == "Rain" }?.value.hasSuffix("chance in any hour") == true, "Plain map rain")
+        try shareChecks()
         try expect(weather.hours.last?.chance == nil && weather.days.last?.chance == nil, "Missing rain chance became zero")
         try expect(data.marineHours(later).isEmpty && data.rows(later).first?.mood == needsDataMood, "Waves extended past returned data")
         func changed(_ source: Data, section: String, field: String, value: Any) throws -> Data {
@@ -159,5 +165,45 @@ import Foundation
             print(live.rows(today).map { "\($0.title): \($0.value) · \($0.mood.emoji) \($0.mood.label)" }.joined(separator: "\n"))
         }
         print("\(checks) place-condition checks passed.")
+    }
+
+    /// The shared conditions message, the same as Android's PlaceConditionsShareTest.
+    static func shareChecks() throws {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        let today = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16))!
+        let rows: [ConditionItem] = [
+            .init(title: "Offshore waves", value: "Up to 0.8 m, 6–7 seconds apart", mood: .init(emoji: "🌊", label: "More motion")),
+            .init(title: "Wind", value: "Breezy: up to 22 km/h, gusts to 28 km/h, from the south", mood: comfortMood(1)),
+            .init(title: "Rain", value: "0.4 mm all day, up to 40% chance in any hour", mood: .init(emoji: "☔", label: "Some rain")),
+            .init(title: "Feels like", value: "—", mood: needsDataMood),
+            .init(title: "Daylight", value: "6:32 AM–7:41 PM", mood: .init(emoji: "🌞", label: "Plan your return")),
+            .init(title: "UV", value: "5.2", mood: .init(emoji: "☀️", label: "Sun protection"))]
+        let place = ConditionPlace(name: "Takapuna Beach", point: GeoPoint(latitude: -36.787123, longitude: 174.770456), region: "Auckland · Land fishing")
+        let station = tideStations.first { $0.name == "Auckland" }!
+        let tide = TideState(currentLevel: "", nextEvent: "", eventTime: "", events: [TideEvent(time: "7:12 AM", height: "2.4 m", type: "High"),
+                                                                                  TideEvent(time: "1:20 PM", height: "0.5 m", type: "Low")], points: [], stationName: "")
+        let distance = String(format: "%.1f", placeDistanceKm(place.point, GeoPoint(latitude: station.latitude, longitude: station.longitude)))
+        let day = calendar.date(byAdding: .day, value: 2, to: today)!
+        let expected = """
+            Fishing conditions · Takapuna Beach
+            Auckland · Land fishing
+            Sun 18 Oct · Short-range forecast
+
+            Offshore waves – Up to 0.8 m, 6–7 seconds apart (More motion)
+            Wind – Breezy: up to 22 km/h, gusts to 28 km/h, from the south (Okay)
+            Rain – 0.4 mm all day, up to 40% chance in any hour (Some rain)
+            Daylight – 6:32 AM–7:41 PM
+            Tide at Auckland (\(distance) km away) – High 7:12 AM, low 1:20 PM
+
+            Map: https://www.google.com/maps/search/?api=1&query=-36.7871,174.7705
+            Weather and waves: Open-Meteo. Tides: LINZ. Check local conditions and marine warnings before you go.
+            """
+        let text = PlaceConditionsShare.text(place: place, day: day, today: today, calendar: calendar, rows: rows, tide: tide, station: station)
+        try expect(text == expected, "Shared conditions message:\n\(text)")
+        let pin = ConditionPlace(name: "Dropped pin", point: GeoPoint(latitude: -37.8, longitude: 174.87), region: "Selected on map")
+        let pinText = PlaceConditionsShare.text(place: pin, day: calendar.date(byAdding: .day, value: -2, to: today)!, today: today, calendar: calendar, rows: rows, tide: nil, station: nil)
+        try expect(pinText.hasPrefix("Fishing conditions · pin on the map\nWed 14 Oct · Recent model data") && !pinText.contains("Tide at"), "Dropped pin message")
+        try expect([-1, 0, 2, 3, 5, 6].map { PlaceConditionsShare.forecastLabel(day: calendar.date(byAdding: .day, value: $0, to: today)!, today: today, calendar: calendar) }
+                   == ["Recent model data", "Short-range forecast", "Short-range forecast", "Planning forecast", "Planning forecast", "Early outlook"], "Forecast labels")
     }
 }

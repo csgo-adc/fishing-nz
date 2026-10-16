@@ -55,6 +55,8 @@ struct FishingMapView: View {
     @State private var conditionsPlace: ConditionPlace?
     @State private var showPlaceSearch = false
     @State private var showSpotList = false
+    /// Set after "Show on map" moves the camera, so returning to the tab does not jump back to the current location.
+    @State private var keepCameraOnAppear = false
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
@@ -146,10 +148,13 @@ struct FishingMapView: View {
             selectedPlaceCard
         }.background(CatchCheckColor.cream)
             .onAppear {
-                if vm.hasDeviceLocation { centerOnCurrentLocation(); needsFirstLocationCenter = false }
+                if vm.mapFocus != nil { showMapFocus() }
+                else if keepCameraOnAppear { keepCameraOnAppear = false }
+                else if vm.hasDeviceLocation { centerOnCurrentLocation(); needsFirstLocationCenter = false }
                 else { needsFirstLocationCenter = true }
                 vm.requestLocation()
             }
+            .onChange(of: vm.mapFocus?.id) { _, id in if id != nil { showMapFocus() } }
             .onChange(of: vm.location) { _, _ in
                 if vm.hasDeviceLocation && (needsFirstLocationCenter || recenterOnLocationUpdate) {
                     centerOnCurrentLocation()
@@ -224,6 +229,17 @@ struct FishingMapView: View {
         }
     }
 
+
+    /// A fishing window sent here with "Show on map": centre on its area and open its card.
+    private func showMapFocus() {
+        guard let place = vm.mapFocus else { return }
+        vm.mapFocus = nil
+        selectedPlace = place
+        conditionsPlace = nil; showSpotList = false; showPlaceSearch = false
+        needsFirstLocationCenter = false; recenterOnLocationUpdate = false; keepCameraOnAppear = true
+        sendCamera(.region(MKCoordinateRegion(center: .init(latitude: place.point.latitude, longitude: place.point.longitude),
+                                              span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
+    }
 
     private func centerOnCurrentLocation() {
         sendCamera(.region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: vm.location.latitude, longitude: vm.location.longitude),

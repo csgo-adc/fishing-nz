@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import nz.fishingnz.app.data.ConditionPlace
 import nz.fishingnz.app.data.FishingRepository
 import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
@@ -67,7 +68,9 @@ data class FishingUiState(
     val hasStoredSession: Boolean = false,
     val signInProviders: SignInProviders = SignInProviders(),
     val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false,
-    val sharedWindowNotice: String? = null
+    val sharedWindowNotice: String? = null,
+    /** A place the Map tab should centre on and open, set by "Show on map" on a fishing window. */
+    val mapFocus: ConditionPlace? = null
 )
 
 class FishingViewModel(private val repository: FishingRepository = FishingRepository()) : ViewModel() {
@@ -342,6 +345,12 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
     fun dismissSharedWindowNotice() { _state.value = _state.value.copy(sharedWindowNotice = null) }
     fun closeSpot() { _state.value = _state.value.copy(selectedSpot = null) }
+    /** Closes the window list and details and opens the Map tab on [place] (see Recommendation.mapPlace). */
+    fun showOnMap(place: ConditionPlace) {
+        _state.value = _state.value.copy(selectedSpot = null, showResults = false, mapFocus = place)
+        selectTab(1)
+    }
+    fun mapFocusShown() { _state.value = _state.value.copy(mapFocus = null) }
     fun startTrip() { _state.value.selectedSpot?.let { _state.value = _state.value.copy(activeTrip = it, selectedSpot = null) } }
     fun endTrip() { _state.value = _state.value.copy(activeTrip = null) }
     fun toggleSaved(spot: Recommendation) {

@@ -1,3 +1,4 @@
+import { waveTile, windTile } from "./plain-conditions";
 import type { ConditionRow, SharedWindow } from "./share";
 
 /**
@@ -30,11 +31,14 @@ const find = (shared: SharedWindow, title: string) => shared.conditions.find((ro
 
 function tile(label: string, row: ConditionRow | undefined): KeyTile {
   if (!row || row.value.trim() === "—") return { label, value: "—", detail: "No data", concern: false };
+  // Wind and waves in plain words (see plain-conditions.ts); a row in another form keeps its own two parts.
+  const plain = row.title === "Wind" ? windTile(row.value) : row.title === "Offshore waves" ? waveTile(row.value) : null;
+  if (plain) return { label, ...plain, concern: isConcern(row) };
   const parts = segments(row.value);
   const first = parts[0] ?? row.value;
   if (row.title === "Rain") {
     const chance = parts.find((part) => part.includes("%"))?.split(" ")[0];
-    return chance ? { label, value: chance, detail: first, concern: isConcern(row) }
+    return chance ? { label, value: chance, detail: `chance · ${first} total`, concern: isConcern(row) }
       : { label, value: first, detail: parts[1] ?? "", concern: isConcern(row) };
   }
   if (row.title === "Tide") {

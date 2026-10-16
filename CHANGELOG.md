@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.31 — 2026-10-16 (build code 32)
+
+- **Show on map.** Every fishing window card has a "Show on map" link next to "All conditions",
+  and a window's details page has a "Show on map" button. It opens the Map tab on that fishing
+  area with its card open, so Check conditions and directions are one tap away. Windows without a
+  position (some older shared links) don't show it. Android and iPhone.
+- **Share the conditions for a place.** The map's Check conditions page has a share button next to
+  Refresh. It shares the day you're looking at in plain words: waves, wind, rain, feels like,
+  daylight and the day's tides, with a Google Maps link to the spot. Android and iPhone.
+- **Conditions in plain words.** "22 km/h · gust 28 · S" now reads "Breezy: 22 km/h, gusts to
+  28 km/h, from the south" (the S was the wind direction, not seconds). Waves read "Up to 1.2 m,
+  6–7 seconds apart", rain "0.4 mm in total, up to 40% chance in any hour", tides "Next high tide
+  7:12 PM, 2.4 m" with "Tide station: …", daylight "All in daylight", and the shore plan "20 min
+  walk in · 15 min back". The key numbers explain themselves too (wind "Breezy · gusts 28 · from S",
+  waves "6–7 s apart", rain "chance · 0.4 mm total"). Same wording on the map's conditions page and
+  the shared-window web page. Shared links keep their format, so old links and older app versions
+  still work. Deploy the API for the web page wording.
+
 ## 1.0.30 — 2026-10-11 (build code 31)
 
 - **Sign in with Apple on iPhone uses Apple's own sheet** (Face ID or passcode, no web page) and

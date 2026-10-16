@@ -116,6 +116,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var selectedSpot: Recommendation?
     @Published var sharedWindowNotice: String?
     @Published var showingResults = false
+    /// A place the Map tab should centre on and open, set by "Show on map" on a fishing window.
+    @Published var mapFocus: ConditionPlace?
     @Published var scoredWindows: [ScoredFishingWindow] = []
     @Published var isLoadingRecommendations = false
     @Published var hasSearchedRecommendations = false
@@ -713,6 +715,14 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 sharedWindowNotice = "This shared window couldn't be opened. The link may have expired or be damaged, or you may be offline."
             }
         }
+    }
+
+    /// Closes the window list and details and opens the Map tab on `place` (see Recommendation.mapPlace).
+    func showOnMap(_ place: ConditionPlace) {
+        selectedSpot = nil
+        showingResults = false
+        mapFocus = place
+        selectedTab = 1
     }
 
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }

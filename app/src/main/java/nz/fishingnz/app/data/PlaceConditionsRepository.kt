@@ -138,15 +138,15 @@ internal object PlaceConditionRows {
         val wettest = hours.filter { it.rain != null && it.rain > 0 }.maxByOrNull { it.rain!! }
         val rainPeak = wettest?.let { "Wettest hour ends ${it.at.atZone(data.zone).format(clock)} · ${number(it.rain, 1)} mm." }
         return when (title) {
-            "Offshore waves" -> listOf("Height is the largest significant wave height; individual waves can be higher. Period is the time between waves.", "🚤 Boat: short periods can make the ride choppy; longer swells can cause rolling.", "🎣 Shore: check breaking waves, shelter and swell direction. Offshore height does not describe waves at your feet.")
-            "Wind" -> listOf("Max is the strongest sustained wind for the day. Gust is a brief stronger burst. Direction shows where wind comes from.", "🎣 Shore: headwinds make casting harder. 🚤 Boat: wind can roughen the water and push the boat.")
-            "Rain" -> listOfNotNull(rainPeak, "mm is the day's precipitation total. % is the highest hourly chance, not a whole-day chance.", "Rain drops on weather icons: 1 light · 2 moderate · 3 heavy. Smaller drops mean drizzle.", "Wet clothes, slippery ground and a wet deck can make fishing uncomfortable.")
+            "Offshore waves" -> listOf("Height is the largest typical (significant) wave height; single waves can be higher. Seconds apart is the time between waves: 5 or less feels short and choppy, 10 or more is a long, rolling swell.", "🚤 Boat: short periods can make the ride choppy; longer swells can cause rolling.", "🎣 Shore: check breaking waves, shelter and swell direction. Offshore height does not describe waves at your feet.")
+            "Wind" -> listOf("“Up to” is the strongest steady wind of the day; gusts are short, stronger bursts. Light wind is under 12 km/h, breezy from 20 and windy from 30. “From the south” means the wind blows from the south.", "🎣 Shore: headwinds make casting harder. 🚤 Boat: wind can roughen the water and push the boat.")
+            "Rain" -> listOfNotNull(rainPeak, "The amount is the day's total. The chance is the highest for any single hour, not for the whole day.", "Rain drops on weather icons: 1 light · 2 moderate · 3 heavy. Smaller drops mean drizzle.", "Wet clothes, slippery ground and a wet deck can make fishing uncomfortable.")
             "Feels like" -> listOf("The range includes overnight hours and accounts for wind, humidity and sunshine.", "Check the hourly values for your visit. Wet clothes can make you feel colder.")
             "Daylight" -> listOf("Sunrise–sunset in local time.", "Allow time to walk back or return to the ramp before dark.")
             "UV" -> listOf("The day's peak UV index. Protection is useful from UV 3, even when it feels cool.", "Shade, sunscreen, a hat and sunglasses help on shore and on the water.")
             "Visibility" -> listOf("The lowest model visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours.")
             "Water temperature" -> listOf("Model temperature at the sea surface, not a measurement at this pin.", "It can help compare days; it does not measure water clarity or fish activity.")
-            "Offshore swell" -> listOf("Swell travels from weather farther away. The period is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water.")
+            "Offshore swell" -> listOf("Swell travels from weather farther away. Seconds apart is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water.")
             else -> emptyList()
         }
     }
@@ -170,10 +170,10 @@ internal object PlaceConditionRows {
             sea.any { (it.height ?: 0.0) >= .5 && (it.period ?: 99.0) <= 5 } -> WindowMood("🌊", "Choppy")
             else -> WindowMood("🌊", if ((maxWave ?: 0.0) <= .5) "Lower waves" else "More motion")
         }
-        val wind = ConditionItem("Wind", "max ${number(day?.wind)} km/h · gust ${number(day?.gust)} · ${direction(day?.direction)}",
+        val wind = ConditionItem("Wind", PlainConditions.wind(day?.wind, day?.gust, listOfNotNull(day?.direction?.let(::direction)), upTo = true),
             if (day?.wind == null || day.gust == null) needsDataMood else comfortMood(LandAssessment.windBand(day.wind, day.gust)))
-        val waves = ConditionItem("Offshore waves", if (maxWave == null) "—" else "max ${number(maxWave, 1)} m · ${range(periods, 1)} s", seaFeeling)
-        val rain = ConditionItem("Rain", "${number(day?.rain, 1)} mm · ${number(day?.chance)}% hourly max", if (day?.rain == null) needsDataMood else
+        val waves = ConditionItem("Offshore waves", PlainConditions.waves(maxWave, range(periods, 1)), seaFeeling)
+        val rain = ConditionItem("Rain", PlainConditions.rain(day?.rain, day?.chance, wholeDay = true), if (day?.rain == null) needsDataMood else
             WindowMood(if (day.rain > 0) "☔" else "🌤️", if (day.rain > 3) "Wet day" else if (day.rain > 0) "Some rain" else if ((day.chance ?: 0.0) >= 60) "Rain possible" else "Mostly dry"))
         val feels = ConditionItem("Feels like", "${range(listOf(day?.feelsLow, day?.feelsHigh))}°C", if (day?.feelsLow == null || day.feelsHigh == null) needsDataMood else
             WindowMood(if (day.feelsLow < 12) "🥶" else if (day.feelsHigh > 26) "🥵" else "😌", if (day.feelsLow < 12) "Cold at times" else if (day.feelsHigh > 26) "Hot at times" else "Mild"))
@@ -181,11 +181,11 @@ internal object PlaceConditionRows {
         val light = ConditionItem("Daylight", if (day?.sunrise == null || day.sunset == null) "—" else "${day.sunrise.atZone(data.zone).format(solarFormat)}–${day.sunset.atZone(data.zone).format(solarFormat)}", if (day?.sunrise == null || day.sunset == null) needsDataMood else WindowMood("🌞", "Plan your return"))
         val visibility = hours.mapNotNull { it.visibility }.minOrNull()
         val uv = ConditionItem("UV", number(day?.uv, 1), if (day?.uv == null) needsDataMood else WindowMood("☀️", if (day.uv >= 3) "Sun protection" else "Lower UV"))
-        val view = ConditionItem("Visibility", visibility?.let { "min ${number(it / 1000, 1)} km" } ?: "—", if (visibility == null) needsDataMood else WindowMood(if (visibility < 1000) "🌫️" else "👀", if (visibility < 1000) "Poor at times" else "Check visibility"))
+        val view = ConditionItem("Visibility", visibility?.let { "down to ${number(it / 1000, 1)} km" } ?: "—", if (visibility == null) needsDataMood else WindowMood(if (visibility < 1000) "🌫️" else "👀", if (visibility < 1000) "Poor at times" else "Check visibility"))
         val water = sea.mapNotNull { it.waterTemperature }
         val waterRow = ConditionItem("Water temperature", if (water.isEmpty()) "—" else "${range(water, 1)}°C", if (water.isEmpty()) needsDataMood else WindowMood("🌡️", "Offshore model"))
         val swells = sea.map { it.swell }
-        val swell = ConditionItem("Offshore swell", swells.filterNotNull().maxOrNull()?.let { "max ${number(it, 1)} m · ${range(sea.map { hour -> hour.swellPeriod }, 1)} s" } ?: "—",
+        val swell = ConditionItem("Offshore swell", PlainConditions.waves(swells.filterNotNull().maxOrNull(), range(sea.map { hour -> hour.swellPeriod }, 1)),
             if (swells.isEmpty() || swells.any { it == null } || sea.any { it.swellPeriod == null }) needsDataMood else WindowMood("🌊", "Offshore model"))
         return listOf(waves, wind) + listOf(rain, feels, light, uv, view, waterRow, swell)
     }

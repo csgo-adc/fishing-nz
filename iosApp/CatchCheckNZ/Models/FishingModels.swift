@@ -170,12 +170,15 @@ enum WindowHighlights {
 
     static func tile(_ label: String, _ item: ConditionItem?) -> KeyTile {
         guard let item, item.value.trimmingCharacters(in: .whitespaces) != "—" else { return KeyTile(label: label, value: "—", detail: "No data", concern: false) }
+        // Wind and waves in plain words (see PlainConditions); a row in another form keeps its own two parts.
+        let plain = item.title == "Wind" ? PlainConditions.windTile(item.value) : item.title == "Offshore waves" ? PlainConditions.waveTile(item.value) : nil
+        if let plain { return KeyTile(label: label, value: plain.value, detail: plain.detail, concern: isConcern(item)) }
         let parts = segments(item.value)
         let first = parts.first ?? item.value
         switch item.title {
         case "Rain":
             if let chance = parts.first(where: { $0.contains("%") })?.split(separator: " ").first.map(String.init) {
-                return KeyTile(label: label, value: chance, detail: first, concern: isConcern(item))
+                return KeyTile(label: label, value: chance, detail: "chance · \(first) total", concern: isConcern(item))
             }
             return KeyTile(label: label, value: first, detail: parts.count > 1 ? parts[1] : "", concern: isConcern(item))
         case "Tide":
@@ -185,6 +188,138 @@ enum WindowHighlights {
         default:
             return KeyTile(label: label, value: first, detail: parts.count > 1 ? parts[1] : "", concern: isConcern(item))
         }
+    }
+}
+
+/// Condition rows in plain words: "22 km/h · gust 28 · S" reads "Breezy: 22 km/h, gusts to 28 km/h, from the south".
+/// A window's rows keep their short form because shared links carry it and older apps read it, so a window is put into
+/// words when it is shown (`windowValue`). The map's conditions page builds its rows with the same words. Android has the
+/// same rules in `PlainConditions.kt`, the shared-window page in `plain-conditions.ts`.
+enum PlainConditions {
+    private static let compass = ["N": "north", "NE": "north-east", "E": "east", "SE": "south-east",
+                                  "S": "south", "SW": "south-west", "W": "west", "NW": "north-west"]
+
+    /// The word for a steady wind, in km/h. The steps follow the land comfort bands (12, 20 and 30 km/h).
+    static func windStrength(_ kmh: Int) -> String {
+        kmh < 12 ? "Light wind" : kmh < 20 ? "Gentle breeze" : kmh < 30 ? "Breezy" : kmh < 40 ? "Windy" : "Very windy"
+    }
+
+    /// "from the south" for one direction, "from SW, then W" when it changes; nil when unknown.
+    static func from(_ directions: [String]) -> String? {
+        let known = directions.map { $0.trimmingCharacters(in: .whitespaces) }.filter { compass[$0] != nil }
+        switch known.count {
+        case 0: return nil
+        case 1: return "from the \(compass[known[0]]!)"
+        default: return "from " + known.joined(separator: ", then ")
+        }
+    }
+
+    /// Whole seconds from a period range: "6.5–7.0" is "7", "5.6–8.2" is "6–8"; nil without a number.
+    static func seconds(_ range: String?) -> String? {
+        let values = (range ?? "").components(separatedBy: "–").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard let lowest = values.min(), let highest = values.max() else { return nil }
+        let low = Int(lowest.rounded()), high = Int(highest.rounded())
+        return low == high ? "\(low)" : "\(low)–\(high)"
+    }
+
+    /// "Breezy: 22 km/h, gusts to 28 km/h, from the south"; `upTo` for a whole day's strongest wind.
+    static func wind(speed: Double?, gust: Double?, directions: [String], upTo: Bool = false) -> String {
+        guard let speed else { return "—" }
+        let steady = Int(speed.rounded())
+        return ["\(windStrength(steady)): \(upTo ? "up to " : "")\(steady) km/h", gust.map { "gusts to \(Int($0.rounded())) km/h" }, from(directions)]
+            .compactMap { $0 }.joined(separator: ", ")
+    }
+
+    /// "Up to 1.2 m, 6–7 seconds apart".
+    static func waves(height: Double?, periods: String?) -> String {
+        guard let height else { return "—" }
+        let apart = seconds(periods).map { ", \($0) \($0 == "1" ? "second" : "seconds") apart" } ?? ""
+        return "Up to \(String(format: "%.1f", height)) m\(apart)"
+    }
+
+    /// "0.4 mm in total, up to 40% chance in any hour", or "… all day" for a whole day on the map. A 0% chance is left out.
+    static func rain(total: Double?, chance: Double?, wholeDay: Bool = false) -> String {
+        let amount = total.map { String(format: "%.1f", $0) }
+        let parts = [amount.map { $0 == "0.0" ? "No rain expected" : "\($0) mm \(wholeDay ? "all day" : "in total")" },
+                     chance.map { Int($0.rounded()) }.flatMap { $0 > 0 ? "up to \($0)% chance in any hour" : nil }].compactMap { $0 }
+        guard let first = parts.first else { return "—" }
+        let text = parts.joined(separator: ", ")
+        return first.hasPrefix("up") ? text.prefix(1).uppercased() + text.dropFirst() : text
+    }
+
+    private static let windRow = "^(\\d+) km/h · gust (\\d+)(?: · ([A-Z/]+))?$"
+    private static let waveRow = "^(\\d+(?:\\.\\d+)?) m · (.+) s$"
+    private static let rainRow = "^(\\d+(?:\\.\\d+)?) mm · peak \\S+ mm/h · (?:(\\d+)% hourly|chance —)$"
+    private static let tideEvent = "^(Next )?(high|low) (.+) · (\\d+(?:\\.\\d+)?) m CD$"
+    private static let daylightShare = "^(\\d+)% (session|visit|known time)$"
+    private static let shorePlan = "^(.+) · before (.+) · return (.+)$"
+
+    /// The capture groups of a whole-text match ("" for a group that took no part), or nil.
+    private static func groups(_ pattern: String, _ text: String) -> [String]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
+        return (1..<match.numberOfRanges).map { Range(match.range(at: $0), in: text).map { String(text[$0]) } ?? "" }
+    }
+
+    /// A window's condition row in plain words. Text it does not recognise, such as a cut-off shared row, stays as it is.
+    static func windowValue(_ item: ConditionItem) -> String {
+        let value = item.value.trimmingCharacters(in: .whitespaces)
+        let plain: String?
+        switch item.title {
+        case "Wind":
+            plain = groups(windRow, value).map { wind(speed: Double($0[0]), gust: Double($0[1]), directions: $0[2].components(separatedBy: "/")) }
+        case "Offshore waves":
+            plain = groups(waveRow, value).map { waves(height: Double($0[0]), periods: $0[1]) }
+        case "Rain":
+            plain = groups(rainRow, value).map { rain(total: Double($0[0]), chance: Double($0[1])) }
+        case "Tide":
+            plain = tide(value)
+        case "Daylight":
+            plain = groups(daylightShare, value).map { daylight($0[0], $0[1]) }
+        case "Shore plan":
+            plain = groups(shorePlan, value).map { parts in
+                [parts[0] == "Not set" ? "Shore type not set" : parts[0],
+                 parts[1] == "—" ? "walk-in time not set" : "\(parts[1]) walk in",
+                 parts[2] == "—" ? "return time not set" : "\(parts[2]) back"].joined(separator: " · ")
+            }
+        default:
+            plain = nil
+        }
+        return plain ?? value
+    }
+
+    /// "Next high tide 7:12 PM, 2.4 m" and "Tide station: Auckland, 3.0 km away".
+    private static func tide(_ value: String) -> String? {
+        let lines = value.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard let first = lines.first, let event = groups(tideEvent, first) else { return nil }
+        let kind = event[1]
+        let start = event[0].isEmpty ? kind.prefix(1).uppercased() + kind.dropFirst() : "Next \(kind)"
+        let stations = lines.dropFirst().map { line in
+            "Tide station: " + (line.hasPrefix("LINZ ") ? String(line.dropFirst(5)) : line).replacingOccurrences(of: " · ", with: ", ")
+        }
+        return (["\(start) tide \(event[2]), \(event[3]) m"] + stations).joined(separator: "\n")
+    }
+
+    private static func daylight(_ percent: String, _ of: String) -> String {
+        if percent == "100" { return of == "visit" ? "Whole visit in daylight" : "All in daylight" }
+        if percent == "0" { return "All after dark" }
+        if of == "visit" { return "\(percent)% of your visit in daylight" }
+        if of == "known time" { return "\(percent)% of the known times in daylight" }
+        return "\(percent)% in daylight"
+    }
+
+    /// "22 km/h" over "Breezy · gusts 28 · from S" ("from SW to E" when it changes). Nil when the row is not recognised.
+    static func windTile(_ value: String) -> (value: String, detail: String)? {
+        guard let parts = groups(windRow, value.trimmingCharacters(in: .whitespaces)), let speed = Int(parts[0]) else { return nil }
+        let directions = parts[2].components(separatedBy: "/").filter { compass[$0] != nil }
+        let from = directions.isEmpty ? nil : directions.count == 1 ? "from \(directions[0])" : "from \(directions.first!) to \(directions.last!)"
+        return ("\(parts[0]) km/h", [windStrength(speed), "gusts \(parts[1])", from].compactMap { $0 }.joined(separator: " · "))
+    }
+
+    /// "1.2 m" over "6–7 s apart". Nil when the row is not recognised.
+    static func waveTile(_ value: String) -> (value: String, detail: String)? {
+        guard let parts = groups(waveRow, value.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return ("\(parts[0]) m", seconds(parts[1]).map { "\($0) s apart" } ?? "")
     }
 }
 

@@ -201,8 +201,8 @@ internal object WindowEvaluation {
             rows, when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("⏱️", "Short-range forecast") },
             band = comfortBand, comfortComplete = complete,
             details = warnings + buildList {
-                add("Boat windows are ranked mainly by waves. Your route and the trip back are not checked. CD = Chart Datum, the tide-table reference level.")
-                add("Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period.")
+                add("Boat windows are ranked mainly by waves. Your route and the trip back are not checked. Tide heights are above Chart Datum, the tide-table reference level.")
+                add("Rain chance is the highest for any single hour, not for the whole session. Offshore waves show the typical (significant) height and the average time between waves.")
                 if (completeTides) add("Tide times and heights are for the named reference station; local timing can differ.")
                 if (temperature.size != 3) add("Some feels-like temperatures are missing.")
                 if (retrievedAt == null || Duration.between(retrievedAt, now).seconds > 3 * 3600) add("Forecast freshness unverified or older than 3 hours.")

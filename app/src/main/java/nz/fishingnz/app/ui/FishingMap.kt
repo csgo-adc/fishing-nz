@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import nz.fishingnz.app.data.ConditionPlace
+import nz.fishingnz.app.data.placeDistanceKm
 import nz.fishingnz.app.data.recommendationTideStation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -60,6 +61,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import nz.fishingnz.app.model.FishingSpot
 import nz.fishingnz.app.model.GeoPoint
+import nz.fishingnz.app.model.Recommendation
 import nz.fishingnz.app.model.SearchOrigin
 import nz.fishingnz.app.model.fishingSpots
 import nz.fishingnz.app.viewmodel.FishingUiState
@@ -248,10 +250,20 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     }
 
     LaunchedEffect(s.deviceLocation) {
+        // A fishing window sent here with "Show on map" keeps the camera on its area.
+        if (s.mapFocus != null) return@LaunchedEffect
         s.deviceLocation?.let { point ->
             val map = snapshotFlow { nativeMap.value }.filterNotNull().first()
             map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), 12.0))
         }
+    }
+
+    LaunchedEffect(s.mapFocus) {
+        val place = s.mapFocus ?: return@LaunchedEffect
+        selectedPlace = place; showConditions = false; showList = false; showSearch = false; navigationError = false
+        val map = snapshotFlow { nativeMap.value }.filterNotNull().first()
+        map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.point.latitude, place.point.longitude), 11.0))
+        vm.mapFocusShown()
     }
 
     fun locate() {
@@ -459,6 +471,17 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/**
+ * A fishing window's area as a map place, for "Show on map": the listed spot when there is one, so its tide station
+ * comes along. Null for a window without a position, such as an older shared link.
+ */
+internal fun Recommendation.mapPlace(): ConditionPlace? {
+    if (!latitude.isFinite() || !longitude.isFinite()) return null
+    val point = GeoPoint(latitude, longitude)
+    val spot = fishingSpots.firstOrNull { it.name == name && it.boat == boat && placeDistanceKm(point, GeoPoint(it.latitude, it.longitude)) < 1 }
+    return (spot ?: FishingSpot(name, area, latitude, longitude, boat)).asConditionPlace()
 }
 
 private fun FishingSpot.asConditionPlace() = ConditionPlace(name, GeoPoint(latitude, longitude), "$area · ${if (boat) "Boat" else "Land"} fishing", boat, recommendationTideStation(this, null))

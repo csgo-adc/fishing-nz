@@ -73,6 +73,8 @@ Without step 2, links from Play-installed copies open in the browser (Android 12
 | `t` | When it was shared, epoch seconds (optional) | |
 | `c` | Conditions, each `[title, value, emoji, label]` | 8 rows; 24 / 120 / 8 / 40 characters; value may have up to 3 lines |
 
+Condition values travel in the apps' short form (`12 km/h · gust 20 · SW`). The page and the apps show them in plain words (“Gentle breeze: 12 km/h, gusts to 20 km/h, from the south-west”); see [Plain words](place-conditions.md#plain-words). Keeping the short form in the token means links from every app version open the same way.
+
 The JSON above, base64url-encoded, is the **token**. It is what the app posts to the service, and it is also the long link's path. A real window with six conditions makes a token of about 750 characters. Text outside the limits is cut with "…", and anything malformed is refused: the page shows a friendly "this link can't be opened" (HTTP 404) and the apps tell the person.
 
 ### The short-link service

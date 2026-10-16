@@ -334,14 +334,15 @@ import Foundation
                                                                matchesComfort: matches, comfortComplete: true))
         }
         let tiles = window(land).keyTiles
-        try expect(tiles == [KeyTile(label: "Wind", value: "20 km/h", detail: "gust 45", concern: true),
+        try expect(tiles == [KeyTile(label: "Wind", value: "20 km/h", detail: "Breezy · gusts 45 · from NW", concern: true),
                              KeyTile(label: "Tide", value: "High", detail: "next 12:53 PM", concern: false),
-                             KeyTile(label: "Rain", value: "70%", detail: "0.8 mm", concern: false)], "Land tiles must show wind, tide and rain")
+                             KeyTile(label: "Rain", value: "70%", detail: "chance · 0.8 mm total", concern: false)], "Land tiles must show wind, tide and rain")
         try expect(window(land).watchOuts == ["Gusts to 45 km/h", "Outside your comfort preference"], "Watch-outs must list gusts and comfort")
         let boat = window(boat: true, [.init(title: "Offshore waves", value: "1.4 m · 5.0–5.5 s", mood: .init(emoji: "🌊", label: "Choppy")),
                                        .init(title: "Wind", value: "12 km/h · gust 20", mood: comfortMood(1)),
                                        .init(title: "Tide", value: "low Thu 1:20 AM · 0.4 m CD", mood: .init(emoji: "🕒", label: "Tide timing"))], matches: true)
         try expect(boat.keyTiles.map(\.value) == ["1.4 m", "12 km/h", "Low"] && boat.keyTiles[2].detail == "1:20 AM", "Boat tiles must lead with waves")
+        try expect(boat.keyTiles[0].detail == "5–6 s apart" && boat.keyTiles[1].detail == "Gentle breeze · gusts 20", "Wave and wind tiles in plain words")
         try expect(boat.watchOuts == ["Short, choppy waves (1.4 m)"], "Choppy waves must be called out")
         try expect(window([.init(title: "Tide", value: "—", mood: needsDataMood)]).keyTiles[0] == KeyTile(label: "Wind", value: "—", detail: "No data", concern: false), "Missing rows show no data")
         try expect(window(land).windowDayAndHours == ("Wed 14 Oct", "10:00 AM–12:00 PM"), "Day and hours")
@@ -350,5 +351,37 @@ import Foundation
         try expect(WindowHighlights.tone("Okay") == .good && WindowHighlights.tone("Demanding") == .caution && WindowHighlights.tone("Uncomfortable") == .poor
                    && WindowHighlights.tone("Needs more data") == .unknown, "Outlook colours")
         try expect(window(land).forecastNote == "Planning forecast · local checks needed" && !window(land, hours: 0).hasHighlights, "Forecast note and eligibility")
+        try plainWordChecks()
+    }
+
+    /// Condition rows in plain words, the same as Android's PlainConditionsTest.
+    static func plainWordChecks() throws {
+        func plain(_ title: String, _ value: String) -> String { PlainConditions.windowValue(ConditionItem(title: title, value: value, mood: comfortMood(1))) }
+        let cases: [(String, String, String)] = [
+            ("Wind", "22 km/h · gust 28 · S", "Breezy: 22 km/h, gusts to 28 km/h, from the south"),
+            ("Wind", "8 km/h · gust 15 · SW/W", "Light wind: 8 km/h, gusts to 15 km/h, from SW, then W"),
+            ("Wind", "12 km/h · gust 20", "Gentle breeze: 12 km/h, gusts to 20 km/h"),
+            ("Offshore waves", "1.2 m · 6.5–7.0 s", "Up to 1.2 m, 7 seconds apart"),
+            ("Offshore waves", "1.4 m · 5.0–5.5 s", "Up to 1.4 m, 5–6 seconds apart"),
+            ("Offshore waves", "—", "—"),
+            ("Rain", "0.4 mm · peak 0.3 mm/h · 40% hourly", "0.4 mm in total, up to 40% chance in any hour"),
+            ("Rain", "0.0 mm · peak 0.0 mm/h · 10% hourly", "No rain expected, up to 10% chance in any hour"),
+            ("Rain", "1.2 mm · peak 0.8 mm/h · chance —", "1.2 mm in total"),
+            ("Rain", "0.0 mm · peak 0.0 mm/h · 0% hourly", "No rain expected"),
+            ("Tide", "Next high 7:12 PM · 2.4 m CD\nAuckland (Waitematā)", "Next high tide 7:12 PM, 2.4 m\nTide station: Auckland (Waitematā)"),
+            ("Tide", "low Thu 15 Oct, 1:20 AM · 0.4 m CD\nLINZ Auckland · 3.0 km away", "Low tide Thu 15 Oct, 1:20 AM, 0.4 m\nTide station: Auckland, 3.0 km away"),
+            ("Daylight", "100% session", "All in daylight"), ("Daylight", "75% session", "75% in daylight"),
+            ("Daylight", "100% visit", "Whole visit in daylight"), ("Daylight", "0% known time", "All after dark"),
+            ("Shore plan", "Beach · before 20 min · return 15 min", "Beach · 20 min walk in · 15 min back"),
+            ("Shore plan", "Not set · before — · return —", "Shore type not set · walk-in time not set · return time not set"),
+            ("Wind", "14 km/h · gust 22 · SW and a few more…", "14 km/h · gust 22 · SW and a few more…"),
+            ("Feels like", "14–16°C", "14–16°C")]
+        for (title, value, expected) in cases { try expect(plain(title, value) == expected, "Plain \(title): \(plain(title, value))") }
+        try expect(PlainConditions.windTile("5 km/h · gust 17 · SW/SE/E").map { [$0.value, $0.detail] } == ["5 km/h", "Light wind · gusts 17 · from SW to E"], "Wind tile with a changing direction")
+        try expect([11, 12, 20, 30, 40].map(PlainConditions.windStrength) == ["Light wind", "Gentle breeze", "Breezy", "Windy", "Very windy"], "Wind words")
+        try expect(PlainConditions.wind(speed: 34.6, gust: 50, directions: ["NE"], upTo: true) == "Windy: up to 35 km/h, gusts to 50 km/h, from the north-east", "Day wind")
+        try expect(PlainConditions.wind(speed: nil, gust: 20, directions: ["N"]) == "—" && PlainConditions.waves(height: 0.8, periods: "—") == "Up to 0.8 m", "Missing wind and period")
+        try expect(PlainConditions.rain(total: 3.5, chance: 80, wholeDay: true) == "3.5 mm all day, up to 80% chance in any hour"
+                   && PlainConditions.rain(total: nil, chance: 30, wholeDay: true) == "Up to 30% chance in any hour", "Day rain")
     }
 }

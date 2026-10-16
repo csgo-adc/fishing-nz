@@ -21,8 +21,8 @@ test("a shared window opens as a readable page without the app", async () => {
   assert.match(response.headers.get("content-type"), /^text\/html/);
   const html = await response.text();
   for (const text of ["Takapuna Beach", "Auckland", "Land fishing", "Sun 11 Oct", "6:00 PM–8:00 PM", "New Zealand time",
-    "Okay", "Planning forecast", "Lower discomfort", "Next high 7:12 PM · 2.4 m CD<br>Auckland (Waitematā)", "Tide timing",
-    "Check before you go", "Fishdays - NZ is an independent app"]) assert.ok(html.includes(text), text);
+    "Okay", "Planning forecast", "Lower discomfort", "Next high tide 7:12 PM, 2.4 m<br>Tide station: Auckland (Waitematā)", "Tide timing",
+    "Gentle breeze: 12 km/h, gusts to 20 km/h, from the south-west", "Check before you go", "Fishdays - NZ is an independent app"]) assert.ok(html.includes(text), text);
   assert.ok(!html.includes("This window has passed") || start * 1000 < Date.now());
   assert.match(html, /<meta name="robots" content="noindex,nofollow">/);
   assert.match(html, /<meta property="og:title" content="Takapuna Beach · Sun 11 Oct, 6:00 PM–8:00 PM">/);
@@ -153,7 +153,7 @@ test("the link format the Android and iPhone apps write is read the same way", a
   assert.equal(response.status, 200);
   const html = await response.text();
   for (const text of ["Takapuna Beach", "Auckland", "Land fishing", "Sun 11 Oct", "6:00 PM–8:00 PM", "Okay", "Planning forecast",
-    "Lower discomfort", "12 km/h · gust 20 · SW", "Comfortable", "Next high 7:12 PM · 2.4 m CD<br>Auckland (Waitematā)", "Tide timing",
+    "Lower discomfort", "Gentle breeze: 12 km/h, gusts to 20 km/h, from the south-west", "Comfortable", "Next high tide 7:12 PM, 2.4 m<br>Tide station: Auckland (Waitematā)", "Tide timing",
     "Forecast snapshot from Saturday 10 October"]) assert.ok(html.includes(text), text);
 });
 
@@ -165,9 +165,9 @@ test("a shared window puts the time, outlook colour, key numbers and watch-outs 
     ["Daylight", "100% session", "🌞", "Daylight"]] };
   const html = await (await get(`/w/${token(demanding)}`)).text();
   assert.match(html, /<span class="badge caution" aria-label="Window outlook: Demanding">😕 Demanding<\/span>/);
-  assert.match(html, /<div class="tile concern"><div class="l">Wind<\/div><div class="v">20 km\/h<\/div><div class="d">gust 45<\/div><\/div>/);
+  assert.match(html, /<div class="tile concern"><div class="l">Wind<\/div><div class="v">20 km\/h<\/div><div class="d">Breezy · gusts 45 · from NW<\/div><\/div>/);
   assert.match(html, /<div class="tile"><div class="l">Tide<\/div><div class="v">High<\/div><div class="d">next 12:53 PM<\/div><\/div>/);
-  assert.match(html, /<div class="tile"><div class="l">Rain<\/div><div class="v">70%<\/div><div class="d">0\.8 mm<\/div><\/div>/);
+  assert.match(html, /<div class="tile"><div class="l">Rain<\/div><div class="v">70%<\/div><div class="d">chance · 0\.8 mm total<\/div><\/div>/);
   assert.ok(html.includes("Gusts to 45 km/h") && html.includes("<span>Outside your comfort preference</span>"), "watch-outs");
   assert.ok(html.indexOf("Gusts to 45 km/h") < html.indexOf(">Conditions<"), "highlights come before the full conditions");
 

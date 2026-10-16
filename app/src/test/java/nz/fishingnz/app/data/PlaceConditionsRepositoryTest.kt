@@ -23,6 +23,15 @@ class PlaceConditionsRepositoryTest {
         assertEquals("thames", searchResult.initialTideStation.id)
         assertEquals("thames", pin.copy(point = searchResult.point).initialTideStation.id)
     }
+    @Test fun mapRowsUsePlainWords() {
+        val rows = data().rows(date)
+        val wind = rows.first { it.title == "Wind" }.value
+        assertTrue(wind, Regex("^(Light wind|Gentle breeze|Breezy|Windy|Very windy): up to \\d+ km/h, gusts to \\d+ km/h, from the [a-z-]+$").matches(wind))
+        assertTrue(rows.first().value, Regex("^Up to \\d+\\.\\d m, \\d+(–\\d+)? seconds apart$").matches(rows.first().value))
+        assertTrue(rows.first { it.title == "Rain" }.value.endsWith("chance in any hour"))
+        assertTrue(rows.first { it.title == "Visibility" }.value.startsWith("down to "))
+    }
+
     @Test fun mapPlacesKeepTheirLinkedTideStation() {
         val linked = tideStations.first { it.id == "thames" }
         val place = ConditionPlace("Named fishing area", GeoPoint(-37.799, 174.87), station = linked)

@@ -17,6 +17,7 @@ struct PlaceConditionsView: View {
     @State private var tideIssue = false
     @State private var tideRefresh = 0
     @State private var showStations = false
+    @State private var shareContent: ShareContent?
     init(place: ConditionPlace) {
         self.place = place
         _station = State(initialValue: place.initialTideStation)
@@ -69,8 +70,18 @@ struct PlaceConditionsView: View {
             .navigationTitle(place.name).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("Map", systemImage: "chevron.left") }.accessibilityLabel("Back to map") }
-                ToolbarItem(placement: .topBarTrailing) { Button { refresh += 1 } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Refresh conditions") }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if let data, let day {
+                        Button {
+                            let text = PlaceConditionsShare.text(place: place, day: day, today: today, calendar: calendar, rows: data.rows(day),
+                                                                 tide: tide, station: tide == nil ? nil : station)
+                            shareContent = ShareContent(subject: PlaceConditionsShare.subject(place), text: text)
+                        } label: { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share these conditions")
+                    }
+                    Button { refresh += 1 } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Refresh conditions")
+                }
             }
+            .sheet(item: $shareContent) { ActivityView(content: $0).presentationDetents([.medium, .large]) }
             .sheet(isPresented: $showStations) { TideReferencePickerView(point: place.point, selected: station) { selectedStation = $0; tideRefresh += 1; showStations = false } }
         }
         .onChange(of: recent) { _, _ in selectedDate = nil }
@@ -147,7 +158,7 @@ struct PlaceConditionsView: View {
                 Text(row.title).font(.subheadline.weight(.semibold))
                 Text(row.value).font(.subheadline)
                 Text("\(row.mood.emoji) \(row.mood.label)").font(.caption).foregroundStyle(.secondary)
-            }.foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+            }.foregroundStyle(.primary).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
         }.tint(CatchCheckColor.accent)
     }
     private var tideCard: some View {
@@ -209,7 +220,7 @@ struct PlaceConditionsView: View {
             DisclosureGroup("Forecast details") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Open-Meteo model data · \(zone.identifier). Recent days use archived model output. Local exposure and official warnings need checking.")
-                    Text("Waves are offshore significant height and mean period. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
+                    Text("Waves are the offshore typical (significant) height and the average time between waves. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
                     if let weather = snapshot.weather { Text("Weather updated \(format(weather.fetchedAt, "h:mm a"))") }
                     if let marine = snapshot.marine { Text("Waves updated \(format(marine.fetchedAt, "h:mm a"))") }
                 }.font(.caption).foregroundStyle(.secondary).padding(.top, 10)
@@ -278,6 +289,16 @@ struct MapPlaceSearchView: View {
                 searching = false
             } catch { if !Task.isCancelled { issue = "Place search unavailable. You can still choose a fishing area or tap the map."; searching = false } }
         }
+    }
+}
+
+extension Recommendation {
+    /// The window's fishing area as a map place, for "Show on map": the listed spot when there is one, so its tide
+    /// station comes along. Nil for a window without a position, such as an older shared link.
+    var mapPlace: ConditionPlace? {
+        guard let coordinate else { return nil }
+        let spot = fishingSpots.first { $0.name == name && $0.boat == boat && placeDistanceKm(coordinate, $0.coordinate) < 1 }
+        return ConditionPlace(spot ?? FishingSpot(name: name, area: area, coordinate: coordinate, boat: boat))
     }
 }
 

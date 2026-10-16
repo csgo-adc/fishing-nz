@@ -546,8 +546,8 @@ struct FishingScoringService: Sendable {
         ]
         let age = start.timeIntervalSince(now)
         let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "⏱️", label: "Short-range forecast")
-        var details = warnings + ["Boat windows are ranked mainly by waves. Your route and the trip back are not checked. CD = Chart Datum, the tide-table reference level.",
-            "Rain chance is the highest hourly likelihood, not the chance for the whole session. Offshore waves show significant height and mean period."]
+        var details = warnings + ["Boat windows are ranked mainly by waves. Your route and the trip back are not checked. Tide heights are above Chart Datum, the tide-table reference level.",
+            "Rain chance is the highest for any single hour, not for the whole session. Offshore waves show the typical (significant) height and the average time between waves."]
         if tideFacts.complete { details.append("Tide times and heights are for the named reference station; local timing can differ.") }
         if temperature.count != 3 { details.append("Some feels-like temperatures are missing.") }
         if retrievedAt == nil || now.timeIntervalSince(retrievedAt!) > 3*3600 { details.append("Forecast freshness unverified or older than 3 hours.") }
@@ -925,8 +925,8 @@ enum LandAssessment {
         if marineHours.contains(where: { (valid($0.wave) ?? 0) >= 0.8 && (valid($0.period) ?? 0) >= 12 }) { details.append("Long-period waves; local surge unchecked.") }
         if codes.contains(where: { $0 == 45 || $0 == 48 }) { details.append("Fog forecast; visibility needs checking.") }
         if temps.contains(where: { $0 < 12 }) && peakRain > 0.2 { details.append("Cold and wet conditions.") }
-        details.append("Rain chance is the highest hourly likelihood, not the chance for the whole visit. Offshore waves show significant height and mean period.")
-        details.append("Not a catch forecast. CD = Chart Datum, the tide-table reference level.")
+        details.append("Rain chance is the highest for any single hour, not for the whole visit. Offshore waves show the typical (significant) height and the average time between waves.")
+        details.append("Not a catch forecast. Tide heights are above Chart Datum, the tide-table reference level.")
         let age = start.timeIntervalSince(now)
         let confidence = age > 5*86400 ? WindowMood(emoji: "🔭", label: "Early outlook") : age > 2*86400 ? .init(emoji: "🗓️", label: "Planning forecast") : .init(emoji: "⏱️", label: "Short-range forecast")
         let assessment = WindowAssessment(mood: complete ? comfortMood(grade) : needsDataMood, conditions: rows, confidence: confidence,

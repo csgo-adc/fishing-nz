@@ -75,7 +75,7 @@ private data class Tone(val background: Color, val content: Color)
                 .clearAndSetSemantics { contentDescription = "${tile.label} ${tile.value} ${tile.detail}" + if (tile.concern) ", needs attention" else "" }) {
                 Text(tile.label, color = soft, style = MaterialTheme.typography.labelMedium)
                 Text(tile.value, color = strong, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (tile.detail.isNotEmpty()) Text(tile.detail, color = soft, style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                if (tile.detail.isNotEmpty()) Text(tile.detail, color = soft, style = MaterialTheme.typography.labelSmall, maxLines = 3)
             }
         }
     }

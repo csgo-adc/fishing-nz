@@ -1,5 +1,6 @@
 import { escapeHtml } from "./privacy";
 import type { SharedWindow } from "./share";
+import { plainValue } from "./plain-conditions";
 import { keyTiles, outlookTone, watchOuts } from "./window-highlights";
 
 export type ShareConfig = {
@@ -241,7 +242,7 @@ export async function renderSharePage(shared: SharedWindow, token: string, confi
     `<meta name="twitter:card" content="summary"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}">`,
   ].join("\n");
   const conditions = shared.conditions.length ? `<section aria-labelledby="conditions"><h2 id="conditions">Conditions</h2><div class="grid">${
-    shared.conditions.map((row) => `<div class="cond"><div class="t">${escapeHtml(row.title)}</div><div class="v">${escapeHtml(row.value).replace(/\n/g, "<br>")}</div><div class="m">${escapeHtml(row.emoji)} ${escapeHtml(row.label)}</div></div>`).join("")
+    shared.conditions.map((row) => `<div class="cond"><div class="t">${escapeHtml(row.title)}</div><div class="v">${escapeHtml(plainValue(row.title, row.value)).replace(/\n/g, "<br>")}</div><div class="m">${escapeHtml(row.emoji)} ${escapeHtml(row.label)}</div></div>`).join("")
   }</div></section>` : "";
   const place = shared.latitude !== null && shared.longitude !== null ? (() => {
     const at = `${shared.latitude.toFixed(4)},${shared.longitude.toFixed(4)}`;

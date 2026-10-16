@@ -158,8 +158,8 @@ internal object LandAssessment {
             if (marineHours.any { (valid(it.wave) ?: 0.0) >= .8 && (valid(it.period) ?: 0.0) >= 12 }) add("Long-period waves; local surge unchecked.")
             if (codes.any { it == 45 || it == 48 }) add("Fog forecast; visibility needs checking.")
             if (temps.any { it < 12 } && peakRain > .2) add("Cold and wet conditions.")
-            add("Rain chance is the highest hourly likelihood, not the chance for the whole visit. Offshore waves show significant height and mean period.")
-            add("Not a catch forecast. CD = Chart Datum, the tide-table reference level.")
+            add("Rain chance is the highest for any single hour, not for the whole visit. Offshore waves show the typical (significant) height and the average time between waves.")
+            add("Not a catch forecast. Tide heights are above Chart Datum, the tide-table reference level.")
         }
         val age = Duration.between(now, start).seconds
         val confidence = when { age > 5 * 86400 -> WindowMood("🔭", "Early outlook"); age > 2 * 86400 -> WindowMood("🗓️", "Planning forecast"); else -> WindowMood("⏱️", "Short-range forecast") }

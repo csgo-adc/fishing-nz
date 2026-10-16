@@ -27,9 +27,9 @@ class WindowHighlightsTest {
     @Test fun landTilesShowWindTideAndRainWithWindHighlighted() {
         val tiles = window(conditions = land).keyTiles()
         assertEquals(listOf("Wind", "Tide", "Rain"), tiles.map { it.label })
-        assertEquals(KeyTile("Wind", "20 km/h", "gust 45", true), tiles[0])
+        assertEquals(KeyTile("Wind", "20 km/h", "Breezy · gusts 45 · from NW", true), tiles[0])
         assertEquals(KeyTile("Tide", "High", "next 12:53 PM", false), tiles[1])
-        assertEquals(KeyTile("Rain", "70%", "0.8 mm", false), tiles[2])
+        assertEquals(KeyTile("Rain", "70%", "chance · 0.8 mm total", false), tiles[2])
     }
 
     @Test fun boatTilesLeadWithWaves() {
@@ -37,7 +37,7 @@ class WindowHighlightsTest {
             ConditionItem("Offshore waves", "1.4 m · 5.0–5.5 s", WindowMood("🌊", "Choppy")),
             ConditionItem("Wind", "12 km/h · gust 20", comfortMood(1)),
             ConditionItem("Tide", "low Thu 15 Oct, 1:20 AM · 0.4 m CD\nLINZ Auckland", WindowMood("🕒", "Tide timing"))))
-        assertEquals(listOf(KeyTile("Waves", "1.4 m", "5.0–5.5 s", true), KeyTile("Wind", "12 km/h", "gust 20", false),
+        assertEquals(listOf(KeyTile("Waves", "1.4 m", "5–6 s apart", true), KeyTile("Wind", "12 km/h", "Gentle breeze · gusts 20", false),
             KeyTile("Tide", "Low", "1:20 AM", false)), boat.keyTiles())
         assertEquals(listOf("Short, choppy waves (1.4 m)"), boat.watchOuts())
     }

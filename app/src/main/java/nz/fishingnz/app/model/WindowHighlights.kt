@@ -57,10 +57,17 @@ private fun missingTile(label: String) = KeyTile(label, "—", "No data", false)
 private fun tile(label: String, item: ConditionItem?): KeyTile {
     if (item == null || item.value.trim() == "—") return missingTile(label)
     val parts = segments(item.value)
+    // Wind and waves in plain words (see PlainConditions); a row in another form keeps its own two parts.
+    val plain = when (item.title) {
+        "Wind" -> PlainConditions.windTile(item.value)
+        "Offshore waves" -> PlainConditions.waveTile(item.value)
+        else -> null
+    }
+    if (plain != null) return KeyTile(label, plain.first, plain.second, item.isConcern())
     return when (item.title) {
         "Rain" -> {
             val chance = parts.firstOrNull { it.contains('%') }?.substringBefore(' ')
-            if (chance != null) KeyTile(label, chance, parts.first(), item.isConcern())
+            if (chance != null) KeyTile(label, chance, "chance · ${parts.first()} total", item.isConcern())
             else KeyTile(label, parts.first(), parts.getOrElse(1) { "" }, item.isConcern())
         }
         "Tide" -> {

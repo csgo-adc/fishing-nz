@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
@@ -246,7 +247,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         } }
         item { Text("Your next planning window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
         item { s.recommendationSearch?.items?.firstOrNull()?.let {
-            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty())) { vm.showResults() }
+            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty()), showOnMap = mapAction(it, vm)) { vm.showResults() }
         } ?: Text("Choose a date and search to compare fishing conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -797,7 +798,8 @@ private fun shouldShowWindowReason(item: Recommendation, results: List<Recommend
         assessment.conditions.forEachIndexed { position, condition ->
             if (position > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("${condition.title}  ${condition.value}", color = Navy, style = MaterialTheme.typography.bodyMedium)
+                Text(condition.title, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                Text(PlainConditions.windowValue(condition), color = Navy, style = MaterialTheme.typography.bodyMedium)
                 Text("${condition.mood.emoji} ${condition.mood.label}", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -830,12 +832,23 @@ private fun kilometres(item: Recommendation): String? = item.distance.takeIf { i
 private fun placeLine(item: Recommendation): String = "${item.area} · ${if (item.boat) "Boat" else "Land"}" +
     (kilometres(item)?.let { " · $it" } ?: "")
 
+/** "Show on map" for a window with a position; null hides it. */
+private fun mapAction(item: Recommendation, vm: FishingViewModel): (() -> Unit)? = item.mapPlace()?.let { place -> { vm.showOnMap(place) } }
+
 /** Collapsed by default: the full condition rows, then the details and sources. */
-@Composable private fun AllConditions(item: Recommendation) {
+@Composable private fun AllConditions(item: Recommendation, showOnMap: (() -> Unit)?) {
     var expanded by rememberSaveable(item.startsAtEpochSeconds, item.name) { mutableStateOf(false) }
-    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
-        Text(if (expanded) "Hide conditions" else "All conditions")
-        Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+            Text(if (expanded) "Hide conditions" else "All conditions")
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.weight(1f))
+        if (showOnMap != null) TextButton(onClick = showOnMap, contentPadding = PaddingValues(0.dp)) {
+            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Show on map")
+        }
     }
     if (expanded) {
         WindowConditions(item)
@@ -848,7 +861,7 @@ private fun placeLine(item: Recommendation): String = "${item.area} · ${if (ite
     if (item.sourceNote.isNotEmpty()) Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-@Composable private fun RecommendationCard(item: Recommendation, showWhy: Boolean = true, click: () -> Unit = {}) {
+@Composable private fun RecommendationCard(item: Recommendation, showWhy: Boolean = true, showOnMap: (() -> Unit)? = null, click: () -> Unit = {}) {
     if (item.hasHighlights) Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             WindowTimeHeader(item)
@@ -860,7 +873,7 @@ private fun placeLine(item: Recommendation): String = "${item.area} · ${if (ite
             WindowKeyTiles(item)
             WindowWatchOut(item)
             item.forecastNote()?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium) }
-            AllConditions(item)
+            AllConditions(item, showOnMap)
         }
     }
     else Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1072,7 +1085,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         Text(if (results.all { it.assessment?.comfortComplete == false }) "More data needed · partial options below"
                             else "No window meets your comfort preference · alternatives below", color = Orange)
                     }
-                    items(results) { RecommendationCard(it, showWhy = shouldShowWindowReason(it, results)) { vm.openSpot(it) } }
+                    items(results) { RecommendationCard(it, showWhy = shouldShowWindowReason(it, results), showOnMap = mapAction(it, vm)) { vm.openSpot(it) } }
                     s.recommendationSearch?.spotsWithoutWindows?.takeIf { it.isNotEmpty() }?.let { missing -> item {
                         Text("No planning window available at: ${missing.take(5).joinToString(", ")}.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -1146,6 +1159,13 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 }
             }
             if (spot.sourceNote.isNotBlank() && spot.assessment == null) Text(spot.sourceNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            spot.mapPlace()?.let { place ->
+                OutlinedButton(onClick = { vm.showOnMap(place) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Show on map")
+                }
+            }
             if (canShareWindow(spot)) OutlinedButton(onClick = {
                 sharing = true
                 scope.launch {
@@ -1214,7 +1234,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             }
         }
         else items(s.savedRecommendations) {
-            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.savedRecommendations)) { vm.openSpot(it) }
+            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.savedRecommendations), showOnMap = mapAction(it, vm)) { vm.openSpot(it) }
         }
     }
 }

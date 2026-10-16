@@ -219,15 +219,15 @@ enum PlaceConditionRows {
         let clock = DateFormatter(); clock.locale = Locale(identifier: "en_NZ"); clock.timeZone = data.zone; clock.dateFormat = "h:mm a"
         let rainPeak = wettest.map { "Wettest hour ends \(clock.string(from: $0.at)) · \(number($0.rain, 1)) mm." }
         return switch title {
-        case "Offshore waves": ["Height is the largest significant wave height; individual waves can be higher. Period is the time between waves.", "🚤 Boat: short periods can make the ride choppy; longer swells can cause rolling.", "🎣 Shore: check breaking waves, shelter and swell direction. Offshore height does not describe waves at your feet."]
-        case "Wind": ["Max is the strongest sustained wind for the day. Gust is a brief stronger burst. Direction shows where wind comes from.", "🎣 Shore: headwinds make casting harder. 🚤 Boat: wind can roughen the water and push the boat."]
-        case "Rain": [rainPeak, "mm is the day's precipitation total. % is the highest hourly chance, not a whole-day chance.", "Rain drops on weather icons: 1 light · 2 moderate · 3 heavy. Smaller drops mean drizzle.", "Wet clothes, slippery ground and a wet deck can make fishing uncomfortable."].compactMap { $0 }
+        case "Offshore waves": ["Height is the largest typical (significant) wave height; single waves can be higher. Seconds apart is the time between waves: 5 or less feels short and choppy, 10 or more is a long, rolling swell.", "🚤 Boat: short periods can make the ride choppy; longer swells can cause rolling.", "🎣 Shore: check breaking waves, shelter and swell direction. Offshore height does not describe waves at your feet."]
+        case "Wind": ["“Up to” is the strongest steady wind of the day; gusts are short, stronger bursts. Light wind is under 12 km/h, breezy from 20 and windy from 30. “From the south” means the wind blows from the south.", "🎣 Shore: headwinds make casting harder. 🚤 Boat: wind can roughen the water and push the boat."]
+        case "Rain": [rainPeak, "The amount is the day's total. The chance is the highest for any single hour, not for the whole day.", "Rain drops on weather icons: 1 light · 2 moderate · 3 heavy. Smaller drops mean drizzle.", "Wet clothes, slippery ground and a wet deck can make fishing uncomfortable."].compactMap { $0 }
         case "Feels like": ["The range includes overnight hours and accounts for wind, humidity and sunshine.", "Check the hourly values for your visit. Wet clothes can make you feel colder."]
         case "Daylight": ["Sunrise–sunset in local time.", "Allow time to walk back or return to the ramp before dark."]
         case "UV": ["The day's peak UV index. Protection is useful from UV 3, even when it feels cool.", "Shade, sunscreen, a hat and sunglasses help on shore and on the water."]
         case "Visibility": ["The lowest model visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours."]
         case "Water temperature": ["Model temperature at the sea surface, not a measurement at this pin.", "It can help compare days; it does not measure water clarity or fish activity."]
-        case "Offshore swell": ["Swell travels from weather farther away. The period is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water."]
+        case "Offshore swell": ["Swell travels from weather farther away. Seconds apart is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water."]
         default: []
         }
     }
@@ -248,20 +248,61 @@ enum PlaceConditionRows {
         else if !completeSea { seaFeeling = needsDataMood }
         else if sea.contains(where: { ($0.height ?? 0) >= 0.5 && ($0.period ?? 99) <= 5 }) { seaFeeling = .init(emoji: "🌊", label: "Choppy") }
         else { seaFeeling = .init(emoji: "🌊", label: (maxWave ?? 0) <= 0.5 ? "Lower waves" : "More motion") }
-        let wind = ConditionItem(title: "Wind", value: "max \(number(day?.wind)) km/h · gust \(number(day?.gust)) · \(direction(day?.direction))", mood: day?.wind == nil || day?.gust == nil ? needsDataMood : comfortMood(LandAssessment.windBand(day!.wind!, day!.gust!)))
-        let waves = ConditionItem(title: "Offshore waves", value: maxWave.map { "max \(number($0, 1)) m · \(range(periods, 1)) s" } ?? "—", mood: seaFeeling)
-        let rain = ConditionItem(title: "Rain", value: "\(number(day?.rain, 1)) mm · \(number(day?.chance))% hourly max", mood: day?.rain == nil ? needsDataMood : .init(emoji: day!.rain! > 0 ? "☔" : "🌤️", label: day!.rain! > 3 ? "Wet day" : day!.rain! > 0 ? "Some rain" : (day?.chance ?? 0) >= 60 ? "Rain possible" : "Mostly dry"))
+        let wind = ConditionItem(title: "Wind", value: PlainConditions.wind(speed: day?.wind, gust: day?.gust, directions: day?.direction.map { [direction($0)] } ?? [], upTo: true), mood: day?.wind == nil || day?.gust == nil ? needsDataMood : comfortMood(LandAssessment.windBand(day!.wind!, day!.gust!)))
+        let waves = ConditionItem(title: "Offshore waves", value: PlainConditions.waves(height: maxWave, periods: range(periods, 1)), mood: seaFeeling)
+        let rain = ConditionItem(title: "Rain", value: PlainConditions.rain(total: day?.rain, chance: day?.chance, wholeDay: true), mood: day?.rain == nil ? needsDataMood : .init(emoji: day!.rain! > 0 ? "☔" : "🌤️", label: day!.rain! > 3 ? "Wet day" : day!.rain! > 0 ? "Some rain" : (day?.chance ?? 0) >= 60 ? "Rain possible" : "Mostly dry"))
         let feels = ConditionItem(title: "Feels like", value: "\(range([day?.feelsLow, day?.feelsHigh]))°C", mood: day?.feelsLow == nil || day?.feelsHigh == nil ? needsDataMood : .init(emoji: day!.feelsLow! < 12 ? "🥶" : day!.feelsHigh! > 26 ? "🥵" : "😌", label: day!.feelsLow! < 12 ? "Cold at times" : day!.feelsHigh! > 26 ? "Hot at times" : "Mild"))
         let f = DateFormatter(); f.locale = Locale(identifier: "en_NZ"); f.timeZone = data.zone; f.dateFormat = "h:mm a"
         let light = ConditionItem(title: "Daylight", value: day?.sunrise == nil || day?.sunset == nil ? "—" : "\(f.string(from: day!.sunrise!))–\(f.string(from: day!.sunset!))", mood: day?.sunrise == nil || day?.sunset == nil ? needsDataMood : .init(emoji: "🌞", label: "Plan your return"))
         let visibility = hours.compactMap(\.visibility).min()
         let uv = ConditionItem(title: "UV", value: number(day?.uv, 1), mood: day?.uv == nil ? needsDataMood : .init(emoji: "☀️", label: day!.uv! >= 3 ? "Sun protection" : "Lower UV"))
-        let view = ConditionItem(title: "Visibility", value: visibility.map { "min \(number($0/1000, 1)) km" } ?? "—", mood: visibility == nil ? needsDataMood : .init(emoji: visibility! < 1000 ? "🌫️" : "👀", label: visibility! < 1000 ? "Poor at times" : "Check visibility"))
+        let view = ConditionItem(title: "Visibility", value: visibility.map { "down to \(number($0/1000, 1)) km" } ?? "—", mood: visibility == nil ? needsDataMood : .init(emoji: visibility! < 1000 ? "🌫️" : "👀", label: visibility! < 1000 ? "Poor at times" : "Check visibility"))
         let water = sea.compactMap(\.waterTemperature)
         let waterRow = ConditionItem(title: "Water temperature", value: water.isEmpty ? "—" : "\(range(water, 1))°C", mood: water.isEmpty ? needsDataMood : .init(emoji: "🌡️", label: "Offshore model"))
         let swells = sea.map(\.swell)
-        let swell = ConditionItem(title: "Offshore swell", value: swells.compactMap { $0 }.max().map { "max \(number($0, 1)) m · \(range(sea.map(\.swellPeriod), 1)) s" } ?? "—",
+        let swell = ConditionItem(title: "Offshore swell", value: PlainConditions.waves(height: swells.compactMap { $0 }.max(), periods: range(sea.map(\.swellPeriod), 1)),
             mood: swells.isEmpty || swells.contains(where: { $0 == nil }) || sea.contains(where: { $0.swellPeriod == nil }) ? needsDataMood : .init(emoji: "🌊", label: "Offshore model"))
         return [waves, wind] + [rain, feels, light, uv, view, waterRow, swell]
     }
+}
+
+/// The message the map's conditions page shares: one day's main rows in plain words, the tide and a map link anyone can
+/// open. Android writes the same message (`PlaceConditionsShare.kt`).
+enum PlaceConditionsShare {
+    /// "Short-range forecast" for today and the next two days, "Planning forecast" to day 5, then "Early outlook".
+    static func forecastLabel(day: Date, today: Date, calendar: Calendar) -> String {
+        let ahead = calendar.dateComponents([.day], from: today, to: day).day ?? 0
+        return ahead < 0 ? "Recent model data" : ahead > 5 ? "Early outlook" : ahead > 2 ? "Planning forecast" : "Short-range forecast"
+    }
+
+    /// A Google Maps link to the position, which opens on any phone or computer.
+    static func mapLink(_ point: GeoPoint) -> String {
+        "https://www.google.com/maps/search/?api=1&query=\(coordinate(point.latitude)),\(coordinate(point.longitude))"
+    }
+
+    static func subject(_ place: ConditionPlace) -> String { "Fishing conditions · \(place.name == "Dropped pin" ? "pin on the map" : place.name)" }
+
+    static func text(place: ConditionPlace, day: Date, today: Date, calendar: Calendar, rows: [ConditionItem], tide: TideState?, station: TideStation?) -> String {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX"); format.timeZone = calendar.timeZone; format.dateFormat = "EEE d MMM"
+        var lines = [subject(place)]
+        if !["Selected on map", "Selected place"].contains(place.region) { lines.append(place.region) }
+        lines.append("\(format.string(from: day)) · \(forecastLabel(day: day, today: today, calendar: calendar))")
+        lines.append("")
+        for row in rows.prefix(5) where row.value.trimmingCharacters(in: .whitespaces) != "—" {
+            let feeling = row.title == "Daylight" || row.mood == needsDataMood ? "" : " (\(row.mood.label))"
+            lines.append("\(row.title) – \(row.value)\(feeling)")
+        }
+        if let tide, let station, !tide.events.isEmpty {
+            let distance = placeDistanceKm(place.point, GeoPoint(latitude: station.latitude, longitude: station.longitude))
+            let events = tide.events.map { "\($0.type.lowercased()) \($0.time)" }.joined(separator: ", ")
+            lines.append("Tide at \(station.name) (\(String(format: "%.1f", distance)) km away) – \(events.prefix(1).uppercased() + events.dropFirst())")
+        }
+        lines.append("")
+        lines.append("Map: \(mapLink(place.point))")
+        lines.append("Weather and waves: Open-Meteo. Tides: LINZ. Check local conditions and marine warnings before you go.")
+        return lines.joined(separator: "\n")
+    }
+
+    private static func coordinate(_ value: Double) -> String { String((value * 10_000).rounded() / 10_000) }
 }
