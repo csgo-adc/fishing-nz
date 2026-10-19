@@ -12,6 +12,7 @@ import org.json.JSONObject
 object TripStore {
     private const val PREFS = "trips"
     private const val KEY = "trips_v1"
+    private const val BACK_BY = "back_by"
     const val SAVED_NOTE = "Saved: these conditions were captured when you saved this window and may have changed. Search from Home for a live forecast."
     @Volatile private var appContext: Context? = null
 
@@ -25,6 +26,14 @@ object TripStore {
 
     fun save(saved: List<Recommendation>, active: Recommendation?) {
         appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.putString(KEY, encode(saved, active))?.apply()
+    }
+
+    /** The back-by time of the active trip's shared plan, if one was shared. */
+    fun backBy(): java.time.Instant? = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        ?.getLong(BACK_BY, 0L)?.takeIf { it > 0 }?.let(java.time.Instant::ofEpochSecond)
+
+    fun saveBackBy(at: java.time.Instant?) {
+        appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.apply { if (at == null) remove(BACK_BY) else putLong(BACK_BY, at.epochSecond) }?.apply()
     }
 
     internal fun encode(saved: List<Recommendation>, active: Recommendation?): String = JSONObject()

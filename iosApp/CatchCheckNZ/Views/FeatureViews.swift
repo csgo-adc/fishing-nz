@@ -53,7 +53,6 @@ struct FishingMapView: View {
     @State private var recenterOnLocationUpdate = false
     @State private var selectedPlace: ConditionPlace?
     @State private var conditionsPlace: ConditionPlace?
-    @State private var notificationsAllowed = true
     @State private var showPlaceSearch = false
     @State private var showSpotList = false
     /// Set after "Show on map" moves the camera, so returning to the tab does not jump back to the current location.
@@ -949,6 +948,7 @@ struct TripsView: View {
     @State private var calendarTrip: Recommendation?
     @State private var conditionsPlace: ConditionPlace?
     @State private var notificationsAllowed = true
+    @State private var tellSomeone = false
     private var saved: [Recommendation] {
         vm.savedRecommendations.values.sorted {
             ($0.startsAt ?? .distantFuture, $0.name) < ($1.startsAt ?? .distantFuture, $1.name)
@@ -984,6 +984,11 @@ struct TripsView: View {
                             Button("Add to calendar") { calendarTrip = active }.buttonStyle(.bordered)
                             // Opens straight from here, so the forecast saved for the trip shows even without a map signal.
                             if let place = active.mapPlace { Button("Check conditions") { conditionsPlace = place }.buttonStyle(.borderedProminent) }
+                            Button("Tell someone") { tellSomeone = true }.buttonStyle(.bordered)
+                            if let backBy = vm.tripBackBy {
+                                Text("Plan shared · back by \(OfflineCache.savedLabel(backBy)). You'll get a reminder to check in then.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             Button("Log a catch") { vm.logCatchOnTrip() }.buttonStyle(.bordered)
                             Button("End trip") { vm.activeTrip = nil }.buttonStyle(.bordered)
                         }
@@ -1006,6 +1011,53 @@ struct TripsView: View {
         .sheet(item: $selectedSavedSpot) { SpotDetailView(spot: $0) }
         .sheet(item: $calendarTrip) { TripCalendarEditor(trip: $0) }
         .fullScreenCover(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
+        .sheet(isPresented: $tellSomeone) { if let trip = vm.activeTrip { TellSomeoneView(trip: trip) } }
+    }
+}
+
+/// "Tell someone": who to tell, when you'll be back, and the plan text to send them. Android has the same dialog.
+private struct TellSomeoneView: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+    let trip: Recommendation
+    @State private var backBy = Date.now
+    @State private var who = ""
+    @State private var details = ""
+    @State private var preparing = false
+    @State private var shareContent: ShareContent?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Send your plan to a friend or family member who isn't going. If you're not back when you said, they'll know where to look and who to call.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    DatePicker("Back by", selection: $backBy, in: Date.now...)
+                    TextField("Who's going (optional)", text: $who)
+                    TextField("Details (car, boat, gear)", text: $details, axis: .vertical).lineLimit(2...5)
+                }
+                Section {
+                    Button(preparing ? "Preparing…" : "Send plan") {
+                        preparing = true
+                        Task {
+                            let link = await ShareLinkService.live.link(for: trip)
+                            preparing = false
+                            shareContent = ShareContent(subject: "Fishing trip plan · \(trip.name)",
+                                                        text: TripPlan.text(trip: trip, backBy: backBy, who: who, details: details, forecastLink: link?.absoluteString))
+                        }
+                    }.disabled(preparing)
+                }
+            }
+            .tint(CatchCheckColor.accent)
+            .navigationTitle("Tell someone")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .onAppear { backBy = vm.tripBackBy ?? TripPlan.defaultBackBy(trip) ?? Date.now.addingTimeInterval(4 * 3_600) }
+            .sheet(item: $shareContent, onDismiss: {
+                vm.tripPlanShared(backBy: backBy)
+                dismiss()
+            }) { ActivityView(content: $0).presentationDetents([.medium, .large]) }
+        }
     }
 }
 

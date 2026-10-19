@@ -91,7 +91,9 @@ data class FishingUiState(
     val catches: List<CatchEntry> = emptyList(),
     val catchPrefill: CatchPrefill? = null,
     /** When the active trip's forecast is checked again (see TripCheck), or null when no check fits. */
-    val tripCheckAt: Instant? = null
+    val tripCheckAt: Instant? = null,
+    /** The back-by time in the trip plan shared with someone, if one was shared. */
+    val tripBackBy: Instant? = null
 )
 
 /** The fixed hours a search keeps to; null for Daytime (sunrise to sunset) and Any time. */
@@ -159,7 +161,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val (saved, active) = TripStore.load()
         _state.value = _state.value.copy(catches = CatchLogStore.load(), savedRecommendations = saved,
             savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active,
-            tripCheckAt = active?.let { TripCheck.checkTime(Instant.ofEpochSecond(it.startsAtEpochSeconds), Instant.now()) })
+            tripCheckAt = active?.let { TripCheck.checkTime(Instant.ofEpochSecond(it.startsAtEpochSeconds), Instant.now()) },
+            tripBackBy = TripStore.backBy().takeIf { active != null })
         refreshStationTide()
         prefetchForOffline(listOfNotNull(active) + saved)
         if (_state.value.originName != null) refreshConditions()
@@ -419,16 +422,27 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun mapFocusShown() { _state.value = _state.value.copy(mapFocus = null) }
     fun startTrip() {
         val trip = _state.value.selectedSpot ?: return
-        _state.value = _state.value.copy(activeTrip = trip, selectedSpot = null)
+        _state.value = _state.value.copy(activeTrip = trip, selectedSpot = null, tripBackBy = null)
+        TripStore.saveBackBy(null)
         saveTrips()
         prefetchForOffline(listOf(trip))
         _state.value = _state.value.copy(tripCheckAt = TripReminders.schedule(trip))
     }
     fun endTrip() {
-        _state.value = _state.value.copy(activeTrip = null, tripCheckAt = null)
+        _state.value = _state.value.copy(activeTrip = null, tripCheckAt = null, tripBackBy = null)
         saveTrips()
+        TripStore.saveBackBy(null)
         TripReminders.cancel()
     }
+    /** After the trip plan is shared: remember the back-by time and remind the person then to check in. */
+    fun tripPlanShared(backBy: Instant) {
+        _state.value = _state.value.copy(tripBackBy = backBy)
+        TripStore.saveBackBy(backBy)
+        TripReminders.scheduleCheckIn(backBy)
+        Analytics.track("trip_plan_shared")
+    }
+    /** A link to the trip's window for the plan: short when the service answers, otherwise the long link. */
+    suspend fun tripLink(trip: Recommendation): String? = ShareService.live.linkFor(trip)
     private fun saveTrips() { _state.value.let { TripStore.save(it.savedRecommendations, it.activeTrip) } }
     /**
      * Fetches the forecast, a year of LINZ tides and the MPI rules for each window's place while there is a signal,

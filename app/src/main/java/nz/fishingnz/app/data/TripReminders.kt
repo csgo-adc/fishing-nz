@@ -34,6 +34,7 @@ object TripReminders {
     const val CHANNEL = "trip_checks"
     const val OPEN_TRIPS = "nz.fishingnz.app.OPEN_TRIPS"
     private const val WORK = "trip-check"
+    private const val CHECK_IN = "trip-check-in"
     @Volatile private var appContext: Context? = null
 
     fun initialize(context: Context) {
@@ -64,9 +65,17 @@ object TripReminders {
         return at
     }
 
-    fun cancel() { appContext?.let { WorkManager.getInstance(it).cancelUniqueWork(WORK) } }
+    fun cancel() { appContext?.let { WorkManager.getInstance(it).cancelUniqueWork(WORK); WorkManager.getInstance(it).cancelUniqueWork(CHECK_IN) } }
 
-    internal fun post(context: Context, title: String, body: String) {
+    /** "Back safe?" at [at], after the trip plan was shared. Replaces an earlier one. */
+    fun scheduleCheckIn(at: Instant, now: Instant = Instant.now()) {
+        val context = appContext ?: return
+        WorkManager.getInstance(context).enqueueUniqueWork(CHECK_IN, ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<CheckInWorker>()
+            .setInitialDelay(Duration.between(now, at).toMillis().coerceAtLeast(0), TimeUnit.MILLISECONDS)
+            .build())
+    }
+
+    internal fun post(context: Context, title: String, body: String, id: Int = 1) {
         if (!notificationsAllowed(context)) return
         val open = PendingIntent.getActivity(context, 0,
             Intent(context, MainActivity::class.java).setAction(OPEN_TRIPS).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
@@ -77,7 +86,7 @@ object TripReminders {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(open).setAutoCancel(true)
             .build()
-        try { NotificationManagerCompat.from(context).notify(1, notification) } catch (_: SecurityException) { /* Permission withdrawn. */ }
+        try { NotificationManagerCompat.from(context).notify(id, notification) } catch (_: SecurityException) { /* Permission withdrawn. */ }
     }
 }
 
@@ -97,6 +106,17 @@ class TripCheckWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
         val (title, body) = TripCheck.message(trip, latest)
         TripReminders.post(applicationContext, title, body)
+        return Result.success()
+    }
+}
+
+/** The back-by reminder for a shared trip plan, while that trip is still active. */
+class CheckInWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        TripStore.initialize(applicationContext)
+        val trip = TripStore.load().second ?: return Result.success()
+        val (title, body) = nz.fishingnz.app.model.TripPlan.checkInMessage(trip)
+        TripReminders.post(applicationContext, title, body, id = 2)
         return Result.success()
     }
 }

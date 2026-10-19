@@ -37,7 +37,7 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate, @un
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard response.notification.request.identifier == TripReminders.requestID else { return }
+        guard [TripReminders.requestID, TripReminders.checkInID].contains(response.notification.request.identifier) else { return }
         await MainActor.run { openTrips?() }
     }
 }

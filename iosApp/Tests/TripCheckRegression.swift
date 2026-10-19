@@ -28,6 +28,29 @@ import Foundation
         try expect(changed == "Now 😣 Uncomfortable, was 😌 Comfortable. Gusts to 45 km/h. Tap to see your trip.", "Changed: \(changed)")
         try expect(TripCheck.message(trip: trip, latest: nil).body == "Check the latest forecast before you go: it couldn't be updated just now.", "Unavailable")
 
+        // Tell someone: the same plan text as Android's TripPlanTest.
+        let planned = Recommendation(name: "Raglan", area: "Waikato", rating: 80, time: "", distance: "", reasons: [], boat: false,
+                                     startsAt: start, endsAt: start.addingTimeInterval(7_200), coordinate: GeoPoint(latitude: -37.8, longitude: 174.88))
+        try expect(TripPlan.defaultBackBy(planned) == iso.date(from: "2026-10-18T00:00:00Z"), "Back by an hour after")
+        let shifted = Recommendation(name: "Raglan", area: "Waikato", rating: 80, time: "", distance: "", reasons: [], boat: false,
+                                     startsAt: start.addingTimeInterval(600), endsAt: start.addingTimeInterval(7_800))
+        try expect(TripPlan.defaultBackBy(shifted) == iso.date(from: "2026-10-18T00:15:00Z"), "Back by on a quarter hour")
+        let plan = TripPlan.text(trip: planned, backBy: iso.date(from: "2026-10-18T00:00:00Z")!, who: "Me and Sam", details: " White Hilux at the ramp ",
+                                 forecastLink: "https://fishing.fishnz.space/w/k3F9xQ2m")
+        let expected = """
+            My fishing trip plan (Fishdays - NZ)
+            Where: Raglan, Waikato · land fishing
+            Map: https://www.google.com/maps/search/?api=1&query=-37.80000,174.88000
+            When: Sun 18 Oct, 10:00 AM–12:00 PM
+            Back by: Sun 18 Oct, 1:00 PM
+            Who: Me and Sam
+            Details: White Hilux at the ramp
+            Forecast: https://fishing.fishnz.space/w/k3F9xQ2m
+
+            If you haven't heard from me by 1:00 PM, try calling me. If you can't reach me and you're worried, call 111 and ask for the Police.
+            """
+        try expect(plan == expected, "Plan text:\n\(plan)")
+
         if CommandLine.arguments.contains("--live") {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!

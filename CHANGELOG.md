@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.39 — 2026-10-20 (build code 40)
+
+- **Tell someone.** The active trip has a **Tell someone** button that sends your trip plan to a friend or family
+  member who isn't going, as AdventureSmart and Coastguard advise: where (with a map link), when, the time you'll be
+  back (an hour after the window by default), who's going, details such as the car or boat, a link to the window's
+  forecast, and what to do if they haven't heard from you: try calling, then call 111 and ask for the Police. At the
+  back-by time a notification asks whether you're back and reminds you to tell them. Ending the trip cancels it. The
+  forecast link is the same short share link as Share this window. Android and iPhone.
+- iPhone: removed an unused setting that 1.0.38 added to the map screen by mistake.
+
 ## 1.0.38 — 2026-10-19 (build code 39)
 
 - **Pre-trip forecast check.** Starting a trip books a check at 7 PM the evening before (or 2 hours before a trip later

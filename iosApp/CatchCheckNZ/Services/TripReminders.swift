@@ -9,6 +9,7 @@ import BackgroundTasks
 enum TripReminders {
     static let taskID = "nz.fishingnz.catchcheck.tripcheck"
     static let requestID = "trip-check"
+    static let checkInID = "trip-check-in"
     private static let provisional = "Time to check the latest forecast before you go. Tap to see your trip."
     nonisolated(unsafe) private static var lastRefresh: Date?
 
@@ -38,8 +39,15 @@ enum TripReminders {
     }
 
     static func cancel() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID, checkInID])
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskID)
+    }
+
+    /// "Back safe?" at `at`, after the trip plan was shared. Replaces an earlier one.
+    static func scheduleCheckIn(_ trip: Recommendation, at: Date) async {
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        let message = TripPlan.checkInMessage(trip)
+        try? await book(title: message.title, body: message.body, at: at, id: checkInID)
     }
 
     /// Whether notifications are allowed, for the Trips card.
@@ -64,7 +72,7 @@ enum TripReminders {
         try? await book(title: message.title, body: message.body, at: at)
     }
 
-    private static func book(title: String, body: String, at: Date) async throws {
+    private static func book(title: String, body: String, at: Date, id: String = requestID) async throws {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -74,6 +82,6 @@ enum TripReminders {
         let parts = calendar.dateComponents(in: calendar.timeZone, from: at)
         let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(calendar: calendar, timeZone: calendar.timeZone,
             year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute), repeats: false)
-        try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: requestID, content: content, trigger: trigger))
+        try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }
 }

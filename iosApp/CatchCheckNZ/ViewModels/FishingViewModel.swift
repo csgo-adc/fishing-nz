@@ -200,6 +200,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         didSet {
             saveTrips()
             guard !restoringTrips, activeTrip?.windowID != oldValue?.windowID else { return }
+            tripBackBy = nil
             if let activeTrip {
                 prefetchForOffline([activeTrip])
                 Task { tripCheckAt = await TripReminders.schedule(activeTrip) }
@@ -213,6 +214,18 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published private(set) var tripCheckAt: Date?
     /// Bumped when a trip notification is tapped; the root view opens Trips.
     @Published var openTripsRequest = 0
+    /// The back-by time in the trip plan shared with someone, if one was shared.
+    @Published private(set) var tripBackBy: Date? {
+        didSet { if !restoringTrips { UserDefaults.standard.set(tripBackBy, forKey: "trip_back_by") } }
+    }
+
+    /// After the trip plan is shared: remember the back-by time and remind the person then to check in.
+    func tripPlanShared(backBy: Date) {
+        guard let trip = activeTrip else { return }
+        tripBackBy = backBy
+        Task { await TripReminders.scheduleCheckIn(trip, at: backBy) }
+        Analytics.track("trip_plan_shared")
+    }
     @Published var selectedSpot: Recommendation?
     @Published var sharedWindowNotice: String?
     /// Every catch log entry on this phone, including deleted ones kept for sync; see `CatchLog.visible`.
@@ -958,6 +971,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         savedSpotNames = Set(savedRecommendations.keys)
         activeTrip = stored.active
         tripCheckAt = stored.active?.startsAt.flatMap { TripCheck.checkTime(start: $0) }
+        tripBackBy = stored.active == nil ? nil : UserDefaults.standard.object(forKey: "trip_back_by") as? Date
         restoringTrips = false
         prefetchForOffline((stored.active.map { [$0] } ?? []) + stored.saved)
     }

@@ -1296,6 +1296,8 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
     val context = LocalContext.current
     var conditionsPlace by remember { mutableStateOf<nz.fishingnz.app.data.ConditionPlace?>(null) }
     conditionsPlace?.let { place -> key(place.id) { PlaceConditionsScreen(place, dismiss = { conditionsPlace = null }) } }
+    var tellSomeone by remember { mutableStateOf(false) }
+    s.activeTrip?.takeIf { tellSomeone }?.let { trip -> TellSomeoneDialog(trip, s.tripBackBy, vm) { tellSomeone = false } }
     LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
@@ -1324,6 +1326,9 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     }, modifier = Modifier.fillMaxWidth()) { Text("Add to calendar") }
                     // Opens straight from here, so the forecast saved for the trip shows even without a map signal.
                     trip.mapPlace()?.let { place -> Button(onClick = { conditionsPlace = place }, modifier = Modifier.fillMaxWidth()) { Text("Check conditions") } }
+                    OutlinedButton(onClick = { tellSomeone = true }, modifier = Modifier.fillMaxWidth()) { Text("Tell someone") }
+                    s.tripBackBy?.let { Text("Plan shared · back by ${it.atZone(java.time.ZoneId.of("Pacific/Auckland")).format(DateTimeFormatter.ofPattern("EEE h:mm a", Locale.US))}. You'll get a reminder to check in then.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     OutlinedButton(onClick = vm::logCatchOnTrip, modifier = Modifier.fillMaxWidth()) { Text("Log a catch") }
                     OutlinedButton(onClick = vm::endTrip) { Text("End trip") }
                 }
@@ -1344,6 +1349,54 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
         }
     }
 }
+/** "Tell someone": who to tell, when you'll be back, and the plan text to send them. */
+@Composable private fun TellSomeoneDialog(trip: Recommendation, sharedBackBy: java.time.Instant?, vm: FishingViewModel, close: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val zone = java.time.ZoneId.of("Pacific/Auckland")
+    var backBy by remember { mutableStateOf(sharedBackBy ?: TripPlan.defaultBackBy(trip) ?: java.time.Instant.now().plusSeconds(4 * 3600)) }
+    var who by rememberSaveable { mutableStateOf("") }
+    var details by rememberSaveable { mutableStateOf("") }
+    var sharing by remember { mutableStateOf(false) }
+    AlertDialog(onDismissRequest = close, title = { Text("Tell someone") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Send your plan to a friend or family member who isn't going. If you're not back when you said, they'll know where to look and who to call.",
+                style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = {
+                val current = backBy.atZone(zone)
+                android.app.DatePickerDialog(context, { _, year, month, day ->
+                    android.app.TimePickerDialog(context, { _, hour, minute ->
+                        backBy = java.time.LocalDateTime.of(year, month + 1, day, hour, minute).atZone(zone).toInstant()
+                    }, current.hour, current.minute, false).show()
+                }, current.year, current.monthValue - 1, current.dayOfMonth).show()
+            }, modifier = Modifier.fillMaxWidth()) { Text("Back by ${backBy.atZone(zone).format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", Locale.US))}") }
+            OutlinedTextField(who, { who = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("Who's going (optional)") }, singleLine = true)
+            OutlinedTextField(details, { details = it.take(300) }, Modifier.fillMaxWidth(), label = { Text("Details (car, boat, gear)") }, minLines = 2)
+        }
+    }, confirmButton = {
+        TextButton(enabled = !sharing, onClick = {
+            sharing = true
+            scope.launch {
+                val link = runCatching { vm.tripLink(trip) }.getOrNull()
+                sharing = false
+                val text = TripPlan.text(trip, backBy, who, details, link)
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Fishing trip plan · ${trip.name}")
+                    putExtra(android.content.Intent.EXTRA_TEXT, text)
+                }
+                try {
+                    context.startActivity(android.content.Intent.createChooser(send, "Send your trip plan"))
+                    vm.tripPlanShared(backBy)
+                    close()
+                } catch (_: android.content.ActivityNotFoundException) {
+                    android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }) { Text(if (sharing) "Preparing…" else "Send plan") }
+    }, dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
+}
+
 internal data class FishingRulesArea(val id: String, val name: String, val slug: String, val description: String) {
     val officialUrl: String get() = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
 }
