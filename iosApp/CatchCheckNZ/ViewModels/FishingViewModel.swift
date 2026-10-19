@@ -1102,6 +1102,13 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }
 
+    /// From the Tides widget: the Tide tab on the widget's station.
+    func openTide(from url: URL) {
+        let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "station" }?.value
+        if let station = tideStations.first(where: { $0.id == id }) { chooseStation(station) }
+        selectedTab = 2
+    }
+
     /// Opens the catch log with a new entry for the fish just identified.
     func logIdentifiedCatch() {
         guard let check = fishCheck, check.isFish else { return }

@@ -936,6 +936,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun refreshStationTide() {
         tideJob?.cancel()
         val station = _state.value.selectedStation
+        // The Tides widget follows the station on the Tide tab.
+        nz.fishingnz.app.data.TideWidgetStation.set(station)
         val date = _state.value.tideDate
         _state.value = _state.value.copy(stationTide = null, tideLoading = true, tideError = null)
         tideJob = viewModelScope.launch {

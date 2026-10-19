@@ -36,7 +36,39 @@
 		AA000025 /* TripReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100027 /* TripReminders.swift */; };
 		AA000026 /* TripPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100028 /* TripPlan.swift */; };
 		AA000027 /* AccountSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100029 /* AccountSync.swift */; };
+		AB000001 /* TideWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB100001 /* TideWidget.swift */; };
+		AB000002 /* FishingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100002 /* FishingModels.swift */; };
+		AB000003 /* FishingScoringService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100009 /* FishingScoringService.swift */; };
+		AB000004 /* LinzTideSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100010 /* LinzTideSource.swift */; };
+		AB000005 /* OfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100024 /* OfflineCache.swift */; };
+		AB000006 /* MoonPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* MoonPhase.swift */; };
+		AB000010 /* TideWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AB100002 /* TideWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AB000011 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB100004 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AB800001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA600001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB400001;
+			remoteInfo = TideWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AB200004 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AB000010 /* TideWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AA100001 /* CatchCheckNZApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchCheckNZApp.swift; sourceTree = "<group>"; };
@@ -70,10 +102,21 @@
 		AA100027 /* TripReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripReminders.swift; sourceTree = "<group>"; };
 		AA100028 /* TripPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlan.swift; sourceTree = "<group>"; };
 		AA100029 /* AccountSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSync.swift; sourceTree = "<group>"; };
+		AB100001 /* TideWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideWidget.swift; sourceTree = "<group>"; };
+		AB100002 /* TideWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TideWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB100003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AB100004 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AA200001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB200002 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -87,6 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				AA300002 /* CatchCheckNZ */,
+				AB300001 /* TideWidget */,
 				AA300003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -108,6 +152,7 @@
 			isa = PBXGroup;
 			children = (
 				AA100008 /* CatchCheckNZ.app */,
+				AB100002 /* TideWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -184,6 +229,16 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		AB300001 /* TideWidget */ = {
+			isa = PBXGroup;
+			children = (
+				AB100001 /* TideWidget.swift */,
+				AB100003 /* Info.plist */,
+				AB100004 /* PrivacyInfo.xcprivacy */,
+			);
+			path = TideWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -194,15 +249,34 @@
 				AA200002 /* Sources */,
 				AA200001 /* Frameworks */,
 				AA200003 /* Resources */,
+				AB200004 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AB900001 /* PBXTargetDependency */,
 			);
 			name = CatchCheckNZ;
 			productName = CatchCheckNZ;
 			productReference = AA100008 /* CatchCheckNZ.app */;
 			productType = "com.apple.product-type.application";
+		};
+		AB400001 /* TideWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB500001 /* Build configuration list for PBXNativeTarget "TideWidgetExtension" */;
+			buildPhases = (
+				AB200001 /* Sources */,
+				AB200002 /* Frameworks */,
+				AB200003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TideWidgetExtension;
+			productName = TideWidgetExtension;
+			productReference = AB100002 /* TideWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -215,6 +289,9 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					AA400001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					AB400001 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -233,6 +310,7 @@
 			projectRoot = "";
 			targets = (
 				AA400001 /* CatchCheckNZ */,
+				AB400001 /* TideWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -245,6 +323,14 @@
 				AA000013 /* Assets.xcassets in Resources */,
 				AA000099 /* PrivacyInfo.xcprivacy in Resources */,
 				AA000098 /* marine_protection.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB200003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AB000011 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,12 +370,35 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AB200001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AB000001 /* TideWidget.swift in Sources */,
+				AB000002 /* FishingModels.swift in Sources */,
+				AB000003 /* FishingScoringService.swift in Sources */,
+				AB000004 /* LinzTideSource.swift in Sources */,
+				AB000005 /* OfflineCache.swift in Sources */,
+				AB000006 /* MoonPhase.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AB900001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB400001 /* TideWidgetExtension */;
+			targetProxy = AB800001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA700001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CURRENT_PROJECT_VERSION = 42;
+				MARKETING_VERSION = 1.0.41;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -302,6 +411,8 @@
 		AA700002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CURRENT_PROJECT_VERSION = 42;
+				MARKETING_VERSION = 1.0.41;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -316,11 +427,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZ.entitlements;
-				CURRENT_PROJECT_VERSION = 41;
 				DEVELOPMENT_TEAM = 8T7835869S;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.40;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -337,14 +446,50 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZRelease.entitlements;
-				CURRENT_PROJECT_VERSION = 41;
 				DEVELOPMENT_TEAM = 8T7835869S;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.40;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		AB700001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8T7835869S;
+				INFOPLIST_FILE = TideWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck.TideWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AB700002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8T7835869S;
+				INFOPLIST_FILE = TideWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck.TideWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -369,6 +514,15 @@
 			buildConfigurations = (
 				AA700003 /* Debug */,
 				AA700004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AB500001 /* Build configuration list for PBXNativeTarget "TideWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB700001 /* Debug */,
+				AB700002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

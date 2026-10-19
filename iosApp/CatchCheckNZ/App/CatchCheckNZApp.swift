@@ -16,7 +16,11 @@ struct CatchCheckNZApp: App {
             CatchCheckRootView()
                 .environmentObject(viewModel)
                 // A shared fishing window: a Universal Link from Messages, WhatsApp and the like, or the app's own scheme.
-                .onOpenURL { viewModel.openSharedWindow($0) }
+                .onOpenURL { url in
+                    // The Tides widget opens the Tide tab on its station; other links are shared windows.
+                    if url.scheme == "nz.fishingnz.catchcheck" && url.host == "tide" { viewModel.openTide(from: url) }
+                    else { viewModel.openSharedWindow(url) }
+                }
                 .task { NotificationHandler.shared.openTrips = { viewModel.openTripsRequest += 1 } }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { Analytics.flush() }

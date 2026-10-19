@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.41 — 2026-10-20 (build code 42)
+
+- **Tides widget.** Android: a home-screen widget with the next two high or low tides, the moon, spring or neap tides
+  and the current wind for the station on the Tide tab (it follows the station you choose or are nearest to). It
+  refreshes every 3 hours and when the station changes, using the saved LINZ table offline. iPhone: a WidgetKit
+  extension (`TideWidgetExtension`, bundle `nz.fishingnz.catchcheck.TideWidget`) in small, medium and Lock Screen sizes;
+  the station is chosen in the widget's own settings (Edit Widget → Station). Tapping either opens the Tide tab.
+  **Not yet verified:** on the iOS 26.5 simulator the iPhone widget stays on its placeholder because the system's
+  intents service disconnects before passing the widget its settings; check it on a real iPhone.
+- iPhone version numbers now live in the project's build settings so the app and its extension always match
+  (`tools/version.py` is unchanged). The first archive with the extension needs Xcode to register its App ID
+  (automatic signing).
+- iPhone privacy manifest: declares file-timestamp access (reason C617.1, used by the offline cache since 1.0.37) in the
+  app and the widget, and, for account sync, precise location and other user content as linked to the user.
+
 ## 1.0.40 — 2026-10-20 (build code 41)
 
 - **Sync trips and catch log with your account (opt-in).** A new **Sync trips and catch log** switch on the Account

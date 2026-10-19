@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Fishdays - NZ</string>
+    <string name="tide_widget_description">Next high and low tide, moon and wind for the station on your Tide tab.</string>
 </resources>

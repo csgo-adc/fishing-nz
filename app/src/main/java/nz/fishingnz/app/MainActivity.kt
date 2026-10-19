@@ -11,6 +11,8 @@ import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.CatchLogStore
 import nz.fishingnz.app.data.OfflineCache
 import nz.fishingnz.app.data.SyncStore
+import nz.fishingnz.app.data.TideWidget
+import nz.fishingnz.app.data.TideWidgetStation
 import nz.fishingnz.app.data.TripReminders
 import nz.fishingnz.app.data.TripStore
 import nz.fishingnz.app.data.Analytics
@@ -29,6 +31,7 @@ class MainActivity : ComponentActivity() {
         TripStore.initialize(applicationContext)
         TripReminders.initialize(applicationContext)
         SyncStore.initialize(applicationContext)
+        TideWidgetStation.initialize(applicationContext)
         PrivacyPreferences.initialize(applicationContext)
         if (PrivacyPreferences.firebaseEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
         Analytics.track("app_open")
@@ -36,6 +39,7 @@ class MainActivity : ComponentActivity() {
         // Only on a fresh start: after a rotation the same intent is delivered again and must not reopen the window.
         if (savedInstanceState == null) fishingViewModel.openSharedWindow(intent.data)
         if (savedInstanceState == null && intent.action == TripReminders.OPEN_TRIPS) fishingViewModel.selectTab(3)
+        if (savedInstanceState == null && intent.action == TideWidget.OPEN_TIDE) fishingViewModel.selectTab(2)
         setContent { CatchCheckApp(fishingViewModel) }
     }
 
@@ -50,5 +54,6 @@ class MainActivity : ComponentActivity() {
         fishingViewModel.completeSocialSignIn(intent.data)
         fishingViewModel.openSharedWindow(intent.data)
         if (intent.action == TripReminders.OPEN_TRIPS) fishingViewModel.selectTab(3)
+        if (intent.action == TideWidget.OPEN_TIDE) fishingViewModel.selectTab(2)
     }
 }
