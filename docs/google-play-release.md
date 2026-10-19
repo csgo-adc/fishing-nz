@@ -22,6 +22,16 @@ All initial Play setup tasks are saved, including reviewer sign-in details, targ
 
 Sources: [target API](https://developer.android.com/google/play/requirements/target-sdk), [16 KB compatibility](https://developer.android.com/guide/practices/page-sizes), [user data](https://support.google.com/googleplay/android-developer/answer/10144311), [account deletion](https://support.google.com/googleplay/android-developer/answer/13327111), [government information](https://support.google.com/googleplay/android-developer/answer/9514050), [store assets](https://support.google.com/googleplay/android-developer/answer/9866151).
 
+## Changes in 1.0.34–1.0.43 that affect the listing
+
+- **Data safety:** with the opt-in **Sync trips and catch log**, the account stores precise location (catch positions)
+  and other user-generated content (catch log entries and notes), linked to the user, collected for app functionality,
+  encrypted in transit and deletable. Update the Data safety answers before releasing.
+- **Permissions:** `POST_NOTIFICATIONS` (asked when a trip starts, for the pre-trip forecast check and check-in
+  reminder). WorkManager runs those checks; no exact alarms.
+- **Widget:** the Tides home-screen widget (`TideWidget`) needs no extra permission.
+- **API deploy:** run Actions → Deploy so migration `0013_user_sync.sql` and `/v1/me/sync` are live before release.
+
 ## Deploy the supporting service
 
 Deployment completed on 6 October 2026: the account-deletion migration and then `0007_identification_daily_limit.sql` and its same-day usage backfill were applied remotely, and the Worker was deployed with the daily cleanup schedule. The quota table and updated public privacy policy were checked on the live service. The privacy and deletion URLs were accepted in Play Console. End-to-end production deletion mail and deletion still need a disposable-account check.

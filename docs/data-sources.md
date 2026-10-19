@@ -43,3 +43,17 @@ Both maps can show DOC marine reserves and the Hauraki Gulf / Tīkapa Moana prot
 A dropped pin, a searched place, a fishing area and a fishing window get a notice when they are inside a protected area, within 2 km of a no-fishing area, or within 500 m of a Seafloor Protection Area. On the review date four listed spots were that close: Port Jackson (200 m from the Cape Colville High Protection Area), St Clair Beach (200 m from Ōrau Marine Reserve), Marsden Point (600 m from Whangārei Harbour Marine Reserve) and Leigh Harbour / Omaha Cove (1.5 km from Cape Rodney-Okakari Point Marine Reserve).
 
 `python3 tools/build_marine_protection.py` downloads the three DOC layers listed above, keeps current areas, drops the five south-east reserves that repeat DOC's national layer, simplifies boundaries to about 30 m and writes [data/marine_protection.json](../data/marine_protection.json) with identical copies in the Android assets and iPhone resources (69 areas, about 290 KB, retrieved 19 October 2026). `--check` confirms the copies match. Islands cut out of an area stay outside it. The national marine reserves layer is [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the south-east and Hauraki Gulf layers are Crown copyright under DOC's terms, which ask maps to acknowledge "Crown Copyright: Department of Conservation Te Papa Atawhai", say when the data was acquired and that it may be out of date. The apps credit DOC on the map and say this under each notice. The boundaries are approximate, not for navigation or legal interpretation, and do not include temporary closures or rāhui; notices link to [DOC marine reserves](https://www.doc.govt.nz/marinereserves) or the [Hauraki Gulf Marine Park](https://www.doc.govt.nz/haurakigulfmarinepark) page.
+
+## Boat ramps
+
+In Boat mode the maps show public boat ramps (teal pins; on Android once zoomed in), and a boat window's details list
+the three nearest within 25 km with directions. When a low tide from the nearest LINZ station falls within an hour of
+the trip, the card says so, because some ramps can't be used near low tide. The ramps are OpenStreetMap
+`leisure=slipway` features: `python3 tools/build_boat_ramps.py` downloads them from the Overpass API, leaves out
+private, no-access, permit and customer-only ramps, ship slipways on rails and abandoned or disused ones, merges points
+within 30 m and writes [data/boat_ramps.json](../data/boat_ramps.json) with identical copies in the apps (1,004 ramps,
+46 named, 79 KB, retrieved 20 October 2026). `--from <file>` builds from a saved Overpass reply and `--check` confirms
+the copies match. 49 of the 56 boat fishing areas have a ramp within 15 km. The data is © OpenStreetMap contributors
+under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/); the apps credit OpenStreetMap on
+the map and the ramp card, and data/boat_ramps.json is the derived database, offered under the same licence. Public
+access, condition and tide limits are not recorded, and the apps say so.

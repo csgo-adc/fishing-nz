@@ -150,6 +150,9 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var styleRevision by remember { mutableIntStateOf(0) }
     var showProtection by rememberSaveable { mutableStateOf(true) }
     val protection = rememberMarineProtection()
+    val ramps = rememberBoatRamps()
+    // Bumped when the camera stops, so ramp pins follow panning as well as zooming.
+    var cameraTick by remember { mutableIntStateOf(0) }
     BackHandler(enabled = showMapStyles || showList || selectedPlace != null) {
         when {
             showMapStyles -> showMapStyles = false
@@ -170,7 +173,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             getMapAsync { map ->
                 map.uiSettings.isCompassEnabled = false
                 map.uiSettings.isAttributionEnabled = true
-                map.addOnCameraIdleListener { zoom = map.cameraPosition.zoom; zoomTarget = null }
+                map.addOnCameraIdleListener { zoom = map.cameraPosition.zoom; zoomTarget = null; cameraTick++ }
                 map.addOnMapClickListener { point ->
                     selectedPlace = ConditionPlace("Dropped pin", GeoPoint(point.latitude, point.longitude), "Selected on map", boat = filter == "Boat")
                     navigationError = false
@@ -218,7 +221,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
 
-    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.deviceLocation, selectedPlace?.id) {
+    val rampTick = if (filter == "Boat" && zoom >= 10.0) cameraTick else 0
+    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.deviceLocation, selectedPlace?.id, filter, ramps, rampTick) {
         val map = nativeMap.value ?: return@LaunchedEffect
         map.clear()
         val icons = IconFactory.getInstance(context)
@@ -239,6 +243,16 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     else if (first.boat) boatIcon else landIcon))
             markerGroups[marker.id] = group
         }
+        // Boat ramps in Boat mode once zoomed in, only for the area on screen.
+        val rampMarkers = mutableMapOf<Long, nz.fishingnz.app.data.BoatRamp>()
+        if (filter == "Boat" && zoom >= 10.0 && ramps != null) {
+            val bounds = map.projection.visibleRegion.latLngBounds
+            val rampIcon = icons.fromBitmap(mapPin(context, 0xFF0E7C86.toInt()))
+            ramps.asSequence().filter { bounds.contains(LatLng(it.point.latitude, it.point.longitude)) }.take(150).forEach { ramp ->
+                val marker = map.addMarker(MarkerOptions().position(LatLng(ramp.point.latitude, ramp.point.longitude)).title(ramp.label).icon(rampIcon))
+                rampMarkers[marker.id] = ramp
+            }
+        }
         s.deviceLocation?.let { point -> map.addMarker(MarkerOptions()
             .position(LatLng(point.latitude, point.longitude))
             .title("Your location")
@@ -248,6 +262,11 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             .icon(icons.fromBitmap(mapPin(context, 0xFF166B58.toInt())))) }
         map.setOnMarkerClickListener { marker ->
             if (marker.id == placeMarker?.id) { showConditions = true; return@setOnMarkerClickListener true }
+            rampMarkers[marker.id]?.let { ramp ->
+                selectedPlace = ConditionPlace(ramp.label, ramp.point, "© OpenStreetMap · access and tide limits not checked", boat = true)
+                navigationError = false
+                return@setOnMarkerClickListener true
+            }
             val group = markerGroups[marker.id]
             navigationError = false
             if (group != null && group.size > 1) {
@@ -351,7 +370,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         Box(Modifier.fillMaxSize().background(Seafoam)) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
             Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
-                Text("${visibleSpots.size} spots", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Navy, style = MaterialTheme.typography.labelMedium)
+                Text("${visibleSpots.size} spots" + if (filter == "Boat") if (zoom >= 10.0) " · teal pins are boat ramps" else " · zoom in for boat ramps" else "",
+                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Navy, style = MaterialTheme.typography.labelMedium)
             }
             Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FloatingActionButton(onClick = { showMapStyles = true }, modifier = Modifier.size(48.dp),
@@ -451,6 +471,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     Text("· OpenFreeMap", color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
                 }
                 if (showProtection && protection != null) AttributionLink("· Protected areas © DOC", MarineProtection.DOC_URL)
+                if (baseMap.isLinz && filter == "Boat" && zoom >= 10.0) AttributionLink("· Ramps © OpenStreetMap", nz.fishingnz.app.data.BoatRamps.CREDIT_URL)
             }
         }
     }

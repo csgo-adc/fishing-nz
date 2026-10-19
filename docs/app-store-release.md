@@ -28,6 +28,21 @@ Three real signed-out iPhone 17 Pro Max screenshots (1320×2868) are in [`assets
 | Permissions | Location (when in use), camera and write-only calendar, each with a purpose string. Gallery uses the system photo picker, so there is no photo-library permission. No tracking, no advertising ID, no background modes. |
 | Government-information disclaimer | Present in the app and the listing copy below. |
 
+## Changes in 1.0.34–1.0.43 that affect the submission
+
+- **App Privacy:** with the opt-in **Sync trips and catch log**, the account stores *Precise Location* (catch positions)
+  and *Other User Content* (catch log entries and notes), linked to the user, for App Functionality. The bundled
+  `PrivacyInfo.xcprivacy` declares both, plus file-timestamp access (reason C617.1) for the offline cache. Update the
+  App Privacy answers to match before submitting.
+- **New extension:** `TideWidgetExtension` (`nz.fishingnz.catchcheck.TideWidget`). The first archive needs Xcode to
+  register its App ID (automatic signing with `-allowProvisioningUpdates`). It has its own privacy manifest.
+- **Background App Refresh** (`UIBackgroundModes: fetch`) updates the pre-trip forecast check's notification text;
+  notifications are asked for when a trip starts.
+- **API deploy:** run Actions → Deploy so migration `0013_user_sync.sql` and `/v1/me/sync` are live before release;
+  the privacy policy (updated 20 October 2026) describes sync.
+- **Review notes:** mention the catch log (local unless sync is on), Tell someone (shares text through the share sheet)
+  and that boat ramps and marine protected areas are bundled public data (OpenStreetMap ODbL, DOC).
+
 ## Account setup and remaining submission steps
 
 Paid Apple Developer membership and Xcode account access are confirmed. Team `8T7835869S` now owns the registered App ID and App Store record. The project selects this team for Debug and Release; the previous free team is no longer selected. The App Store URL is already set in the app.

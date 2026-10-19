@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.43 — 2026-10-20 (build code 44)
+
+- **Boat ramps in boat mode.** With **Boat fishing** chosen, the map shows public boat ramps as teal pins (on Android
+  once zoomed in) and tapping one opens its card with directions and conditions. A boat window's details have a
+  **Boat ramps nearby** card: the three nearest ramps within 25 km with distance, direction ("3.3 km SW"), fee when
+  known and **Directions**, plus a note when a low tide falls within an hour of the trip ("Low tide 11:05 AM, during
+  your trip. Some ramps can't be used near low tide: check the ramp's limits."). 1,004 ramps from OpenStreetMap
+  (`tools/build_boat_ramps.py`, ODbL), credited on the map and the card; access, condition and tide limits aren't
+  checked. Android and iPhone.
+- Release checklists (`docs/app-store-release.md`, `docs/google-play-release.md`) list what 1.0.34–1.0.43 change in
+  the App Privacy and Data safety answers, the new widget extension and the API deploy.
+
 ## 1.0.42 — 2026-10-20 (build code 43)
 
 - **iPhone Tides widget checked in the simulator.** It shows live tides (for example "Auckland tides · Next high 2:37 AM

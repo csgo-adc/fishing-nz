@@ -72,11 +72,12 @@ struct FishingMapView: View {
                 Text("Search a place or tap anywhere on the map").font(.subheadline).foregroundStyle(.secondary)
                 Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented)
             }.padding(20)
-            FishingMapCanvas(layer: layer, showProtection: showProtection, spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
+            FishingMapCanvas(layer: layer, showProtection: showProtection, showRamps: filter == "Boat", spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
                              currentCamera: $currentCamera, onSpotSelected: { selectedPlace = ConditionPlace($0) },
-                             onPointSelected: { selectedPlace = ConditionPlace(name: "Dropped pin", point: $0, region: "Selected on map", boat: filter == "Boat") })
+                             onPointSelected: { selectedPlace = ConditionPlace(name: "Dropped pin", point: $0, region: "Selected on map", boat: filter == "Boat") },
+                             onRampSelected: { selectedPlace = ConditionPlace(name: $0.label, point: $0.point, region: "© OpenStreetMap · access and tide limits not checked", boat: true) })
             .overlay(alignment: .topLeading) {
-                Text("\(visibleSpots.count) spots")
+                Text("\(visibleSpots.count) spots" + (filter == "Boat" ? " · teal pins are boat ramps" : ""))
                     .font(.caption.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(CatchCheckColor.surface.opacity(0.94), in: RoundedRectangle(cornerRadius: 8))
@@ -134,7 +135,7 @@ struct FishingMapView: View {
                 .padding(18)
             }
             .overlay(alignment: .bottomLeading) {
-                if layer.tileURLTemplate != nil || showProtection {
+                if layer.tileURLTemplate != nil || showProtection || filter == "Boat" {
                     HStack(spacing: 4) {
                         if layer.tileURLTemplate != nil {
                             Link("LINZ CC BY 4.0", destination: URL(string: "https://www.linz.govt.nz/copyright")!)
@@ -145,6 +146,10 @@ struct FishingMapView: View {
                         if showProtection {
                             if layer.tileURLTemplate != nil { Text("·") }
                             Link("Protected areas © DOC", destination: MarineProtection.docURL)
+                        }
+                        if filter == "Boat" {
+                            Text("·")
+                            Link("Ramps © OpenStreetMap", destination: BoatRamps.creditURL)
                         }
                     }
                     .font(.caption2)
@@ -317,12 +322,14 @@ private final class FishingSpotMapAnnotation: NSObject, MKAnnotation {
 private struct FishingMapCanvas: UIViewRepresentable {
     let layer: FishingMapLayer
     let showProtection: Bool
+    let showRamps: Bool
     let spots: [FishingSpot]
     let selectedPlace: ConditionPlace?
     let cameraCommand: MapCameraCommand
     @Binding var currentCamera: MKMapCamera?
     let onSpotSelected: (FishingSpot) -> Void
     let onPointSelected: (GeoPoint) -> Void
+    let onRampSelected: (BoatRamp) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -366,6 +373,12 @@ private struct FishingMapCanvas: UIViewRepresentable {
             if showProtection { map.addOverlays(MarineProtectionOverlays.all, level: .aboveLabels) }
         }
 
+        if coordinator.rampsShown != showRamps {
+            coordinator.rampsShown = showRamps
+            map.removeAnnotations(map.annotations.filter { $0 is BoatRampAnnotation })
+            if showRamps { map.addAnnotations(BoatRamps.bundled.map(BoatRampAnnotation.init)) }
+        }
+
         let displayed = map.annotations.compactMap { $0 as? FishingSpotMapAnnotation }
         let wantedIDs = Set(spots.map(\.id))
         let displayedIDs = Set(displayed.map { $0.spot.id })
@@ -397,6 +410,7 @@ private struct FishingMapCanvas: UIViewRepresentable {
         var parent: FishingMapCanvas
         var layer: FishingMapLayer?
         var protectionShown: Bool?
+        var rampsShown = false
         var lastCameraCommand = -1
         var selectedID: String?
         var selectedPin: MKPointAnnotation?
@@ -440,18 +454,31 @@ private struct FishingMapCanvas: UIViewRepresentable {
                 marker.displayPriority = .required
                 return marker
             }
+            if let ramp = annotation as? BoatRampAnnotation {
+                let marker = mapView.dequeueReusableAnnotationView(withIdentifier: "BoatRamp") as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: ramp, reuseIdentifier: "BoatRamp")
+                marker.annotation = ramp
+                marker.markerTintColor = UIColor(red: 0x0E / 255, green: 0x7C / 255, blue: 0x86 / 255, alpha: 1)
+                marker.glyphImage = UIImage(systemName: "sailboat.fill")
+                marker.canShowCallout = false
+                marker.clusteringIdentifier = "boat-ramps"
+                marker.displayPriority = .defaultLow
+                return marker
+            }
             // Spots close together on screen merge into one marker showing how many there are, as on Android.
             if let cluster = annotation as? MKClusterAnnotation {
+                let ramps = cluster.memberAnnotations.allSatisfy { $0 is BoatRampAnnotation }
                 let marker = mapView.dequeueReusableAnnotationView(withIdentifier: "SpotCluster") as? MKMarkerAnnotationView
                     ?? MKMarkerAnnotationView(annotation: cluster, reuseIdentifier: "SpotCluster")
                 marker.annotation = cluster
-                marker.markerTintColor = UIColor(red: 0x12 / 255, green: 0x3B / 255, blue: 0x43 / 255, alpha: 1)
+                marker.markerTintColor = ramps ? UIColor(red: 0x0E / 255, green: 0x7C / 255, blue: 0x86 / 255, alpha: 1)
+                    : UIColor(red: 0x12 / 255, green: 0x3B / 255, blue: 0x43 / 255, alpha: 1)
                 marker.glyphImage = nil
                 marker.glyphText = "\(cluster.memberAnnotations.count)"
                 marker.titleVisibility = .hidden
                 marker.subtitleVisibility = .hidden
                 marker.canShowCallout = false
-                marker.accessibilityLabel = "\(cluster.memberAnnotations.count) fishing spots"
+                marker.accessibilityLabel = "\(cluster.memberAnnotations.count) \(ramps ? "boat ramps" : "fishing spots")"
                 return marker
             }
             guard let spotAnnotation = annotation as? FishingSpotMapAnnotation else { return nil }
@@ -470,6 +497,11 @@ private struct FishingMapCanvas: UIViewRepresentable {
             if let cluster = view.annotation as? MKClusterAnnotation {
                 mapView.deselectAnnotation(cluster, animated: false)
                 mapView.showAnnotations(cluster.memberAnnotations, animated: true)
+                return
+            }
+            if let ramp = view.annotation as? BoatRampAnnotation {
+                parent.onRampSelected(ramp.ramp)
+                mapView.deselectAnnotation(ramp, animated: false)
                 return
             }
             guard let spotAnnotation = view.annotation as? FishingSpotMapAnnotation else { return }
