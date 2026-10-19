@@ -42,6 +42,7 @@ struct PlaceConditionsView: View {
                     if recent {
                         Picker("Recent history", selection: $pastDays) { ForEach([3, 7, 30, 92], id: \.self) { Text("\($0) days").tag($0) } }.pickerStyle(.segmented)
                     }
+                    MarineProtectionNoticeView(point: place.point)
                     if loading { ProgressView("Updating conditions…") }
                     if let issue = data?.weatherIssue { Text(issue).font(.subheadline).foregroundStyle(.secondary) }
                     if let issue = data?.marineIssue { Text(issue).font(.subheadline).foregroundStyle(.secondary) }

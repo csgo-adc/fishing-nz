@@ -57,6 +57,7 @@ struct FishingMapView: View {
     @State private var showSpotList = false
     /// Set after "Show on map" moves the camera, so returning to the tab does not jump back to the current location.
     @State private var keepCameraOnAppear = false
+    @AppStorage("mapShowsProtectedAreas") private var showProtection = true
     private var visibleSpots: [FishingSpot] { fishingSpots.filter { filter == "All" || (filter == "Boat" && $0.boat) || (filter == "Land" && !$0.boat) } }
     var body: some View {
         VStack(spacing: 0) {
@@ -71,7 +72,7 @@ struct FishingMapView: View {
                 Text("Search a place or tap anywhere on the map").font(.subheadline).foregroundStyle(.secondary)
                 Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented)
             }.padding(20)
-            FishingMapCanvas(layer: layer, spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
+            FishingMapCanvas(layer: layer, showProtection: showProtection, spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
                              currentCamera: $currentCamera, onSpotSelected: { selectedPlace = ConditionPlace($0) },
                              onPointSelected: { selectedPlace = ConditionPlace(name: "Dropped pin", point: $0, region: "Selected on map", boat: filter == "Boat") })
             .overlay(alignment: .topLeading) {
@@ -94,6 +95,11 @@ struct FishingMapView: View {
                                     Text(choice.rawValue)
                                 }
                             }
+                        }
+                        Divider()
+                        // Red: marine reserves and High Protection Areas (no fishing). Amber: Seafloor Protection Areas.
+                        Button { showProtection.toggle() } label: {
+                            if showProtection { Label("Marine protected areas", systemImage: "checkmark") } else { Text("Marine protected areas") }
                         }
                     } label: {
                         mapControlIcon("square.3.layers.3d")
@@ -128,12 +134,18 @@ struct FishingMapView: View {
                 .padding(18)
             }
             .overlay(alignment: .bottomLeading) {
-                if layer.tileURLTemplate != nil {
+                if layer.tileURLTemplate != nil || showProtection {
                     HStack(spacing: 4) {
-                        Link("LINZ CC BY 4.0", destination: URL(string: "https://www.linz.govt.nz/copyright")!)
-                        Text("·")
-                        Link(layer == .linzAerial ? "Imagery Basemap contributors" : "Topographic Basemap contributors",
-                             destination: URL(string: "https://www.linz.govt.nz/products-services/data/licensing-and-using-data/attributing-linz-basemaps-data")!)
+                        if layer.tileURLTemplate != nil {
+                            Link("LINZ CC BY 4.0", destination: URL(string: "https://www.linz.govt.nz/copyright")!)
+                            Text("·")
+                            Link(layer == .linzAerial ? "Imagery Basemap contributors" : "Topographic Basemap contributors",
+                                 destination: URL(string: "https://www.linz.govt.nz/products-services/data/licensing-and-using-data/attributing-linz-basemaps-data")!)
+                        }
+                        if showProtection {
+                            if layer.tileURLTemplate != nil { Text("·") }
+                            Link("Protected areas © DOC", destination: MarineProtection.docURL)
+                        }
                     }
                     .font(.caption2)
                     .lineLimit(1)
@@ -204,6 +216,7 @@ struct FishingMapView: View {
                     }
                     .accessibilityLabel("Close selected spot")
                 }
+                MarineProtectionNoticeView(point: place.point, compact: true)
                 Button { conditionsPlace = place } label: {
                     Label("Check conditions", systemImage: "cloud.sun.fill").frame(maxWidth: .infinity)
                 }.buttonStyle(.borderedProminent)
@@ -303,6 +316,7 @@ private final class FishingSpotMapAnnotation: NSObject, MKAnnotation {
 
 private struct FishingMapCanvas: UIViewRepresentable {
     let layer: FishingMapLayer
+    let showProtection: Bool
     let spots: [FishingSpot]
     let selectedPlace: ConditionPlace?
     let cameraCommand: MapCameraCommand
@@ -327,7 +341,8 @@ private struct FishingMapCanvas: UIViewRepresentable {
         let coordinator = context.coordinator
         coordinator.parent = self
 
-        if coordinator.layer != layer {
+        let layerChanged = coordinator.layer != layer
+        if layerChanged {
             map.removeOverlays(map.overlays.filter { $0 is MKTileOverlay })
             coordinator.layer = layer
             switch layer {
@@ -343,6 +358,12 @@ private struct FishingMapCanvas: UIViewRepresentable {
                     map.addOverlay(tiles, level: .aboveLabels)
                 }
             }
+        }
+        // Protected areas go above any LINZ tiles, so they are added again after a layer change.
+        if layerChanged || coordinator.protectionShown != showProtection {
+            coordinator.protectionShown = showProtection
+            map.removeOverlays(map.overlays.filter { $0 is ProtectedAreaPolygon })
+            if showProtection { map.addOverlays(MarineProtectionOverlays.all, level: .aboveLabels) }
         }
 
         let displayed = map.annotations.compactMap { $0 as? FishingSpotMapAnnotation }
@@ -375,6 +396,7 @@ private struct FishingMapCanvas: UIViewRepresentable {
     final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var parent: FishingMapCanvas
         var layer: FishingMapLayer?
+        var protectionShown: Bool?
         var lastCameraCommand = -1
         var selectedID: String?
         var selectedPin: MKPointAnnotation?
@@ -407,6 +429,7 @@ private struct FishingMapCanvas: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: any MKOverlay) -> MKOverlayRenderer {
             if let tiles = overlay as? MKTileOverlay { return MKTileOverlayRenderer(tileOverlay: tiles) }
+            if let area = overlay as? ProtectedAreaPolygon { return MarineProtectionOverlays.renderer(for: area) }
             return MKOverlayRenderer(overlay: overlay)
         }
 

@@ -38,6 +38,7 @@ import nz.fishingnz.app.data.ConditionPlace
 import nz.fishingnz.app.data.placeDistanceKm
 import nz.fishingnz.app.data.recommendationTideStation
 import androidx.compose.material3.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +76,12 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import nz.fishingnz.app.data.MarineProtection
 import kotlin.math.floor
 
 // LINZ permits this developer key to be embedded in a public client application.
@@ -141,6 +148,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var zoomTarget by remember { mutableStateOf<Double?>(null) }
     var bearing by remember { mutableDoubleStateOf(0.0) }
     var styleRevision by remember { mutableIntStateOf(0) }
+    var showProtection by rememberSaveable { mutableStateOf(true) }
+    val protection = rememberMarineProtection()
     BackHandler(enabled = showMapStyles || showList || selectedPlace != null) {
         when {
             showMapStyles -> showMapStyles = false
@@ -246,6 +255,26 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 map.animateCamera(CameraUpdateFactory.newLatLngZoom(marker.position, (map.cameraPosition.zoom + 2.5).coerceAtMost(12.0)))
             } else selectedPlace = group?.firstOrNull()?.asConditionPlace()
             true
+        }
+    }
+
+    // DOC marine reserves and Hauraki Gulf protection areas under the pins: red where fishing is banned, amber for
+    // Seafloor Protection Areas. A new base map style drops the layers, so they are added again on each style.
+    LaunchedEffect(nativeMap.value, styleRevision, protection, showProtection) {
+        val map = nativeMap.value ?: return@LaunchedEffect
+        map.getStyle { style ->
+            listOf("marine-protection-line", "marine-protection-fill").forEach { style.getLayer(it)?.let(style::removeLayer) }
+            style.getSource("marine-protection")?.let(style::removeSource)
+            val catalogue = protection ?: return@getStyle
+            if (!showProtection) return@getStyle
+            style.addSource(GeoJsonSource("marine-protection", catalogue.geoJson))
+            val colour = Expression.match(Expression.get("kind"), Expression.color(0xFFD9822B.toInt()),
+                Expression.stop("reserve", Expression.color(0xFFD64541.toInt())),
+                Expression.stop("high_protection", Expression.color(0xFFD64541.toInt())))
+            style.addLayer(FillLayer("marine-protection-fill", "marine-protection").withProperties(
+                PropertyFactory.fillColor(colour), PropertyFactory.fillOpacity(0.22f)))
+            style.addLayer(LineLayer("marine-protection-line", "marine-protection").withProperties(
+                PropertyFactory.lineColor(colour), PropertyFactory.lineWidth(1.4f), PropertyFactory.lineOpacity(0.85f)))
         }
     }
 
@@ -383,6 +412,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                             }
                             IconButton(onClick = { selectedPlace = null }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "Close spot details") }
                         }
+                        MarineProtectionNotice(place.point, compact = true)
                         Button(onClick = { showConditions = true }, modifier = Modifier.fillMaxWidth()) { Text("Check conditions") }
                         OutlinedButton(onClick = {
                             navigationError = !openSpotInMaps(context, spot)
@@ -420,6 +450,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     AttributionLink("© OpenStreetMap contributors", "https://www.openstreetmap.org/copyright")
                     Text("· OpenFreeMap", color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
                 }
+                if (showProtection && protection != null) AttributionLink("· Protected areas © DOC", MarineProtection.DOC_URL)
             }
         }
     }
@@ -469,6 +500,12 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 trailingContent = { RadioButton(selected = baseMap == option, onClick = null) },
                 modifier = Modifier.fillMaxWidth().clickable { selectBaseMap(option) })
         }
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        ListItem(
+            headlineContent = { Text("Marine protected areas") },
+            supportingContent = { Text("Red: marine reserves and High Protection Areas, no fishing. Amber: Seafloor Protection Areas, where line fishing is allowed but trawling and dredging are not. Approximate DOC boundaries; not for navigation.") },
+            trailingContent = { Switch(checked = showProtection, onCheckedChange = null) },
+            modifier = Modifier.fillMaxWidth().clickable { showProtection = !showProtection })
         Spacer(Modifier.height(24.dp))
     }
 }

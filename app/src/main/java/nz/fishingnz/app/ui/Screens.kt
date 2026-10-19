@@ -1212,6 +1212,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 Text(spot.time, color = Orange, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(spot.distance, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            MarineProtectionNotice(GeoPoint(spot.latitude, spot.longitude))
             if (shouldShowWindowReason(spot, reasonPeers)) Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Why this window", fontWeight = FontWeight.Bold, color = Navy)

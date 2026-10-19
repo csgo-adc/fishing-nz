@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.35 — 2026-10-19 (build code 36)
+
+- **Marine protected areas on the map.** DOC marine reserves and the Hauraki Gulf protection areas are drawn on the
+  map: red where fishing is banned (marine reserves and High Protection Areas) and amber for Seafloor Protection Areas,
+  where line fishing is allowed but trawling and dredging are not. **Map layers → Marine protected areas** turns them
+  off. A dropped pin, a fishing area, its conditions page and a fishing window's details warn when the place is inside
+  one, within 2 km of a no-fishing area or within 500 m of a Seafloor Protection Area (for example St Clair Beach is
+  200 m from Ōrau Marine Reserve), with a link to DOC. The 69 boundaries are bundled in the apps, simplified to about
+  30 m; `tools/build_marine_protection.py` refreshes them. Temporary closures and rāhui are not included. Android and
+  iPhone.
+
 ## 1.0.34 — 2026-10-19 (build code 35)
 
 - **Moon phase and spring/neap tides.** The Tide tab has a Moon card for the chosen day: the phase as seen from

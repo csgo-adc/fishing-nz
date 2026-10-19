@@ -108,6 +108,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                             listOf(3, 7, 30, 92).forEach { count -> FilterChip(pastDays == count, { pastDays = count; selectedDate = null }, label = { Text("$count days") }) }
                         }
                     }
+                    item { MarineProtectionNotice(place.point) }
                     if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Updating conditions…", style = MaterialTheme.typography.bodySmall) }
                     data?.weatherIssue?.let { issue -> item { Text(issue, color = MaterialTheme.colorScheme.error) } }
                     data?.marineIssue?.let { issue -> item { Text(issue, color = MaterialTheme.colorScheme.error) } }

@@ -1709,6 +1709,7 @@ struct SpotDetailView: View {
                             Text(spot.time).font(.title3.bold()).foregroundStyle(CatchCheckColor.orange)
                             Text(spot.distance).font(.subheadline).foregroundStyle(.secondary)
                         }
+                        MarineProtectionNoticeView(point: spot.coordinate)
                         if shouldShowWindowReason(spot, among: vm.recommendations) {
                             Card(background: CatchCheckColor.seafoam) {
                                 Text("Why this window").bold().foregroundStyle(CatchCheckColor.navy)
