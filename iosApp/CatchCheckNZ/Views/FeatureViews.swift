@@ -53,6 +53,7 @@ struct FishingMapView: View {
     @State private var recenterOnLocationUpdate = false
     @State private var selectedPlace: ConditionPlace?
     @State private var conditionsPlace: ConditionPlace?
+    @State private var notificationsAllowed = true
     @State private var showPlaceSearch = false
     @State private var showSpotList = false
     /// Set after "Show on map" moves the camera, so returning to the tab does not jump back to the current location.
@@ -947,6 +948,7 @@ struct TripsView: View {
     @State private var selectedSavedSpot: Recommendation?
     @State private var calendarTrip: Recommendation?
     @State private var conditionsPlace: ConditionPlace?
+    @State private var notificationsAllowed = true
     private var saved: [Recommendation] {
         vm.savedRecommendations.values.sorted {
             ($0.startsAt ?? .distantFuture, $0.name) < ($1.startsAt ?? .distantFuture, $1.name)
@@ -974,6 +976,11 @@ struct TripsView: View {
                             if active.startsAt == nil {
                                 Text("Choose the date and time in your calendar.").font(.caption).foregroundStyle(.secondary)
                             }
+                            if let checkAt = vm.tripCheckAt {
+                                Text(notificationsAllowed ? "Forecast check \(OfflineCache.savedLabel(checkAt)): you'll get a notification saying whether it changed."
+                                     : "Allow notifications for Fishdays - NZ in Settings to get a forecast check \(OfflineCache.savedLabel(checkAt)).")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             Button("Add to calendar") { calendarTrip = active }.buttonStyle(.bordered)
                             // Opens straight from here, so the forecast saved for the trip shows even without a map signal.
                             if let place = active.mapPlace { Button("Check conditions") { conditionsPlace = place }.buttonStyle(.borderedProminent) }
@@ -993,6 +1000,7 @@ struct TripsView: View {
             .navigationTitle("Trips")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear { vm.trackScreen("trip_planning") }
+            .task(id: vm.tripCheckAt) { notificationsAllowed = await TripReminders.allowed() }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
         .sheet(item: $selectedSavedSpot) { SpotDetailView(spot: $0) }

@@ -81,6 +81,7 @@ struct CatchCheckRootView: View {
         .task { vm.requestLocation() }
         // "Log this catch" and a trip's "Log a catch" open the catch log, which starts the new entry.
         .onChange(of: vm.catchPrefill?.id) { _, id in if id != nil { moreDestination = .catchLog } }
+        .onChange(of: vm.openTripsRequest) { _, _ in moreDestination = .trips }
     }
 }
 
@@ -1778,6 +1779,8 @@ struct SpotDetailView: View {
                         if addToCalendar { showingCalendarEditor = true }
                         else { vm.startTrip(spot); dismiss() }
                     }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).frame(maxWidth: .infinity)
+                    Text("Starting a trip saves its forecast and tides for offline use and checks the forecast again before you go.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)

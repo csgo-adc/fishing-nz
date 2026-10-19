@@ -17,6 +17,7 @@ import nz.fishingnz.app.data.CatchConditionsLookup
 import nz.fishingnz.app.data.CatchLogStore
 import nz.fishingnz.app.data.PlaceConditionsRepository
 import nz.fishingnz.app.data.RulesRepository
+import nz.fishingnz.app.data.TripReminders
 import nz.fishingnz.app.data.TripStore
 import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.AnalyticsPayload
@@ -88,7 +89,9 @@ data class FishingUiState(
     val mapFocus: ConditionPlace? = null,
     /** Every catch log entry on this phone, including deleted ones kept for sync; see [CatchLog.visible]. */
     val catches: List<CatchEntry> = emptyList(),
-    val catchPrefill: CatchPrefill? = null
+    val catchPrefill: CatchPrefill? = null,
+    /** When the active trip's forecast is checked again (see TripCheck), or null when no check fits. */
+    val tripCheckAt: Instant? = null
 )
 
 /** The fixed hours a search keeps to; null for Daytime (sunrise to sunset) and Any time. */
@@ -155,7 +158,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     init {
         val (saved, active) = TripStore.load()
         _state.value = _state.value.copy(catches = CatchLogStore.load(), savedRecommendations = saved,
-            savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active)
+            savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active,
+            tripCheckAt = active?.let { TripCheck.checkTime(Instant.ofEpochSecond(it.startsAtEpochSeconds), Instant.now()) })
         refreshStationTide()
         prefetchForOffline(listOfNotNull(active) + saved)
         if (_state.value.originName != null) refreshConditions()
@@ -418,8 +422,13 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         _state.value = _state.value.copy(activeTrip = trip, selectedSpot = null)
         saveTrips()
         prefetchForOffline(listOf(trip))
+        _state.value = _state.value.copy(tripCheckAt = TripReminders.schedule(trip))
     }
-    fun endTrip() { _state.value = _state.value.copy(activeTrip = null); saveTrips() }
+    fun endTrip() {
+        _state.value = _state.value.copy(activeTrip = null, tripCheckAt = null)
+        saveTrips()
+        TripReminders.cancel()
+    }
     private fun saveTrips() { _state.value.let { TripStore.save(it.savedRecommendations, it.activeTrip) } }
     /**
      * Fetches the forecast, a year of LINZ tides and the MPI rules for each window's place while there is a signal,
@@ -803,6 +812,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     savedRecommendations = emptyList(), activeTrip = null,
                     accountNotice = "Your account and associated data have been deleted.")
                 saveTrips()
+                TripReminders.cancel()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,

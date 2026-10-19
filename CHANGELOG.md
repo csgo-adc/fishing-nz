@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.38 — 2026-10-19 (build code 39)
+
+- **Pre-trip forecast check.** Starting a trip books a check at 7 PM the evening before (or 2 hours before a trip later
+  the same day). The app evaluates the trip's exact hours again with the latest forecast and your current plan
+  options, and a notification says whether the outlook changed: "Now 😕 Demanding, was 😌 Comfortable. Gusts to
+  45 km/h." Tapping it opens Trips. The active trip card shows when the check happens. Ending the trip cancels it.
+  - Android: a WorkManager job runs the check once there is a connection; Android 13 and later ask for notification
+    permission when you start a trip (the trip starts either way).
+  - iPhone: the notification is booked with iOS and its text is rewritten with the re-checked forecast whenever the
+    app opens or iOS gives it background time (Background App Refresh) before then; otherwise it reminds you to check.
+- The window details say that starting a trip saves its forecast offline and checks it again before you go.
+
 ## 1.0.37 — 2026-10-19 (build code 38)
 
 - **Saved spots and the active trip are kept.** Before, both were lost when the app closed. They are now stored on the

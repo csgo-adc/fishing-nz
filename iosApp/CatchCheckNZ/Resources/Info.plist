@@ -20,5 +20,7 @@
     <key>NSCalendarsWriteOnlyAccessUsageDescription</key><string>Fishdays - NZ lets you choose to add a fishing trip to your calendar.</string>
     <key>NSLocationWhenInUseUsageDescription</key><string>Fishdays - NZ uses your location to find nearby fishing spots, compare forecast conditions, and choose a fishing rules area.</string>
     <key>FishIdentificationAPIBaseURL</key><string>https://fishing.fishnz.space</string>
+    <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>nz.fishingnz.catchcheck.tripcheck</string></array>
+    <key>UIBackgroundModes</key><array><string>fetch</string></array>
     <key>UILaunchScreen</key><dict><key>UIColorName</key><string></string></dict>
 </dict></plist>

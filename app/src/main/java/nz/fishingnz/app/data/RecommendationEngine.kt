@@ -86,6 +86,34 @@ class RecommendationEngine {
         )
     }
 
+    /**
+     * The same spot and hours as [window], evaluated again with the latest forecast and the current preferences, for
+     * the pre-trip check. Null when the forecast no longer covers those hours or the window has no position.
+     */
+    suspend fun recheck(window: Recommendation, priority: WindowPriority, land: LandPreferences, tidePhase: TidePhase): Recommendation? =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            if (!window.latitude.isFinite() || !window.longitude.isFinite() || window.startsAtEpochSeconds <= 0 || window.durationHours !in 1..4) return@withContext null
+            val point = GeoPoint(window.latitude, window.longitude)
+            val spot = fishingSpots.firstOrNull { it.name == window.name && it.boat == window.boat && distanceKm(point, GeoPoint(it.latitude, it.longitude)) < 1 }
+                ?: FishingSpot(window.name, window.area, window.latitude, window.longitude, window.boat)
+            val start = Instant.ofEpochSecond(window.startsAtEpochSeconds)
+            val day = start.atZone(zone).toLocalDate()
+            val today = LocalDate.now(zone)
+            if (day.isBefore(today) || day.isAfter(today.plusDays(15))) return@withContext null
+            val forecastDays = min(16, ChronoUnit.DAYS.between(today, day).toInt() + 2)
+            val weather = weather(spot, forecastDays)
+            val marine = try { marine(spot, forecastDays) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            val reference = try {
+                loadTideReference(point, recommendationTideStation(spot, null)) { LinzTideSource.predictions(it, day, day.plusDays(1)) }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            val index = weather.hours.indexOfFirst { it.time == start }
+            if (index < 0 || index + window.durationHours >= weather.hours.size) return@withContext null
+            val samples = weather.hours.subList(index, index + window.durationHours + 1)
+            val source = "Weather: Open-Meteo, updated ${weather.retrievedAt.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))}."
+            WindowEvaluation.evaluate(spot, 0.0, samples, marine?.hours.orEmpty(), weather.solar, reference?.value.orEmpty(), reference?.station,
+                Instant.now(), source, priority, land, weather.hours, weather.retrievedAt, tidePhase)
+        }
+
     private suspend fun bestWindows(
         spot: FishingSpot, distance: Double, start: LocalDate, end: LocalDate, forecastDays: Int,
         now: Instant, preferredTime: PreferredTimeRange?, mayCrossMidnight: Boolean,

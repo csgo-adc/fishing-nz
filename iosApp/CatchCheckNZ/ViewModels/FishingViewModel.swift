@@ -199,9 +199,20 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var activeTrip: Recommendation? {
         didSet {
             saveTrips()
-            if let activeTrip, activeTrip.windowID != oldValue?.windowID { prefetchForOffline([activeTrip]) }
+            guard !restoringTrips, activeTrip?.windowID != oldValue?.windowID else { return }
+            if let activeTrip {
+                prefetchForOffline([activeTrip])
+                Task { tripCheckAt = await TripReminders.schedule(activeTrip) }
+            } else {
+                TripReminders.cancel()
+                tripCheckAt = nil
+            }
         }
     }
+    /// When the active trip's forecast is checked again (see `TripCheck`), or nil when no check fits.
+    @Published private(set) var tripCheckAt: Date?
+    /// Bumped when a trip notification is tapped; the root view opens Trips.
+    @Published var openTripsRequest = 0
     @Published var selectedSpot: Recommendation?
     @Published var sharedWindowNotice: String?
     /// Every catch log entry on this phone, including deleted ones kept for sync; see `CatchLog.visible`.
@@ -748,25 +759,31 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         }
     }
 
+    /// The saved "More options" for land fishing; the pre-trip check reads them too.
+    nonisolated static func storedLandPreferences(_ defaults: UserDefaults = .standard) -> LandPreferences {
+        guard let stored = defaults.dictionary(forKey: "land_preferences") else { return LandPreferences(arrivalMinutes: 0, returnMinutes: 0) }
+        // 1.0.32 has one walk time for both ways (none when never set) and three roughness choices.
+        let arrival = (stored["arrival"] as? Int).flatMap { (0...180).contains($0) ? $0 : nil }
+        let returning = (stored["return"] as? Int).flatMap { (0...180).contains($0) ? $0 : nil }
+        let walk = arrival ?? returning ?? 0
+        let snapped = walkChoices.map(\.minutes).min { abs($0 - walk) < abs($1 - walk) } ?? 0
+        return LandPreferences(
+            setting: ShoreSetting.saved(stored["setting"] as? String),
+            priority: LandPriority.saved(stored["priority"] as? String),
+            maxBand: min(2, max(0, stored["maxBand"] as? Int ?? 1)),
+            arrivalMinutes: snapped, returnMinutes: snapped)
+    }
+    nonisolated static func storedPriority(_ defaults: UserDefaults = .standard) -> WindowPriority { WindowPriority.saved(defaults.string(forKey: "fishingPlanPriority")) }
+    nonisolated static func storedTidePhase(_ defaults: UserDefaults = .standard) -> TidePhase {
+        defaults.string(forKey: "fishingPlanTidePhase").flatMap(TidePhase.init(rawValue:)) ?? .aroundHigh
+    }
+
     override init() {
         super.init()
         restoreTrips()
         Analytics.track("app_open")
         let defaults = UserDefaults.standard
-        if let stored = defaults.dictionary(forKey: "land_preferences") {
-            // 1.0.32 has one walk time for both ways (none when never set) and three roughness choices.
-            let arrival = (stored["arrival"] as? Int).flatMap { (0...180).contains($0) ? $0 : nil }
-            let returning = (stored["return"] as? Int).flatMap { (0...180).contains($0) ? $0 : nil }
-            let walk = arrival ?? returning ?? 0
-            let snapped = walkChoices.map(\.minutes).min { abs($0 - walk) < abs($1 - walk) } ?? 0
-            landPreferences = LandPreferences(
-                setting: ShoreSetting.saved(stored["setting"] as? String),
-                priority: LandPriority.saved(stored["priority"] as? String),
-                maxBand: min(2, max(0, stored["maxBand"] as? Int ?? 1)),
-                arrivalMinutes: snapped, returnMinutes: snapped)
-        } else {
-            landPreferences = LandPreferences(arrivalMinutes: 0, returnMinutes: 0)
-        }
+        landPreferences = Self.storedLandPreferences(defaults)
         isBoatFishing = defaults.bool(forKey: Self.planBoatKey)
         if let preset = FishingDatePreset.saved(defaults.string(forKey: Self.planDatePresetKey)) {
             datePreset = preset
@@ -940,6 +957,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         savedRecommendations = Dictionary(stored.saved.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         savedSpotNames = Set(savedRecommendations.keys)
         activeTrip = stored.active
+        tripCheckAt = stored.active?.startsAt.flatMap { TripCheck.checkTime(start: $0) }
         restoringTrips = false
         prefetchForOffline((stored.active.map { [$0] } ?? []) + stored.saved)
     }

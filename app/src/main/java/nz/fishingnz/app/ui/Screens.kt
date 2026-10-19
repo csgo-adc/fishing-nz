@@ -103,6 +103,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.ShareService
+import nz.fishingnz.app.data.OfflineCache
+import nz.fishingnz.app.data.TripReminders
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -1275,11 +1277,17 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             }
             if (addToCalendar && (spot.startsAtEpochSeconds <= 0 || spot.durationHours <= 0))
                 Text("Choose the date and time in your calendar.", style = MaterialTheme.typography.bodySmall)
+            // The trip's forecast check is a notification, so Android 13 and later ask first; the trip starts either way.
+            val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
             Button(onClick = {
                 vm.startTrip()
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && !TripReminders.notificationsAllowed(context))
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 if (addToCalendar && !openTripInCalendar(context, spot))
                     android.widget.Toast.makeText(context, "No calendar app is available on this device.", android.widget.Toast.LENGTH_LONG).show()
             }, modifier = Modifier.fillMaxWidth()) { Text("Start fishing trip") }
+            Text("Starting a trip saves its forecast and tides for offline use and checks the forecast again before you go.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1305,6 +1313,11 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     }
                     if (trip.startsAtEpochSeconds <= 0 || trip.durationHours <= 0)
                         Text("Choose the date and time in your calendar.", style = MaterialTheme.typography.bodySmall)
+                    s.tripCheckAt?.let { at ->
+                        Text(if (TripReminders.notificationsAllowed(context)) "Forecast check ${OfflineCache.savedLabel(at)}: you'll get a notification saying whether it changed."
+                            else "Allow notifications for Fishdays - NZ to get a forecast check ${OfflineCache.savedLabel(at)}.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     OutlinedButton(onClick = {
                         if (!openTripInCalendar(context, trip))
                             android.widget.Toast.makeText(context, "No calendar app is available on this device.", android.widget.Toast.LENGTH_LONG).show()

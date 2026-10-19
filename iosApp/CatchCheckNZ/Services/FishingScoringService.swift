@@ -343,16 +343,7 @@ struct FishingScoringService: Sendable {
         guard weather.isValid else { return ([], false) }
         let solar = solarByDay(weather.daily, calendar: calendar)
         let marineHours = marineHoursByTime(marine?.isValid == true ? marine?.hourly : nil)
-        let data = weather.hourly
-        let hours = data.time.indices.map { index in
-            WeatherHour(time: Date(timeIntervalSince1970: TimeInterval(data.time[index])),
-                        wind: nonnegative(data.windSpeed10m[index]), gust: nonnegative(data.windGusts10m[index]),
-                        precipitation: nonnegative(data.precipitation[index]),
-                        rainProbability: probability(data.precipitationProbability?[index]),
-                        code: data.weatherCode[index].flatMap { (0...99).contains($0) ? $0 : nil },
-                        windDirection: data.windDirection10m[index].flatMap { $0.isFinite && (0...360).contains($0) ? $0 : nil },
-                        feelsLike: data.apparentTemperature?[index].flatMap { $0.isFinite && (-100...80).contains($0) ? $0 : nil })
-        }
+        let hours = weatherHours(weather)
         let hasUsableWeather = hours.contains { days.contains(calendar.startOfDay(for: $0.time)) && $0.wind != nil }
         var byDay: [Date: [ScoredFishingWindow]] = [:]
         /// Sunrise or sunset in Daytime: the whole visit within an hour before sunrise and after sunset.
@@ -395,6 +386,49 @@ struct FishingScoringService: Sendable {
         }
         // The best window on each selected day, so a multi-day plan shows every day that has one.
         return (best.sorted { $0.start < $1.start }, hasUsableWeather)
+    }
+
+    private static func weatherHours(_ weather: WeatherPayload) -> [WeatherHour] {
+        let data = weather.hourly
+        return data.time.indices.map { index in
+            WeatherHour(time: Date(timeIntervalSince1970: TimeInterval(data.time[index])),
+                        wind: nonnegative(data.windSpeed10m[index]), gust: nonnegative(data.windGusts10m[index]),
+                        precipitation: nonnegative(data.precipitation[index]),
+                        rainProbability: probability(data.precipitationProbability?[index]),
+                        code: data.weatherCode[index].flatMap { (0...99).contains($0) ? $0 : nil },
+                        windDirection: data.windDirection10m[index].flatMap { $0.isFinite && (0...360).contains($0) ? $0 : nil },
+                        feelsLike: data.apparentTemperature?[index].flatMap { $0.isFinite && (-100...80).contains($0) ? $0 : nil })
+        }
+    }
+
+    /// The same spot and hours as `window`, evaluated again with the latest forecast and the current preferences, for
+    /// the pre-trip check. Nil when the forecast no longer covers those hours. Android has `RecommendationEngine.recheck`.
+    static func recheck(_ window: Recommendation, priority: WindowPriority, land: LandPreferences, tidePhase: TidePhase) async -> ScoredFishingWindow? {
+        guard let coordinate = window.coordinate, let start = window.startsAt, let end = window.endsAt else { return nil }
+        let sessionHours = Int((end.timeIntervalSince(start) / 3600).rounded())
+        guard (1...4).contains(sessionHours) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let today = calendar.startOfDay(for: .now), day = calendar.startOfDay(for: start)
+        guard let ahead = calendar.dateComponents([.day], from: today, to: day).day, (0...15).contains(ahead),
+              let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { return nil }
+        let spot = fishingSpots.first { $0.name == window.name && $0.boat == window.boat && placeDistanceKm(coordinate, $0.coordinate) < 1 }
+            ?? FishingSpot(name: window.name, area: window.area, coordinate: coordinate, boat: window.boat)
+        let forecastDays = min(16, ahead + 2)
+        guard let weather = try? await fetchWeather(at: coordinate, boat: window.boat, forecastDays: forecastDays), weather.isValid else { return nil }
+        let marine = try? await fetchMarine(at: coordinate, forecastDays: forecastDays)
+        let reference = try? await loadTideReference(point: coordinate, linked: matchingStation(for: spot), selected: nil) {
+            try await LINZTideStore.shared.predictions(stationName: $0.csvName, start: day, end: nextDay)
+        }
+        let hours = weatherHours(weather)
+        guard let index = hours.firstIndex(where: { $0.time == start }), index + sessionHours < hours.count else { return nil }
+        let tides = reference?.value ?? []
+        return evaluate(samples: Array(hours[index...index + sessionHours]), spot: spot, distanceKm: 0, isTideStation: false,
+                        solar: solarByDay(weather.daily, calendar: calendar),
+                        marineHours: marineHoursByTime(marine?.isValid == true ? marine?.hourly : nil),
+                        tides: tides, tideStation: reference?.station, now: .now, calendar: calendar, priority: priority,
+                        sourceNote: sourceNote(spot: spot, weather: weather, marine: marine, station: tides.isEmpty ? nil : reference?.station),
+                        land: land, allHours: hours, retrievedAt: weather.retrievedAt, tidePhase: tidePhase)
     }
 
     /// The most windows a radius search lists on one day: the best few spots, not every nearby spot.

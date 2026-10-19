@@ -32,6 +32,8 @@
 		AA000021 /* CatchLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100023 /* CatchLogView.swift */; };
 		AA000022 /* OfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100024 /* OfflineCache.swift */; };
 		AA000023 /* TripStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100025 /* TripStore.swift */; };
+		AA000024 /* TripCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100026 /* TripCheck.swift */; };
+		AA000025 /* TripReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100027 /* TripReminders.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +64,8 @@
 		AA100023 /* CatchLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchLogView.swift; sourceTree = "<group>"; };
 		AA100024 /* OfflineCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCache.swift; sourceTree = "<group>"; };
 		AA100025 /* TripStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStore.swift; sourceTree = "<group>"; };
+		AA100026 /* TripCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripCheck.swift; sourceTree = "<group>"; };
+		AA100027 /* TripReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripReminders.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,6 +119,7 @@
 		AA300005 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				AA100026 /* TripCheck.swift */,
 				AA100021 /* CatchLog.swift */,
 				AA100002 /* FishingModels.swift */,
 				AA100016 /* SharedWindow.swift */,
@@ -126,6 +131,7 @@
 		AA300006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AA100027 /* TripReminders.swift */,
 				AA100025 /* TripStore.swift */,
 				AA100024 /* OfflineCache.swift */,
 				AA100022 /* CatchLogStore.swift */,
@@ -243,6 +249,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000025 /* TripReminders.swift in Sources */,
+				AA000024 /* TripCheck.swift in Sources */,
 				AA000023 /* TripStore.swift in Sources */,
 				AA000022 /* OfflineCache.swift in Sources */,
 				AA000021 /* CatchLogView.swift in Sources */,
@@ -300,11 +308,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZ.entitlements;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				DEVELOPMENT_TEAM = 8T7835869S;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.37;
+				MARKETING_VERSION = 1.0.38;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -321,11 +329,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZRelease.entitlements;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				DEVELOPMENT_TEAM = 8T7835869S;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.37;
+				MARKETING_VERSION = 1.0.38;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
