@@ -14,14 +14,27 @@ data class FishingRulesPage(
     val reviewedAt: String?,
     val needsReview: Boolean,
     val sections: List<FishingRulesSection>,
-    val tables: List<List<List<String>>>
+    val tables: List<List<List<String>>>,
+    /** When this copy was saved, if it was read from the phone because the service could not be reached. */
+    val savedAt: java.time.Instant? = null
 )
 
 class RulesRepository {
     private val baseUrl = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/').ifBlank { "https://fishing.fishnz.space" }
 
+    /** The area's rules from the service, or the copy saved on the phone when the service cannot be reached. */
     suspend fun load(areaId: String): FishingRulesPage = withContext(Dispatchers.IO) {
-        val slug = ruleAreaSlugs[areaId] ?: error("Unknown fishing area.")
+        val key = "rules_$areaId.json"
+        try {
+            val text = download(areaId)
+            parse(areaId, text).also { OfflineCache.write(key, text) }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            OfflineCache.read(key)?.let { (text, at) -> runCatching { parse(areaId, text).copy(savedAt = at) }.getOrNull() } ?: throw error
+        }
+    }
+
+    private fun download(areaId: String): String {
         val connection = (URL("$baseUrl/v1/rules?area=$areaId").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
@@ -32,32 +45,36 @@ class RulesRepository {
         }
         try {
             if (connection.responseCode !in 200..299) error("Saved rules are unavailable right now. Try again shortly.")
-            val item = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                .getJSONArray("rules").getJSONObject(0)
-            val officialUrl = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
-            require(item.optString("area_id") == areaId && item.optString("source_url").trimEnd('/') == officialUrl) {
-                "Saved rules do not match the selected fishing area. Open the official MPI page instead."
-            }
-            val sections = item.getJSONArray("sections")
-            val tables = item.getJSONArray("tables")
-            FishingRulesPage(
-                areaName = item.getString("area_name"),
-                sourceUrl = item.getString("source_url"),
-                reviewedAt = item.optString("reviewed_at").takeIf { it.isNotBlank() && it != "null" },
-                needsReview = item.optBoolean("needsReview", false),
-                sections = (0 until sections.length()).map { index ->
-                    val section = sections.getJSONObject(index)
-                    FishingRulesSection(section.optString("heading"), section.optString("text"))
-                },
-                tables = (0 until tables.length()).map { tableIndex ->
-                    val rows = tables.getJSONArray(tableIndex)
-                    (0 until rows.length()).map { rowIndex ->
-                        val cells = rows.getJSONArray(rowIndex)
-                        (0 until cells.length()).map { cellIndex -> cells.optString(cellIndex) }
-                    }
-                }
-            )
+            return connection.inputStream.bufferedReader().use { it.readText() }
         } finally { connection.disconnect() }
+    }
+
+    private fun parse(areaId: String, text: String): FishingRulesPage {
+        val slug = ruleAreaSlugs[areaId] ?: error("Unknown fishing area.")
+        val item = JSONObject(text).getJSONArray("rules").getJSONObject(0)
+        val officialUrl = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
+        require(item.optString("area_id") == areaId && item.optString("source_url").trimEnd('/') == officialUrl) {
+            "Saved rules do not match the selected fishing area. Open the official MPI page instead."
+        }
+        val sections = item.getJSONArray("sections")
+        val tables = item.getJSONArray("tables")
+        return FishingRulesPage(
+            areaName = item.getString("area_name"),
+            sourceUrl = item.getString("source_url"),
+            reviewedAt = item.optString("reviewed_at").takeIf { it.isNotBlank() && it != "null" },
+            needsReview = item.optBoolean("needsReview", false),
+            sections = (0 until sections.length()).map { index ->
+                val section = sections.getJSONObject(index)
+                FishingRulesSection(section.optString("heading"), section.optString("text"))
+            },
+            tables = (0 until tables.length()).map { tableIndex ->
+                val rows = tables.getJSONArray(tableIndex)
+                (0 until rows.length()).map { rowIndex ->
+                    val cells = rows.getJSONArray(rowIndex)
+                    (0 until cells.length()).map { cellIndex -> cells.optString(cellIndex) }
+                }
+            }
+        )
     }
 }
 

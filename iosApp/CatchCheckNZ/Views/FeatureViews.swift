@@ -946,6 +946,7 @@ struct TripsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedSavedSpot: Recommendation?
     @State private var calendarTrip: Recommendation?
+    @State private var conditionsPlace: ConditionPlace?
     private var saved: [Recommendation] {
         vm.savedRecommendations.values.sorted {
             ($0.startsAt ?? .distantFuture, $0.name) < ($1.startsAt ?? .distantFuture, $1.name)
@@ -974,6 +975,8 @@ struct TripsView: View {
                                 Text("Choose the date and time in your calendar.").font(.caption).foregroundStyle(.secondary)
                             }
                             Button("Add to calendar") { calendarTrip = active }.buttonStyle(.bordered)
+                            // Opens straight from here, so the forecast saved for the trip shows even without a map signal.
+                            if let place = active.mapPlace { Button("Check conditions") { conditionsPlace = place }.buttonStyle(.borderedProminent) }
                             Button("Log a catch") { vm.logCatchOnTrip() }.buttonStyle(.bordered)
                             Button("End trip") { vm.activeTrip = nil }.buttonStyle(.bordered)
                         }
@@ -994,6 +997,7 @@ struct TripsView: View {
         }
         .sheet(item: $selectedSavedSpot) { SpotDetailView(spot: $0) }
         .sheet(item: $calendarTrip) { TripCalendarEditor(trip: $0) }
+        .fullScreenCover(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
     }
 }
 
@@ -1057,6 +1061,8 @@ struct RulesView: View {
     @State private var query = ""
     @State private var page: SavedRulesPage?
     @State private var loadError: String?
+    /// When the rules shown were saved on the phone, if the service could not be reached.
+    @State private var offlineSavedAt: Date?
     @State private var loading = false
     @State private var loadToken = UUID()
     private var nearRaglanWest: Bool {
@@ -1147,6 +1153,10 @@ struct RulesView: View {
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Link("See full official MPI rules", destination: selectedArea?.officialURL ?? page.sourceURL).buttonStyle(.borderedProminent)
                             if let reviewedAt = page.reviewedAt { Text("Saved page reviewed by MPI: \(reviewedAt)").font(.caption).foregroundStyle(.secondary) }
+                            if let offlineSavedAt {
+                                Text("No connection · showing the rules saved on this phone \(OfflineCache.savedLabel(offlineSavedAt)). Check MPI when you can.")
+                                    .font(.caption).foregroundStyle(CatchCheckColor.warning)
+                            }
                         }
                         }
                     }
@@ -1212,7 +1222,15 @@ struct RulesView: View {
         loading = true
         loadError = nil
         page = nil
+        offlineSavedAt = nil
         defer { if loadToken == token { loading = false } }
+        let offlineKey = "rules_\(selectedArea.id).json"
+        let officialPath = selectedArea.officialURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        func matching(_ data: Data) -> SavedRulesPage? {
+            (try? JSONDecoder().decode(SavedRulesEnvelope.self, from: data))?.rules.first(where: {
+                $0.areaID == selectedArea.id && $0.sourceURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == officialPath
+            })
+        }
         let baseURL = ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space")
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(baseURL)/v1/rules?area=\(selectedArea.id)") else { loadError = "Rules service URL is unavailable."; return }
@@ -1224,18 +1242,19 @@ struct RulesView: View {
             if let deviceID = AnalyticsPreferences.deviceID() { request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id") }
             let (data, response) = try await URLSession.shared.data(for: request)
             guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-            let envelope = try JSONDecoder().decode(SavedRulesEnvelope.self, from: data)
+            _ = try JSONDecoder().decode(SavedRulesEnvelope.self, from: data)
             guard loadToken == token, self.selectedArea?.id == selectedArea.id else { return }
-            let officialPath = selectedArea.officialURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            page = envelope.rules.first(where: {
-                $0.areaID == selectedArea.id &&
-                $0.sourceURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == officialPath
-            })
+            page = matching(data)
             if page == nil { loadError = "Saved rules do not match this fishing area. Open the official MPI page instead." }
+            else { OfflineCache.write(offlineKey, data) }
         } catch {
             // URLSession reports a cancelled task as URLError.cancelled, not CancellationError.
             guard loadToken == token, !Task.isCancelled else { return }
-            loadError = "Saved rules are unavailable right now. Try again shortly."
+            if let saved = OfflineCache.read(offlineKey), let savedPage = matching(saved.data) {
+                page = savedPage; offlineSavedAt = saved.savedAt
+            } else {
+                loadError = "Saved rules are unavailable right now. Try again shortly."
+            }
         }
     }
 }

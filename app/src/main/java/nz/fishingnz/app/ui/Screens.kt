@@ -1286,6 +1286,8 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
 
 @Composable fun TripsScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val context = LocalContext.current
+    var conditionsPlace by remember { mutableStateOf<nz.fishingnz.app.data.ConditionPlace?>(null) }
+    conditionsPlace?.let { place -> key(place.id) { PlaceConditionsScreen(place, dismiss = { conditionsPlace = null }) } }
     LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Text("Your trips", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
@@ -1307,6 +1309,8 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         if (!openTripInCalendar(context, trip))
                             android.widget.Toast.makeText(context, "No calendar app is available on this device.", android.widget.Toast.LENGTH_LONG).show()
                     }, modifier = Modifier.fillMaxWidth()) { Text("Add to calendar") }
+                    // Opens straight from here, so the forecast saved for the trip shows even without a map signal.
+                    trip.mapPlace()?.let { place -> Button(onClick = { conditionsPlace = place }, modifier = Modifier.fillMaxWidth()) { Text("Check conditions") } }
                     OutlinedButton(onClick = vm::logCatchOnTrip, modifier = Modifier.fillMaxWidth()) { Text("Log a catch") }
                     OutlinedButton(onClick = vm::endTrip) { Text("End trip") }
                 }
@@ -1510,6 +1514,8 @@ internal val fishingRulesAreas = listOf(
                 Text(if (search.isEmpty()) "At a glance" else "${matchingSpecies.size} matching species",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 rules.reviewedAt?.let { Text("MPI last reviewed: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                rules.savedAt?.let { Text("No connection · showing the rules saved on this phone ${nz.fishingnz.app.data.OfflineCache.savedLabel(it)}. Check MPI when you can.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             }
             if (search.isEmpty()) item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

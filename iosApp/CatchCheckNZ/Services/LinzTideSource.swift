@@ -84,15 +84,35 @@ actor LINZTideStore {
         let filename = "\(stationName) \(year).csv"
         guard let path = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))),
               let url = URL(string: "https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/\(path)") else { throw TideDataError.invalidSource }
-        let request = URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 20)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0),
-              let csv = String(data: data, encoding: .utf8) else { throw TideDataError.noPredictions }
-        let events = try Self.parseLocal(csv, stationName: stationName, year: year)
-        let calendar = Self.wallCalendar
-        let days = Set(events.map { calendar.startOfDay(for: $0.clock) })
-        let expected = calendar.range(of: .day, in: .year, for: events[0].clock)?.count
-        guard days.count == expected else { throw TideDataError.invalidSource }
+        func complete(_ csv: String) throws -> [LocalPrediction] {
+            let events = try Self.parseLocal(csv, stationName: stationName, year: year)
+            let calendar = Self.wallCalendar
+            let days = Set(events.map { calendar.startOfDay(for: $0.clock) })
+            let expected = calendar.range(of: .day, in: .year, for: events[0].clock)?.count
+            guard days.count == expected else { throw TideDataError.invalidSource }
+            return events
+        }
+        // LINZ publishes each year's table in advance, so a saved copy is reused for a month and kept for when there
+        // is no signal. Android does the same.
+        let offlineKey = "linz_\(stationName.replacingOccurrences(of: "/", with: "-"))_\(year).csv"
+        let saved = OfflineCache.read(offlineKey)
+        let savedEvents = saved.flatMap { String(data: $0.data, encoding: .utf8) }.flatMap { try? complete($0) }
+        let events: [LocalPrediction]
+        if let saved, let savedEvents, Date().timeIntervalSince(saved.savedAt) < 30 * 86_400 {
+            events = savedEvents
+        } else {
+            do {
+                let request = URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 20)
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0),
+                      let csv = String(data: data, encoding: .utf8) else { throw TideDataError.noPredictions }
+                events = try complete(csv)
+                OfflineCache.write(offlineKey, data)
+            } catch {
+                guard let savedEvents else { throw error }
+                events = savedEvents
+            }
+        }
         annualCache[key] = Cached(fetchedAt: Date(), events: events)
         return events
     }

@@ -50,12 +50,21 @@ class PlaceConditionsRepository {
     suspend fun load(point: GeoPoint, pastDays: Int = 3): PlaceConditions = coroutineScope {
         require(point.latitude.isFinite() && point.longitude.isFinite() && point.latitude in -90.0..90.0 && point.longitude in -180.0..180.0)
         require(pastDays in 0..MAX_PAST_DAYS)
-        val weather = async { outcome { decodeWeather(request(weatherURL(point, pastDays)), Instant.now()) } }
-        val marine = async { outcome { decodeMarine(request(marineURL(point, pastDays)), Instant.now()) } }
+        val weather = async { outcome { saved("weather", point, request(weatherURL(point, pastDays))) { json, at -> decodeWeather(json, at) } } }
+        val marine = async { outcome { saved("marine", point, request(marineURL(point, pastDays))) { json, at -> decodeMarine(json, at) } } }
         val w = weather.await(); val m = marine.await()
-        PlaceConditions(w.getOrNull(), m.getOrNull(), w.exceptionOrNull()?.let { "Weather unavailable · try refreshing" },
-            m.exceptionOrNull()?.let { "Offshore waves unavailable · try refreshing" })
+        // Without a signal, the last forecast saved for this place stands in, labelled with when it was saved.
+        val offlineWeather = if (w.isFailure) offline("weather", point) { json, at -> decodeWeather(json, at) } else null
+        val offlineMarine = if (m.isFailure) offline("marine", point) { json, at -> decodeMarine(json, at) } else null
+        PlaceConditions(w.getOrNull() ?: offlineWeather, m.getOrNull() ?: offlineMarine,
+            when { w.isSuccess -> null; offlineWeather != null -> "No connection · showing the forecast saved ${OfflineCache.savedLabel(offlineWeather.fetchedAt)}"; else -> "Weather unavailable · try refreshing" },
+            when { m.isSuccess -> null; offlineMarine != null -> "No connection · showing waves saved ${OfflineCache.savedLabel(offlineMarine.fetchedAt)}"; else -> "Offshore waves unavailable · try refreshing" })
     }
+    /** Decodes a fresh response and, once it reads correctly, saves it for offline use. */
+    private fun <T> saved(kind: String, point: GeoPoint, json: JSONObject, decode: (JSONObject, Instant) -> T): T =
+        decode(json, Instant.now()).also { OfflineCache.write(OfflineCache.placeKey(kind, point), json.toString()) }
+    private fun <T> offline(kind: String, point: GeoPoint, decode: (JSONObject, Instant) -> T): T? =
+        OfflineCache.read(OfflineCache.placeKey(kind, point))?.let { (text, at) -> runCatching { decode(JSONObject(text), at) }.getOrNull() }
     private suspend fun <T> outcome(work: suspend () -> T): Result<T> = try { Result.success(work()) }
         catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { Result.failure(error) }
     private suspend fun request(url: String): JSONObject = withContext(Dispatchers.IO) {

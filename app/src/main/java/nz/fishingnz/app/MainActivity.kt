@@ -9,6 +9,8 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import nz.fishingnz.app.ui.CatchCheckApp
 import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.CatchLogStore
+import nz.fishingnz.app.data.OfflineCache
+import nz.fishingnz.app.data.TripStore
 import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.SearchPreferencesStore
 import nz.fishingnz.app.data.PrivacyPreferences
@@ -21,6 +23,8 @@ class MainActivity : ComponentActivity() {
         AccountSessionStore.initialize(applicationContext)
         SearchPreferencesStore.initialize(applicationContext)
         CatchLogStore.initialize(applicationContext)
+        OfflineCache.initialize(applicationContext)
+        TripStore.initialize(applicationContext)
         PrivacyPreferences.initialize(applicationContext)
         if (PrivacyPreferences.firebaseEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
         Analytics.track("app_open")

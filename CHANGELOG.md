@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.37 — 2026-10-19 (build code 38)
+
+- **Saved spots and the active trip are kept.** Before, both were lost when the app closed. They are now stored on the
+  phone as the same small window snapshot a share link carries, and come back marked "Saved · forecast may have
+  changed". Deleting the account clears them.
+- **Offline at the water.** Starting a trip or saving a spot fetches, while there is a signal, that place's forecast,
+  a full year of LINZ tides for its station and the MPI rules for its area. Without a connection the conditions page
+  shows the saved forecast ("No connection · showing the forecast saved Sun 18 Oct, 12:00 PM"), tide pages use the
+  saved LINZ table (also reused for a month instead of downloading again) and the rules page shows the saved copy
+  with when it was saved. The active trip has a **Check conditions** button, so the forecast opens without the map.
+  Android and iPhone.
+
 ## 1.0.36 — 2026-10-19 (build code 37)
 
 - **Catch log.** More → **Catch log** keeps your catches on this phone: species, length, kept or released, how

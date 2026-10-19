@@ -120,12 +120,17 @@ struct PlaceConditionsService: Sendable {
     static let weatherDays = 16, marineDays = 8, maxPastDays = 92
     func load(at point: GeoPoint, pastDays: Int = 3) async throws -> PlaceConditions {
         guard point.latitude.isFinite, point.longitude.isFinite, (-90...90).contains(point.latitude), (-180...180).contains(point.longitude), (0...Self.maxPastDays).contains(pastDays) else { throw ConditionsError.invalidData }
-        async let weather = attempt { try Self.decodeWeather(await fetch(Self.weatherURL(point, pastDays: pastDays)), fetchedAt: .now) }
-        async let marine = attempt { try Self.decodeMarine(await fetch(Self.marineURL(point, pastDays: pastDays)), fetchedAt: .now) }
+        let weatherKey = OfflineCache.placeKey("weather", point), marineKey = OfflineCache.placeKey("marine", point)
+        async let weather = attempt { let data = try await fetch(Self.weatherURL(point, pastDays: pastDays)); let decoded = try Self.decodeWeather(data, fetchedAt: .now); OfflineCache.write(weatherKey, data); return decoded }
+        async let marine = attempt { let data = try await fetch(Self.marineURL(point, pastDays: pastDays)); let decoded = try Self.decodeMarine(data, fetchedAt: .now); OfflineCache.write(marineKey, data); return decoded }
         let (w, m) = try await (weather, marine)
         try Task.checkCancellation()
-        return PlaceConditions(weather: w, marine: m, weatherIssue: w == nil ? "Weather unavailable · try refreshing" : nil,
-            marineIssue: m == nil ? "Offshore waves unavailable · try refreshing" : nil)
+        // Without a signal, the last forecast saved for this place stands in, labelled with when it was saved.
+        let savedWeather = w == nil ? OfflineCache.read(weatherKey).flatMap { try? Self.decodeWeather($0.data, fetchedAt: $0.savedAt) } : nil
+        let savedMarine = m == nil ? OfflineCache.read(marineKey).flatMap { try? Self.decodeMarine($0.data, fetchedAt: $0.savedAt) } : nil
+        return PlaceConditions(weather: w ?? savedWeather, marine: m ?? savedMarine,
+            weatherIssue: w != nil ? nil : savedWeather.map { "No connection · showing the forecast saved \(OfflineCache.savedLabel($0.fetchedAt))" } ?? "Weather unavailable · try refreshing",
+            marineIssue: m != nil ? nil : savedMarine.map { "No connection · showing waves saved \(OfflineCache.savedLabel($0.fetchedAt))" } ?? "Offshore waves unavailable · try refreshing")
     }
     private func attempt<T: Sendable>(_ work: @Sendable () async throws -> T) async throws -> T? {
         do { return try await work() } catch is CancellationError { throw CancellationError() } catch { try Task.checkCancellation(); return nil }

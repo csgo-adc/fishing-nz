@@ -8,6 +8,7 @@ swiftc -enable-bare-slash-regex "$repo_root/iosApp/CatchCheckNZ/Models/FishingMo
   "$repo_root/iosApp/CatchCheckNZ/Models/MoonPhase.swift" \
   "$repo_root/iosApp/CatchCheckNZ/Models/CatchLog.swift" \
   "$repo_root/iosApp/CatchCheckNZ/Services/LinzTideSource.swift" \
+  "$repo_root/iosApp/CatchCheckNZ/Services/OfflineCache.swift" \
   "$repo_root/iosApp/CatchCheckNZ/Services/FishingScoringService.swift" \
   "$repo_root/iosApp/CatchCheckNZ/Services/PlaceConditionsService.swift" \
   "$repo_root/iosApp/CatchCheckNZ/Services/WeatherForecastService.swift" \

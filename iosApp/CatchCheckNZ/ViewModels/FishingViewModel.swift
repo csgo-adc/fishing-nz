@@ -195,8 +195,13 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published private(set) var isLoadingFishRules = false
     @Published private(set) var fishRulesError: String?
     @Published var savedSpotNames = Set<String>()
-    @Published var savedRecommendations: [String: Recommendation] = [:]
-    @Published var activeTrip: Recommendation?
+    @Published var savedRecommendations: [String: Recommendation] = [:] { didSet { saveTrips() } }
+    @Published var activeTrip: Recommendation? {
+        didSet {
+            saveTrips()
+            if let activeTrip, activeTrip.windowID != oldValue?.windowID { prefetchForOffline([activeTrip]) }
+        }
+    }
     @Published var selectedSpot: Recommendation?
     @Published var sharedWindowNotice: String?
     /// Every catch log entry on this phone, including deleted ones kept for sync; see `CatchLog.visible`.
@@ -243,6 +248,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private var tideRequestID = UUID()
     private var accountRequestVersion = 0
     private var catchRulesCache: [String: FishRulesResult] = [:]
+    private var restoringTrips = false
     @Published private(set) var rulesAreaSelectionIsManual = false
     private static let searchStationKey = "fishingSearchStationID"
     private static let searchOriginKey = "fishingSearchOrigin"
@@ -744,6 +750,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
 
     override init() {
         super.init()
+        restoreTrips()
         Analytics.track("app_open")
         let defaults = UserDefaults.standard
         if let stored = defaults.dictionary(forKey: "land_preferences") {
@@ -923,7 +930,37 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
     func toggleSaved(_ spot: Recommendation) {
         if savedSpotNames.contains(spot.id) { savedSpotNames.remove(spot.id); savedRecommendations.removeValue(forKey: spot.id) }
-        else { savedSpotNames.insert(spot.id); savedRecommendations[spot.id] = spot }
+        else { savedSpotNames.insert(spot.id); savedRecommendations[spot.id] = spot; prefetchForOffline([spot]) }
+    }
+
+    /// Restores saved windows and the active trip from the last launch.
+    private func restoreTrips() {
+        let stored = TripStore.load()
+        restoringTrips = true
+        savedRecommendations = Dictionary(stored.saved.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        savedSpotNames = Set(savedRecommendations.keys)
+        activeTrip = stored.active
+        restoringTrips = false
+        prefetchForOffline((stored.active.map { [$0] } ?? []) + stored.saved)
+    }
+    private func saveTrips() {
+        guard !restoringTrips else { return }
+        TripStore.save(saved: savedRecommendations.values.sorted { ($0.startsAt ?? .distantPast) < ($1.startsAt ?? .distantPast) }, active: activeTrip)
+    }
+    /// Fetches the forecast, a year of LINZ tides and the MPI rules for each window's place while there is a signal,
+    /// so the active trip and saved spots still show conditions at the water. Failures are ignored.
+    private func prefetchForOffline(_ windows: [Recommendation]) {
+        guard !restoringTrips else { return }
+        var seen = Set<String>()
+        let points = windows.compactMap(\.coordinate).filter { seen.insert(OfflineCache.placeKey("p", $0)).inserted }.prefix(6)
+        guard !points.isEmpty else { return }
+        let repository = repository
+        Task.detached(priority: .utility) {
+            for point in points {
+                _ = try? await PlaceConditionsService().load(at: point, pastDays: 1)
+                if let station = nearbyTideStations(point: point).first { _ = try? await repository.tide(for: station, date: .now) }
+            }
+        }
     }
     /// Shows the window in a shared link the app was opened with. Other addresses are ignored.
     func openSharedWindow(_ url: URL) {

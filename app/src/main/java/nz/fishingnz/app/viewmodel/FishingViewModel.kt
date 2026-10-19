@@ -15,6 +15,9 @@ import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.CatchConditionsLookup
 import nz.fishingnz.app.data.CatchLogStore
+import nz.fishingnz.app.data.PlaceConditionsRepository
+import nz.fishingnz.app.data.RulesRepository
+import nz.fishingnz.app.data.TripStore
 import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.AnalyticsPayload
 import nz.fishingnz.app.data.PrivacyPreferences
@@ -150,8 +153,11 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     val state: StateFlow<FishingUiState> = _state.asStateFlow()
     private val rulesCache = mutableMapOf<Pair<String, String>, FishRulesResult>()
     init {
-        _state.value = _state.value.copy(catches = CatchLogStore.load())
+        val (saved, active) = TripStore.load()
+        _state.value = _state.value.copy(catches = CatchLogStore.load(), savedRecommendations = saved,
+            savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active)
         refreshStationTide()
+        prefetchForOffline(listOfNotNull(active) + saved)
         if (_state.value.originName != null) refreshConditions()
         refreshAccount()
     }
@@ -407,8 +413,30 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         selectTab(1)
     }
     fun mapFocusShown() { _state.value = _state.value.copy(mapFocus = null) }
-    fun startTrip() { _state.value.selectedSpot?.let { _state.value = _state.value.copy(activeTrip = it, selectedSpot = null) } }
-    fun endTrip() { _state.value = _state.value.copy(activeTrip = null) }
+    fun startTrip() {
+        val trip = _state.value.selectedSpot ?: return
+        _state.value = _state.value.copy(activeTrip = trip, selectedSpot = null)
+        saveTrips()
+        prefetchForOffline(listOf(trip))
+    }
+    fun endTrip() { _state.value = _state.value.copy(activeTrip = null); saveTrips() }
+    private fun saveTrips() { _state.value.let { TripStore.save(it.savedRecommendations, it.activeTrip) } }
+    /**
+     * Fetches the forecast, a year of LINZ tides and the MPI rules for each window's place while there is a signal,
+     * so the active trip and saved spots still show conditions at the water. Failures are ignored.
+     */
+    private fun prefetchForOffline(windows: List<Recommendation>) {
+        val points = windows.filter { it.latitude.isFinite() && it.longitude.isFinite() }
+            .map { GeoPoint(it.latitude, it.longitude) }.distinct().take(6)
+        if (points.isEmpty()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            points.forEach { point ->
+                runCatching { PlaceConditionsRepository().load(point, 1) }
+                runCatching { repository.tide(nearestTideStation(point), LocalDate.now(nzZone)) }
+                suggestedRulesAreaId(point)?.let { area -> runCatching { RulesRepository().load(area) } }
+            }
+        }
+    }
     fun toggleSaved(spot: Recommendation) {
         val current = _state.value
         val key = recommendationKey(spot)
@@ -416,6 +444,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val recommendations = if (key in current.savedSpots) current.savedRecommendations.filterNot { recommendationKey(it) == key }
             else current.savedRecommendations.filterNot { recommendationKey(it) == key } + spot
         _state.value = current.copy(savedSpots = saved, savedRecommendations = recommendations)
+        saveTrips()
+        if (key !in current.savedSpots) prefetchForOffline(listOf(spot))
     }
     /** Opens the catch log with a new entry for the fish just identified. */
     fun logIdentifiedCatch() {
@@ -772,6 +802,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     fishRulesLoading = false, fishRulesError = null, savedSpots = emptySet(),
                     savedRecommendations = emptyList(), activeTrip = null,
                     accountNotice = "Your account and associated data have been deleted.")
+                saveTrips()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,

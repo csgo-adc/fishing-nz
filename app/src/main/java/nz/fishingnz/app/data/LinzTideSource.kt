@@ -52,6 +52,8 @@ internal fun tideReferenceLabel(spot: FishingSpot, station: TideStation): String
 object LinzTideSource {
     private val zone = ZoneId.of("Pacific/Auckland")
     private val lifetime = Duration.ofHours(24)
+    private val savedLifetime = Duration.ofDays(30)
+    private fun offlineKey(station: TideStation, year: Int) = "linz_${station.id}_$year.csv"
     private data class LocalPrediction(val at: LocalDateTime, val height: Double)
     private data class AnnualTable(val fetchedAt: Instant, val events: List<LocalPrediction>)
     private val tables = ConcurrentHashMap<String, AnnualTable>()
@@ -98,20 +100,30 @@ object LinzTideSource {
             val fetchedAt = Instant.now()
             if (previous != null && Duration.between(previous.fetchedAt, fetchedAt) in Duration.ZERO..lifetime) previous
             else {
-                val filename = URLEncoder.encode("${station.csvName} $year.csv", Charsets.UTF_8.name()).replace("+", "%20")
-                val connection = (URL("https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/$filename").openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 8_000
-                    readTimeout = 8_000
+                fun complete(raw: String) = parseLocal(raw, station, year).also { events ->
+                    require(events.map { it.at.toLocalDate() }.distinct().size == LocalDate.of(year, 1, 1).lengthOfYear()) {
+                        "LINZ annual tide table is incomplete for ${station.name} in $year."
+                    }
                 }
-                val raw = try {
-                    check(connection.responseCode in 200..299) { "LINZ tide table unavailable for ${station.name} in $year." }
-                    connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                } finally { connection.disconnect() }
-                val events = parseLocal(raw, station, year)
-                require(events.map { it.at.toLocalDate() }.distinct().size == LocalDate.of(year, 1, 1).lengthOfYear()) {
-                    "LINZ annual tide table is incomplete for ${station.name} in $year."
+                fun download(): List<LocalPrediction> {
+                    val filename = URLEncoder.encode("${station.csvName} $year.csv", Charsets.UTF_8.name()).replace("+", "%20")
+                    val connection = (URL("https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/$filename").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 8_000
+                        readTimeout = 8_000
+                    }
+                    val raw = try {
+                        check(connection.responseCode in 200..299) { "LINZ tide table unavailable for ${station.name} in $year." }
+                        connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    } finally { connection.disconnect() }
+                    return complete(raw).also { OfflineCache.write(offlineKey(station, year), raw) }
                 }
+                // LINZ publishes each year's table in advance, so a saved copy is reused for a month and kept for
+                // when there is no signal.
+                val saved = OfflineCache.read(offlineKey(station, year))
+                val savedEvents = saved?.let { runCatching { complete(it.first) }.getOrNull() }
+                val events = if (saved != null && savedEvents != null && Duration.between(saved.second, fetchedAt) < savedLifetime) savedEvents
+                    else try { download() } catch (error: Exception) { savedEvents ?: throw error }
                 AnnualTable(fetchedAt, events)
             }
         }!!.events
