@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.42 — 2026-10-20 (build code 43)
+
+- **iPhone Tides widget checked in the simulator.** It shows live tides (for example "Auckland tides · Next high 2:37 AM
+  · 2.6 m · Then low 8:40 AM · 1.1 m"), its Station setting lists every LINZ station, and tapping it opens the Tide tab.
+  The placeholder seen while testing 1.0.41 came from unsigned test builds: the system's intents service refuses an
+  unsigned widget, so the station setting never arrived. Signed builds (as Xcode and the App Store make) work.
+- The widget's second line reads "Then low …" instead of "Then Low …".
+- Opening the app refreshes the widget, so it picks up the latest tide table.
+
 ## 1.0.41 — 2026-10-20 (build code 42)
 
 - **Tides widget.** Android: a home-screen widget with the next two high or low tides, the moon, spring or neap tides

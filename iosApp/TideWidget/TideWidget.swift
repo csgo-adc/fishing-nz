@@ -125,7 +125,7 @@ struct TideWidgetView: View {
                     Text(time(next.time)).font(.title2.bold()).foregroundStyle(.white).minimumScaleFactor(0.7).lineLimit(1)
                     Text(String(format: "%.1f m", next.height)).font(.subheadline).foregroundStyle(.white.opacity(0.9))
                     if let then = entry.next.dropFirst().first {
-                        Text("Then \(line(then))").font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.8)
+                        Text("Then \(line(then).prefix(1).lowercased() + line(then).dropFirst())").font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.8)
                     }
                 } else {
                     Text("Tides unavailable").font(.headline).foregroundStyle(.white)

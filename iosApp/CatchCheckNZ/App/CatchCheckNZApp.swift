@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import WidgetKit
 
 @main
 struct CatchCheckNZApp: App {
@@ -25,7 +26,11 @@ struct CatchCheckNZApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { Analytics.flush() }
                     // Keeps a booked trip check's text up to date with the latest forecast.
-                    if phase == .active { Task { await TripReminders.refresh(force: false) } }
+                    if phase == .active {
+                        Task { await TripReminders.refresh(force: false) }
+                        // The Tides widget reloads with the latest LINZ table whenever the app opens.
+                        WidgetCenter.shared.reloadAllTimelines()
+                    }
                 }
         }
     }
