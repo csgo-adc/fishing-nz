@@ -176,6 +176,8 @@ struct PlaceConditionsView: View {
                     Text("Published high and low tides").font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
                     Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                     TideEventRows(events: tide.events).font(.subheadline)
+                    let moon = MoonPhase.forDay(day)
+                    Text("\(moon.summary) · \(moon.tideRange.label)").font(.caption).foregroundStyle(.secondary)
                 }
                 DisclosureGroup("Tide details") {
                     VStack(alignment: .leading, spacing: 8) {

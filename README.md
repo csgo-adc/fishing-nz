@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.33 (build code 34)**. The original code is preserved
+Current project version: **1.0.34 (build code 35)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -21,7 +21,7 @@ Suggestions normally fit between **7:00 AM and 9:00 PM**. Choose your own hours,
 
 ## See the tides
 
-The Tide page selects the nearest supported tide station from your location. You can search for another station, move between days, and slide across the curve to inspect the estimated height at a particular time. Published high and low tide times and heights come from [Toitū Te Whenua Land Information New Zealand](https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions) and are shown above local Chart Datum. The station picker includes locations with direct LINZ daily predictions; offset-only locations require a separate calculation.
+The Tide page selects the nearest supported tide station from your location. You can search for another station, move between days, and slide across the curve to inspect the estimated height at a particular time. Published high and low tide times and heights come from [Toitū Te Whenua Land Information New Zealand](https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions) and are shown above local Chart Datum. The station picker includes locations with direct LINZ daily predictions; offset-only locations require a separate calculation. A Moon card shows the day's moon phase, whether tides are spring (bigger range) or neap (smaller range), and the next full and new moon.
 
 ## Explore and prepare
 

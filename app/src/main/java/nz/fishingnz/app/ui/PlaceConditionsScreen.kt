@@ -171,6 +171,9 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                                 Text(event.type, color = Navy, fontWeight = FontWeight.SemiBold)
                                                 Text("${event.time} · ${event.height}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             } }
+                                            val moon = MoonPhase.forDay(day)
+                                            Text("${moon.summary} · ${moon.tideRange.label}",
+                                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         TextButton(onClick = { tideDetails = !tideDetails }, contentPadding = PaddingValues(0.dp)) {
                                             Text("Tide details")

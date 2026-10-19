@@ -22,6 +22,7 @@
 		AA000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100015 /* Assets.xcassets */; };
 		AA000014 /* SharedWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100016 /* SharedWindow.swift */; };
 		AA000015 /* ShareLinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100017 /* ShareLinkService.swift */; };
+		AA000016 /* MoonPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* MoonPhase.swift */; };
 		AA000099 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA100099 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -43,6 +44,7 @@
 		AA100015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA100016 /* SharedWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedWindow.swift; sourceTree = "<group>"; };
 		AA100017 /* ShareLinkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkService.swift; sourceTree = "<group>"; };
+		AA100018 /* MoonPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonPhase.swift; sourceTree = "<group>"; };
 		AA100099 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -99,6 +101,7 @@
 			children = (
 				AA100002 /* FishingModels.swift */,
 				AA100016 /* SharedWindow.swift */,
+				AA100018 /* MoonPhase.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -229,6 +232,7 @@
 				AA000012 /* PlaceConditionsView.swift in Sources */,
 				AA000014 /* SharedWindow.swift in Sources */,
 				AA000015 /* ShareLinkService.swift in Sources */,
+				AA000016 /* MoonPhase.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -264,11 +268,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZ.entitlements;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEVELOPMENT_TEAM = 8T7835869S;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.33;
+				MARKETING_VERSION = 1.0.34;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -285,11 +289,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = CatchCheckNZ/Resources/CatchCheckNZRelease.entitlements;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEVELOPMENT_TEAM = 8T7835869S;
 				INFOPLIST_FILE = CatchCheckNZ/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.0.33;
+				MARKETING_VERSION = 1.0.34;
 				PRODUCT_BUNDLE_IDENTIFIER = nz.fishingnz.catchcheck;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

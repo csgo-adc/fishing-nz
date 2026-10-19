@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.34 — 2026-10-19 (build code 35)
+
+- **Moon phase and spring/neap tides.** The Tide tab has a Moon card for the chosen day: the phase as seen from
+  New Zealand (lit on the left while it waxes) and how much is lit, whether it is a spring tide (bigger range), a neap
+  tide (smaller range) or between, and the dates of the next full and new moon. A place's conditions page on the map
+  shows the same in one line under the day's tides. Worked out on the phone (Meeus's lunar formulas, within about half
+  an hour of published phase times), so it needs no new data source. It describes the tide range, not catches.
+  Android and iPhone.
+
 ## 1.0.33 — 2026-10-16 (build code 34)
 
 Better fishing-window rules, on Android and iPhone.

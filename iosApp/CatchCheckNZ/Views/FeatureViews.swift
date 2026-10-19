@@ -690,6 +690,7 @@ private struct TideDetails: View {
                 Text("Next \(tide.nextEvent.lowercased()) tide · \(tide.eventTime)")
                     .font(.subheadline)
             }
+            MoonCard(day: day)
             Card {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Tide height through the day").bold().foregroundStyle(.primary)
@@ -711,6 +712,22 @@ private struct TideDetails: View {
                     .foregroundStyle(CatchCheckColor.navy)
                 TideEventRows(events: tide.events)
             }
+        }
+    }
+}
+
+/// The day's moon and what it means for the tide range. The Android Tide tab shows the same card.
+private struct MoonCard: View {
+    let day: Date
+
+    var body: some View {
+        let moon = MoonPhase.forDay(day)
+        Card {
+            Text("Moon").bold().foregroundStyle(.primary)
+            Text(moon.summary).font(.headline).foregroundStyle(CatchCheckColor.navy)
+            Text("\(moon.tideRange.label): \(moon.tideRange.explanation.prefix(1).lowercased() + moon.tideRange.explanation.dropFirst())")
+            Text(MoonPhase.nextPhasesLine(after: day)).font(.caption).foregroundStyle(.secondary)
+            Text("Spring tides follow new and full moons; neap tides follow the quarter moons.").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

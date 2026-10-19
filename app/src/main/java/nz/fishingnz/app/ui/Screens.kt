@@ -1688,6 +1688,7 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
                     Text("Next ${tide.nextEvent} · ${tide.eventTime}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } }
+            item { MoonCard(s.tideDate) }
             item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Tide curve", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
@@ -1729,6 +1730,22 @@ private fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page
                     HorizontalDivider()
                 }
             }
+        }
+    }
+}
+
+/** The day's moon and what it means for the tide range. The iPhone Tide tab shows the same card. */
+@Composable private fun MoonCard(date: java.time.LocalDate) {
+    val moon = remember(date) { MoonPhase.forDay(date) }
+    val next = remember(date) { MoonPhase.nextPhasesLine(date) }
+    Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Moon", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+            Text(moon.summary, color = Navy, fontWeight = FontWeight.SemiBold)
+            Text("${moon.tideRange.label}: ${moon.tideRange.explanation.replaceFirstChar { it.lowercase() }}", color = MaterialTheme.colorScheme.onSurface)
+            Text(next, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text("Spring tides follow new and full moons; neap tides follow the quarter moons.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
