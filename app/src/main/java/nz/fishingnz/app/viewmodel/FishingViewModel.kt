@@ -13,6 +13,8 @@ import nz.fishingnz.app.data.ConditionPlace
 import nz.fishingnz.app.data.FishingRepository
 import nz.fishingnz.app.data.AccountRequestException
 import nz.fishingnz.app.data.AccountSessionStore
+import nz.fishingnz.app.data.CatchConditionsLookup
+import nz.fishingnz.app.data.CatchLogStore
 import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.AnalyticsPayload
 import nz.fishingnz.app.data.PrivacyPreferences
@@ -22,6 +24,7 @@ import nz.fishingnz.app.data.SearchPreferencesStore
 import nz.fishingnz.app.data.SharedWindowLink
 import nz.fishingnz.app.data.ShareService
 import nz.fishingnz.app.model.*
+import java.time.Instant
 import java.time.LocalDate
 import java.time.DayOfWeek
 import java.time.LocalTime
@@ -46,6 +49,9 @@ internal fun presetFishingDates(value: String, today: LocalDate): Pair<LocalDate
 }
 
 enum class SearchLocationMode { NEAR_ME, SPECIFIC_LOCATION }
+
+/** What "Log this catch" carries from fish identification into a new catch log entry. */
+data class CatchPrefill(val species: String, val photo: Uri?, val rulesAreaId: String?)
 
 data class FishingUiState(
     val tab: Int = 0, val boat: Boolean = false, val dateLabel: String = "Next 3 days", val dateStart: LocalDate = LocalDate.now(nzZone), val dateEnd: LocalDate = LocalDate.now(nzZone).plusDays(2),
@@ -76,7 +82,10 @@ data class FishingUiState(
     val accountError: String? = null, val accountNotice: String? = null, val verificationPending: Boolean = false,
     val sharedWindowNotice: String? = null,
     /** A place the Map tab should centre on and open, set by "Show on map" on a fishing window. */
-    val mapFocus: ConditionPlace? = null
+    val mapFocus: ConditionPlace? = null,
+    /** Every catch log entry on this phone, including deleted ones kept for sync; see [CatchLog.visible]. */
+    val catches: List<CatchEntry> = emptyList(),
+    val catchPrefill: CatchPrefill? = null
 )
 
 /** The fixed hours a search keeps to; null for Daytime (sunrise to sunset) and Any time. */
@@ -139,16 +148,18 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         originName = savedOrigin?.name
     ))
     val state: StateFlow<FishingUiState> = _state.asStateFlow()
+    private val rulesCache = mutableMapOf<Pair<String, String>, FishRulesResult>()
     init {
+        _state.value = _state.value.copy(catches = CatchLogStore.load())
         refreshStationTide()
         if (_state.value.originName != null) refreshConditions()
         refreshAccount()
     }
     fun selectTab(value: Int) {
         val old = _state.value
-        if (value !in 0..11 || old.tab == value) return
+        if (value !in 0..12 || old.tab == value) return
         _state.value = old.copy(tab = value)
-        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance", "weather")
+        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance", "weather", "catch_log")
         Analytics.track("screen_view", "screen" to features[value])
         if (old.account != null) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
     }
@@ -159,7 +170,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             current.selectedSpot != null -> closeSpot()
             current.showResults -> closeResults()
             current.tab in 8..10 -> selectTab(7)
-            current.tab == 7 || current.tab in 3..5 -> selectTab(6)
+            current.tab == 7 || current.tab in 3..5 || current.tab == 12 -> selectTab(6)
             current.tab != 0 -> selectTab(0)
         }
     }
@@ -406,6 +417,61 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             else current.savedRecommendations.filterNot { recommendationKey(it) == key } + spot
         _state.value = current.copy(savedSpots = saved, savedRecommendations = recommendations)
     }
+    /** Opens the catch log with a new entry for the fish just identified. */
+    fun logIdentifiedCatch() {
+        val check = _state.value.fishCheck?.takeIf { it.isFish } ?: return
+        _state.value = _state.value.copy(catchPrefill = CatchPrefill(check.commonName, _state.value.fishPhoto, _state.value.fishRulesAreaId))
+        selectTab(12)
+    }
+    fun catchPrefillUsed() { _state.value = _state.value.copy(catchPrefill = null) }
+    /** "Log a catch" on the active trip: a new entry at the trip's spot. */
+    fun logCatchOnTrip() {
+        _state.value = _state.value.copy(catchPrefill = CatchPrefill("", null, _state.value.fishRulesAreaId))
+        selectTab(12)
+    }
+
+    /** Adds or replaces [entry], keeps [photo] with it, then looks up the conditions at that time and place. */
+    fun saveCatch(entry: CatchEntry, photo: Uri?) {
+        val now = Instant.now().epochSecond
+        val previous = _state.value.catches.firstOrNull { it.id == entry.id }
+        val photoFile = photo?.let { CatchLogStore.keepPhoto(it, entry.id) } ?: entry.photoFile
+        // A changed time or place needs fresh conditions; otherwise the recorded ones stay.
+        val moved = previous == null || previous.caughtAtEpochSeconds != entry.caughtAtEpochSeconds ||
+            previous.latitude != entry.latitude || previous.longitude != entry.longitude
+        val saved = entry.copy(photoFile = photoFile, updatedAtEpochSeconds = now,
+            conditions = if (moved) CatchConditions() else entry.conditions)
+        updateCatches { list -> list.filterNot { it.id == saved.id } + saved }
+        Analytics.track(if (previous == null) "catch_logged" else "catch_edited", "kept" to saved.kept, "has_length" to (saved.lengthCm != null))
+        if (moved) viewModelScope.launch {
+            val point = if (saved.latitude != null && saved.longitude != null) GeoPoint(saved.latitude, saved.longitude) else null
+            val conditions = runCatching { CatchConditionsLookup.lookup(point, Instant.ofEpochSecond(saved.caughtAtEpochSeconds)) }.getOrNull()
+                ?: return@launch
+            updateCatches { list -> list.map { if (it.id == saved.id && it.updatedAtEpochSeconds == saved.updatedAtEpochSeconds) it.copy(conditions = conditions) else it } }
+        }
+    }
+    /** Hides the entry and deletes its photo; the entry stays as a tombstone so account sync removes it everywhere. */
+    fun deleteCatch(id: String) {
+        val entry = _state.value.catches.firstOrNull { it.id == id } ?: return
+        CatchLogStore.deletePhoto(entry.photoFile)
+        updateCatches { list -> list.map { if (it.id == id) it.copy(deleted = true, photoFile = null, updatedAtEpochSeconds = Instant.now().epochSecond) else it } }
+    }
+    fun deleteAllCatches() {
+        val now = Instant.now().epochSecond
+        _state.value.catches.forEach { CatchLogStore.deletePhoto(it.photoFile) }
+        updateCatches { list -> list.map { it.copy(deleted = true, photoFile = null, updatedAtEpochSeconds = now) } }
+    }
+    private fun updateCatches(change: (List<CatchEntry>) -> List<CatchEntry>) {
+        val updated = change(_state.value.catches)
+        _state.value = _state.value.copy(catches = updated)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { CatchLogStore.save(updated) }
+    }
+    /** MPI rows for [species] in an area, for the catch log's size check. Remembered for this session. */
+    suspend fun rulesFor(species: String, areaId: String): FishRulesResult {
+        val key = species.trim().lowercase() to areaId
+        rulesCache[key]?.let { return it }
+        return repository.fishRules(species.trim(), areaId).also { rulesCache[key] = it }
+    }
+
     fun refreshRecommendations() {
         recommendationJob?.cancel()
         val query = _state.value

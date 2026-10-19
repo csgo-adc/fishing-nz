@@ -35,7 +35,7 @@ enum CatchCheckColor {
 }
 
 private enum MoreDestination: String, Identifiable {
-    case trips, rules, account, settings
+    case trips, catchLog, rules, account, settings
     var id: String { rawValue }
 }
 
@@ -72,12 +72,15 @@ struct CatchCheckRootView: View {
         .sheet(item: $moreDestination) { destination in
             switch destination {
             case .trips: TripsView()
+            case .catchLog: CatchLogView()
             case .rules: RulesView()
             case .account: AccountView()
             case .settings: SettingsView()
             }
         }
         .task { vm.requestLocation() }
+        // "Log this catch" and a trip's "Log a catch" open the catch log, which starts the new entry.
+        .onChange(of: vm.catchPrefill?.id) { _, id in if id != nil { moreDestination = .catchLog } }
     }
 }
 
@@ -96,6 +99,7 @@ private struct MoreView: View {
                     .padding(.bottom, 6)
                     VStack(spacing: 10) {
                         MoreNavigationRow(title: "Trips", subtitle: "Saved spots and active plans", icon: "calendar") { open(.trips) }
+                        MoreNavigationRow(title: "Catch log", subtitle: "Your catches, sizes and patterns", icon: "fish") { open(.catchLog) }
                         MoreNavigationRow(title: "Fishing rules", subtitle: "Sizes, limits and local restrictions", icon: "book.closed") { open(.rules) }
                     }
                     .padding(.bottom, 6)
@@ -258,6 +262,7 @@ private struct TermsPrivacyView: View {
                     Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
                     Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device. You can delete your account from the Account page.")
                     Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
+                    Text("Your catch log, with its photos and positions, stays on this phone. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
                     Text("Publisher: Tristan · tc199558@gmail.com")
                     if let privacyPolicyURL { Link("Read the full privacy policy", destination: privacyPolicyURL).font(.subheadline.weight(.semibold)) }
                     Toggle(isOn: $analyticsOn) {
@@ -879,6 +884,10 @@ private struct FishIdentifierView: View {
             }
             if let result = vm.fishCheck {
                 FishCheckCard(result: result)
+                if result.isFish {
+                    Button { vm.logIdentifiedCatch() } label: { Label("Log this catch", systemImage: "square.and.pencil").frame(maxWidth: .infinity) }
+                        .buttonStyle(.borderedProminent)
+                }
                 if vm.account != nil {
                     Button("Report this AI result") { showingAIReport = true }
                         .font(.subheadline.weight(.semibold))

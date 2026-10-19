@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Phishing
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MenuBook
@@ -129,7 +130,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                 )
                 destinations.forEach { (icon, label, tab) ->
                     NavigationBarItem(
-                        selected = if (tab == 6) state.tab in 3..10 else state.tab == tab,
+                        selected = if (tab == 6) state.tab in 3..10 || state.tab == 12 else state.tab == tab,
                         onClick = { vm.selectTab(tab) },
                         icon = { Icon(icon, contentDescription = null) },
                         label = { Text(label) }
@@ -155,6 +156,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                     }
                 }
                 11 -> WeatherScreen(modifier)
+                12 -> MoreDetail("Catch log", { vm.selectTab(6) }, modifier) { CatchLogScreen(Modifier, state, vm) }
                 else -> MoreScreen(modifier, state.account?.user?.displayName, vm::selectTab)
             }
         }
@@ -187,6 +189,8 @@ private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> U
         Spacer(Modifier.height(2.dp))
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             MoreItem(Icons.Default.CalendarMonth, "Trips", "Saved spots and active plans") { onNavigate(3) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.Phishing, "Catch log", "Your catches, sizes and patterns") { onNavigate(12) }
             HorizontalDivider(Modifier.padding(start = 64.dp))
             MoreItem(Icons.Default.MenuBook, "Fishing rules", "Sizes, limits and local restrictions") { onNavigate(4) }
         }
@@ -267,6 +271,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
                 Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
                 Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
+                Text("Your catch log, with its photos and positions, stays on this phone. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
                 Text("Publisher: Tristan · tc199558@gmail.com")
                 TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read full privacy policy") }
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.35 (build code 36)**. The original code is preserved
+Current project version: **1.0.36 (build code 37)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -27,6 +27,7 @@ The Tide page selects the nearest supported tide station from your location. You
 
 - **Map:** Search a place or tap the map, then check upcoming and recent conditions on a full-screen page. Compare daily and hourly weather, wind, offshore waves, tide events with the day's tide curve, rain and daylight. The +/− buttons zoom the map with one hand; nearby pins merge into a numbered marker when zoomed out, and **List** browses every fishing area. From a selected place, **Find a fishing window nearby** searches around it. Expand each item for explanations and shore/boat guidance. History supports 3, 7, 30 or 92 recent days. Existing fishing spots and LINZ map layers remain available. Marine reserves and Hauraki Gulf protection areas are shaded (red: no fishing; amber: Seafloor Protection Areas), and places inside or near one show a warning. [How place conditions work](docs/place-conditions.md).
 - **Trips:** Keep a shortlist of spots and an active plan while you are planning.
+- **Catch log:** Log each catch with its length, a photo and notes. The app checks the length against the MPI summary for the area, records the tide, wind, waves and moon at the time, and shows patterns once you have a few catches. Export it as CSV.
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location for a short rule summary, then open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
 - **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and up to 16 forecast days with familiar weather icons and plain labels. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
 - **Account:** Create an account in the mobile app with an 8-character minimum password entered twice, or use Google or Apple once sign-in is configured. Manage your profile, connect sign-in options, and send feedback. The website is for administrators. [Sign-in setup](docs/account-sign-in.md).

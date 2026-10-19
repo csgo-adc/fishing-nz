@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.36 — 2026-10-19 (build code 37)
+
+- **Catch log.** More → **Catch log** keeps your catches on this phone: species, length, kept or released, how
+  many, place, time, notes and an optional photo. Saving a catch records the conditions at that time and place: the
+  part of the tide from the nearest LINZ station (for example "Incoming · 2 h after low"), wind, offshore waves and
+  water temperature from Open-Meteo, and the moon and spring/neap tides. With three or more catches, **Your patterns**
+  sums up your own log (most-caught species, tide, time of day), without predicting anything. **Export as CSV** shares
+  the log; **Delete all** clears it.
+- **Size check.** As you log a fish, the app looks up the species in the saved MPI summary for the chosen area and
+  compares the length with each matching minimum size (for example "28 cm is under the 30 cm minimum for Snapper
+  (Auckland East - SNA1). Release it." and "meets the 27 cm minimum" for Auckland West), converts millimetre rules
+  and sends tail-width rules to MPI. It shows the daily limit and how many of that species you have kept that day.
+- **Log this catch** after identifying a fish fills in the species, photo and MPI area. The active trip has a
+  **Log a catch** button that uses the trip's spot.
+- Terms & privacy say the log stays on the phone and that saving a catch sends its place and time to Open-Meteo.
+  Android and iPhone; both read the same JSON format (shared test fixture), ready for account sync.
+
 ## 1.0.35 — 2026-10-19 (build code 36)
 
 - **Marine protected areas on the map.** DOC marine reserves and the Hauraki Gulf protection areas are drawn on the

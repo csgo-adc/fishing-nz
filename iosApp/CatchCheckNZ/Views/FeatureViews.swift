@@ -974,6 +974,7 @@ struct TripsView: View {
                                 Text("Choose the date and time in your calendar.").font(.caption).foregroundStyle(.secondary)
                             }
                             Button("Add to calendar") { calendarTrip = active }.buttonStyle(.bordered)
+                            Button("Log a catch") { vm.logCatchOnTrip() }.buttonStyle(.bordered)
                             Button("End trip") { vm.activeTrip = nil }.buttonStyle(.bordered)
                         }
                     }

@@ -199,6 +199,10 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var activeTrip: Recommendation?
     @Published var selectedSpot: Recommendation?
     @Published var sharedWindowNotice: String?
+    /// Every catch log entry on this phone, including deleted ones kept for sync; see `CatchLog.visible`.
+    @Published private(set) var catches: [CatchEntry] = CatchLogStore.load()
+    /// Set by "Log this catch" or a trip's "Log a catch"; the catch log opens a new entry with it.
+    @Published var catchPrefill: CatchPrefill?
     @Published var showingResults = false
     /// A place the Map tab should centre on and open, set by "Show on map" on a fishing window.
     @Published var mapFocus: ConditionPlace?
@@ -238,6 +242,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private var tideTask: Task<Void, Never>?
     private var tideRequestID = UUID()
     private var accountRequestVersion = 0
+    private var catchRulesCache: [String: FishRulesResult] = [:]
     @Published private(set) var rulesAreaSelectionIsManual = false
     private static let searchStationKey = "fishingSearchStationID"
     private static let searchOriginKey = "fishingSearchOrigin"
@@ -942,6 +947,76 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     }
 
     func startTrip(_ spot: Recommendation) { activeTrip = spot; selectedSpot = nil }
+
+    /// Opens the catch log with a new entry for the fish just identified.
+    func logIdentifiedCatch() {
+        guard let check = fishCheck, check.isFish else { return }
+        catchPrefill = CatchPrefill(species: check.commonName, photo: selectedPhoto, rulesAreaID: selectedRulesAreaID)
+        trackScreen("catch_log")
+    }
+    /// "Log a catch" on the active trip: a new entry at the trip's spot.
+    func logCatchOnTrip() { catchPrefill = CatchPrefill(species: "", photo: nil, rulesAreaID: selectedRulesAreaID) }
+
+    /// A new entry at the current time: the active trip's spot, else the phone's position and nearest listed spot.
+    func newCatch(species: String = "", rulesAreaID: String? = nil) -> CatchEntry {
+        let device = hasDeviceLocation ? location : nil
+        let tripPoint = activeTrip?.coordinate
+        let atTrip = tripPoint != nil && (device == nil || placeDistanceKm(device!, tripPoint!) <= 5)
+        let point = atTrip ? tripPoint : device
+        var place = ""
+        if atTrip, let trip = activeTrip { place = trip.name }
+        else if let device {
+            place = fishingSpots.filter { placeDistanceKm(device, $0.coordinate) <= 3 }
+                .min { placeDistanceKm(device, $0.coordinate) < placeDistanceKm(device, $1.coordinate) }?.name
+                ?? devicePlaceName.map { "Near \($0)" } ?? ""
+        }
+        return CatchEntry(caughtAt: .now, species: species, placeName: place, latitude: point?.latitude, longitude: point?.longitude,
+                          rulesAreaID: rulesAreaID ?? selectedRulesAreaID)
+    }
+
+    /// Adds or replaces `entry`, keeps `photo` with it, then looks up the conditions at that time and place.
+    func saveCatch(_ entry: CatchEntry, photo: UIImage?) {
+        let previous = catches.first { $0.id == entry.id }
+        var saved = entry
+        if let photo { saved.photoFile = CatchLogStore.keepPhoto(photo, id: entry.id) ?? entry.photoFile }
+        // A changed time or place needs fresh conditions; otherwise the recorded ones stay.
+        let moved = previous == nil || previous?.caughtAt != entry.caughtAt || previous?.latitude != entry.latitude || previous?.longitude != entry.longitude
+        if moved { saved.conditions = CatchConditions() }
+        saved.updatedAt = Date(timeIntervalSince1970: Date.now.timeIntervalSince1970.rounded())
+        updateCatches { $0.filter { $0.id != saved.id } + [saved] }
+        Analytics.track(previous == nil ? "catch_logged" : "catch_edited", ["kept": .flag(saved.kept), "has_length": .flag(saved.lengthCm != nil)])
+        guard moved else { return }
+        let stamp = saved.updatedAt
+        Task {
+            let conditions = await CatchConditionsLookup.lookup(point: saved.point, at: saved.caughtAt)
+            updateCatches { list in list.map { $0.id == saved.id && $0.updatedAt == stamp ? { var e = $0; e.conditions = conditions; return e }($0) : $0 } }
+        }
+    }
+    /// Hides the entry and deletes its photo; the entry stays as a tombstone so account sync removes it everywhere.
+    func deleteCatch(_ id: String) {
+        guard let entry = catches.first(where: { $0.id == id }) else { return }
+        CatchLogStore.deletePhoto(entry.photoFile)
+        let now = Date(timeIntervalSince1970: Date.now.timeIntervalSince1970.rounded())
+        updateCatches { $0.map { $0.id == id ? { var e = $0; e.deleted = true; e.photoFile = nil; e.updatedAt = now; return e }($0) : $0 } }
+    }
+    func deleteAllCatches() {
+        let now = Date(timeIntervalSince1970: Date.now.timeIntervalSince1970.rounded())
+        catches.forEach { CatchLogStore.deletePhoto($0.photoFile) }
+        updateCatches { $0.map { var e = $0; e.deleted = true; e.photoFile = nil; e.updatedAt = now; return e } }
+    }
+    private func updateCatches(_ change: ([CatchEntry]) -> [CatchEntry]) {
+        catches = change(catches)
+        let snapshot = catches
+        Task.detached(priority: .utility) { CatchLogStore.save(snapshot) }
+    }
+    /// MPI rows for `species` in an area, for the catch log's size check. Remembered for this session.
+    func rulesFor(species: String, areaID: String) async throws -> FishRulesResult {
+        let key = species.trimmingCharacters(in: .whitespaces).lowercased() + "|" + areaID
+        if let cached = catchRulesCache[key] { return cached }
+        let result = try await repository.fishRules(species: species.trimmingCharacters(in: .whitespaces), areaID: areaID)
+        catchRulesCache[key] = result
+        return result
+    }
     func refreshAccount() {
         let version = accountRequestVersion
         accountLoading = true

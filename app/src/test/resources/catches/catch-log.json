@@ -1,0 +1,6 @@
+{"version":1,"entries":[
+{"id":"7d0f3c1e-2a4b-4c55-9b1e-0f6b8e2d9a10","caught_at":1792364400,"species":"Snapper","length_cm":32.5,"kept":true,"count":2,"place":"Raglan","latitude":-37.8,"longitude":174.88,"rules_area":"auckland-kermadec","notes":"Pilchard, ledger rig","photo":"7d0f3c1e-2a4b-4c55-9b1e-0f6b8e2d9a10.jpg","conditions":{"tide_phase":"Incoming","tide":"Incoming · 2 h after low (LINZ Raglan)","wind":"Breezy: 22 km/h, gusts to 28 km/h, from the south-west","waves":"Up to 1.2 m, 7 seconds apart offshore","water_temperature":"16°C","moon":"🌗 First quarter","tide_range":"Neap tides"},"updated_at":1792364460,"deleted":false},
+{"id":"b2","caught_at":1792368000,"species":"Kahawai","kept":false,"count":1,"place":"","notes":"","conditions":{},"updated_at":1792368000,"deleted":true},
+{"id":"","caught_at":1792368000,"species":"No id"},
+{"id":"b3","caught_at":1792371600,"species":"Gurnard","length_cm":999,"latitude":123,"count":500}
+]}

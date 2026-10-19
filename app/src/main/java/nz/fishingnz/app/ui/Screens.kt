@@ -627,6 +627,7 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).background(Seafoam, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, null, tint = Navy) }; Spacer(Modifier.width(12.dp)); Column { Text("What fish is this?", style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold); Text("AI ID + local rules check", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) } }
         s.fishPhoto?.let { uri -> val bitmap = remember(uri) { try { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } } catch (_: Exception) { null } }; bitmap?.let { Image(it.asImageBitmap(), "Selected fish photo", Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Crop) } }
         s.fishCheck?.let { FishResultCard(it, s, vm::retryFishRules) }
+        if (s.fishCheck?.isFish == true) Button(onClick = vm::logIdentifiedCatch, modifier = Modifier.fillMaxWidth()) { Text("Log this catch") }
         if (s.fishCheck != null && s.account != null) TextButton(onClick = { showAiReport = true }) { Text("Report this AI result") }
         if (s.fishChecking) Text("Checking the photo…", color = Orange, fontWeight = FontWeight.SemiBold)
         s.fishError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -1306,6 +1307,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                         if (!openTripInCalendar(context, trip))
                             android.widget.Toast.makeText(context, "No calendar app is available on this device.", android.widget.Toast.LENGTH_LONG).show()
                     }, modifier = Modifier.fillMaxWidth()) { Text("Add to calendar") }
+                    OutlinedButton(onClick = vm::logCatchOnTrip, modifier = Modifier.fillMaxWidth()) { Text("Log a catch") }
                     OutlinedButton(onClick = vm::endTrip) { Text("End trip") }
                 }
             }
