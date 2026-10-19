@@ -33,6 +33,7 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showChangePassword by remember { mutableStateOf(false) }
     var showSignOutEverywhere by remember { mutableStateOf(false) }
+    var showSyncOff by remember { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -154,6 +155,25 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 Button(enabled = !s.accountBusy && countryCode.matches(Regex("[A-Z]{2}")), onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text(if (s.accountBusy) "Please wait…" else "Save changes") }
             }
             AccountPanel {
+                AccountSectionHeading("Sync trips and catch log", "Use them on your other signed-in devices", Icons.Default.Sync)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sync on this device", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Navy)
+                    Switch(checked = s.syncEnabled, onCheckedChange = { if (it) vm.setSyncEnabled(true) else showSyncOff = true })
+                }
+                Text("Saved spots, the active trip and your catch log, including each catch's position and notes, are kept with your account. Photos stay on this phone.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (s.syncEnabled) {
+                    val status = when {
+                        s.syncing -> "Syncing…"
+                        s.syncError != null -> s.syncError
+                        s.lastSyncedAt != null -> "Last synced ${nz.fishingnz.app.data.OfflineCache.savedLabel(s.lastSyncedAt)}"
+                        else -> "Not synced yet"
+                    }
+                    Text(status, style = MaterialTheme.typography.bodySmall, color = if (s.syncError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(enabled = !s.syncing, onClick = vm::syncNow, contentPadding = PaddingValues(0.dp)) { Text("Sync now") }
+                }
+            }
+            AccountPanel {
                 AccountSectionHeading("Sign-in options", "Google or Apple", Icons.Default.Lock)
                 socialButtons()
             }
@@ -209,6 +229,11 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
             confirmButton = { TextButton(enabled = valid && !s.accountBusy, onClick = { showChangePassword = false; vm.changePassword(current, next) }) { Text("Change password") } },
             dismissButton = { TextButton(onClick = { showChangePassword = false }) { Text("Cancel") } })
     }
+    if (showSyncOff) AlertDialog(onDismissRequest = { showSyncOff = false },
+        title = { Text("Turn off sync?") },
+        text = { Text("This phone keeps its trips and catch log. You can also delete the copy kept with your account; your other devices keep theirs.") },
+        confirmButton = { TextButton(onClick = { showSyncOff = false; vm.setSyncEnabled(false, deleteSyncedCopy = true) }) { Text("Turn off and delete copy", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { showSyncOff = false; vm.setSyncEnabled(false) }) { Text("Turn off, keep copy") } })
     if (showSignOutEverywhere) AlertDialog(onDismissRequest = { showSignOutEverywhere = false },
         title = { Text("Sign out of all devices?") },
         text = { Text("This ends every session for your account, including this phone. You will need to sign in again everywhere.") },
@@ -216,7 +241,7 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
         dismissButton = { TextButton(onClick = { showSignOutEverywhere = false }) { Text("Cancel") } })
     if (showDeleteConfirmation) AlertDialog(onDismissRequest = { showDeleteConfirmation = false },
         title = { Text("Permanently delete your account?") },
-        text = { Text("This removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. It also clears this device’s selected fish photo and trip shortlist and resets optional analytics. It cannot be undone. Recovery copies can remain for up to 30 days. Your Google or Apple account and gallery photos remain available.") },
+        text = { Text("This removes your profile, sign-in connections, sessions, feedback, synced trips and catch log, and account-linked usage records from our live database. It also clears this device’s selected fish photo and trip shortlist and resets optional analytics. It cannot be undone. Recovery copies can remain for up to 30 days. Your Google or Apple account and gallery photos remain available.") },
         confirmButton = { TextButton(enabled = !s.accountBusy, onClick = { showDeleteConfirmation = false; vm.deleteAccount() }) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") } })
 }

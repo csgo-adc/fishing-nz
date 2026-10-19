@@ -17,6 +17,8 @@ import nz.fishingnz.app.data.CatchConditionsLookup
 import nz.fishingnz.app.data.CatchLogStore
 import nz.fishingnz.app.data.PlaceConditionsRepository
 import nz.fishingnz.app.data.RulesRepository
+import nz.fishingnz.app.data.AccountSync
+import nz.fishingnz.app.data.SyncStore
 import nz.fishingnz.app.data.TripReminders
 import nz.fishingnz.app.data.TripStore
 import nz.fishingnz.app.data.Analytics
@@ -93,7 +95,9 @@ data class FishingUiState(
     /** When the active trip's forecast is checked again (see TripCheck), or null when no check fits. */
     val tripCheckAt: Instant? = null,
     /** The back-by time in the trip plan shared with someone, if one was shared. */
-    val tripBackBy: Instant? = null
+    val tripBackBy: Instant? = null,
+    /** Account sync for trips and the catch log: on for this device, and how the last sync went. */
+    val syncEnabled: Boolean = false, val syncing: Boolean = false, val syncError: String? = null, val lastSyncedAt: Instant? = null
 )
 
 /** The fixed hours a search keeps to; null for Daytime (sunrise to sunset) and Any time. */
@@ -162,7 +166,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         _state.value = _state.value.copy(catches = CatchLogStore.load(), savedRecommendations = saved,
             savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active,
             tripCheckAt = active?.let { TripCheck.checkTime(Instant.ofEpochSecond(it.startsAtEpochSeconds), Instant.now()) },
-            tripBackBy = TripStore.backBy().takeIf { active != null })
+            tripBackBy = TripStore.backBy().takeIf { active != null },
+            syncEnabled = SyncStore.enabled(), lastSyncedAt = SyncStore.lastSyncedAt())
         refreshStationTide()
         prefetchForOffline(listOfNotNull(active) + saved)
         if (_state.value.originName != null) refreshConditions()
@@ -438,12 +443,79 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     fun tripPlanShared(backBy: Instant) {
         _state.value = _state.value.copy(tripBackBy = backBy)
         TripStore.saveBackBy(backBy)
+        SyncStore.setTripsUpdatedAt(Instant.now().epochSecond)
+        requestSync()
         TripReminders.scheduleCheckIn(backBy)
         Analytics.track("trip_plan_shared")
     }
     /** A link to the trip's window for the plan: short when the service answers, otherwise the long link. */
     suspend fun tripLink(trip: Recommendation): String? = ShareService.live.linkFor(trip)
-    private fun saveTrips() { _state.value.let { TripStore.save(it.savedRecommendations, it.activeTrip) } }
+    private fun saveTrips() {
+        _state.value.let { TripStore.save(it.savedRecommendations, it.activeTrip) }
+        SyncStore.setTripsUpdatedAt(Instant.now().epochSecond)
+        requestSync()
+    }
+
+    private var syncJob: Job? = null
+    /** Syncs a few seconds after the last change, so a burst of edits makes one request. */
+    private fun requestSync(delayMillis: Long = 3_000) {
+        if (!SyncStore.enabled() || _state.value.account == null) return
+        syncJob?.cancel()
+        syncJob = viewModelScope.launch { kotlinx.coroutines.delay(delayMillis); syncNow() }
+    }
+    /** Sends this device's trips and catches and applies whatever is newer on the account. */
+    fun syncNow() {
+        if (!SyncStore.enabled() || _state.value.account == null || _state.value.syncing) return
+        val start = _state.value
+        val sentTrips = SyncStore.tripsUpdatedAt()
+        _state.value = start.copy(syncing = true, syncError = null)
+        viewModelScope.launch {
+            try {
+                val trips = AccountSync.Trips(start.savedRecommendations, start.activeTrip, start.tripBackBy)
+                val response = repository.sync(AccountSync.items(trips, sentTrips, start.catches))
+                val current = _state.value
+                // Changes made while the request was out stay: they are sent with the next sync.
+                if (current.catches != start.catches || SyncStore.tripsUpdatedAt() != sentTrips) {
+                    _state.value = current.copy(syncing = false); requestSync(); return@launch
+                }
+                val merged = AccountSync.merge(response, sentTrips, current.catches)
+                var next = current.copy(catches = merged.catches, syncing = false, lastSyncedAt = Instant.now())
+                merged.trips?.let { remote ->
+                    next = next.copy(savedRecommendations = remote.saved, savedSpots = remote.saved.map(::recommendationKey).toSet(),
+                        activeTrip = remote.active, tripBackBy = remote.backBy)
+                    TripStore.save(remote.saved, remote.active)
+                    TripStore.saveBackBy(remote.backBy)
+                    SyncStore.setTripsUpdatedAt(merged.tripsUpdatedAt)
+                    if (remote.active?.startsAtEpochSeconds != current.activeTrip?.startsAtEpochSeconds || remote.active?.name != current.activeTrip?.name) {
+                        next = next.copy(tripCheckAt = remote.active?.let(TripReminders::schedule))
+                        if (remote.active == null) TripReminders.cancel() else prefetchForOffline(listOf(remote.active))
+                    }
+                }
+                _state.value = next
+                SyncStore.setLastSyncedAt(next.lastSyncedAt)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { CatchLogStore.save(merged.catches) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                _state.value = _state.value.copy(syncing = false, syncError = if ((error as? AccountRequestException)?.statusCode == 404)
+                    "Sync isn't available on the service yet. Your trips and catch log are safe on this phone." else error.message ?: "Couldn't sync. It will try again later.")
+            }
+        }
+    }
+    /** Turns account sync on or off for this device; turning it off can also delete the account's synced copy. */
+    fun setSyncEnabled(enabled: Boolean, deleteSyncedCopy: Boolean = false) {
+        SyncStore.setEnabled(enabled)
+        _state.value = _state.value.copy(syncEnabled = enabled, syncError = null)
+        Analytics.track(if (enabled) "sync_enabled" else "sync_disabled")
+        if (enabled) {
+            // A first sync sends everything on this phone.
+            if (SyncStore.tripsUpdatedAt() == 0L) SyncStore.setTripsUpdatedAt(Instant.now().epochSecond)
+            syncNow()
+        } else if (deleteSyncedCopy) viewModelScope.launch {
+            runCatching { repository.deleteSynced() }
+                .onSuccess { SyncStore.setLastSyncedAt(null); _state.value = _state.value.copy(lastSyncedAt = null, accountNotice = "The synced copy was deleted from your account.") }
+                .onFailure { _state.value = _state.value.copy(syncError = "Couldn't delete the synced copy. Check your connection and try again.") }
+        }
+    }
     /**
      * Fetches the forecast, a year of LINZ tides and the MPI rules for each window's place while there is a signal,
      * so the active trip and saved spots still show conditions at the water. Failures are ignored.
@@ -517,6 +589,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val updated = change(_state.value.catches)
         _state.value = _state.value.copy(catches = updated)
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { CatchLogStore.save(updated) }
+        requestSync()
     }
     /** MPI rows for [species] in an area, for the catch log's size check. Remembered for this session. */
     suspend fun rulesFor(species: String, areaId: String): FishRulesResult {
@@ -655,6 +728,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                 _state.value = _state.value.copy(account = account, accountLoading = false,
                     hasStoredSession = AccountSessionStore.token() != null)
                 if (account != null) runCatching { repository.trackEvent("app_opened", null, "android") }
+                if (account != null) syncNow()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -681,6 +755,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                         hasStoredSession = true,
                         accountBusy = false, verificationPending = false, accountError = null, accountNotice = "You’re signed in.")
                     refreshSignInProviders()
+                    syncNow()
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -744,6 +819,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                 if (version == accountVersion) _state.value = _state.value.copy(account = account, hasStoredSession = true,
                     accountBusy = false, verificationPending = false, accountNotice = "You’re signed in.")
                 refreshSignInProviders()
+                syncNow()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,
@@ -761,6 +837,9 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         val version = ++accountVersion
         _state.value = _state.value.copy(accountBusy = true, accountLoading = false, accountError = null, accountNotice = null)
         PrivacyPreferences.setPhotoConsentRemembered(false)
+        // Sync belongs to the signed-in account: another account signing in on this phone must not receive this log.
+        SyncStore.setEnabled(false)
+        _state.value = _state.value.copy(syncEnabled = false)
         viewModelScope.launch {
             try {
                 Analytics.track("sign_out")
@@ -798,6 +877,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             try {
                 repository.signOutEverywhere()
                 Analytics.track("signed_out_everywhere")
+                SyncStore.setEnabled(false)
+                _state.value = _state.value.copy(syncEnabled = false)
                 PrivacyPreferences.setPhotoConsentRemembered(false)
                 if (version == accountVersion) _state.value = _state.value.copy(account = null, accountBusy = false,
                     hasStoredSession = false, verificationPending = false, accountNotice = "You’re signed out of every device.")
@@ -827,6 +908,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     accountNotice = "Your account and associated data have been deleted.")
                 saveTrips()
                 TripReminders.cancel()
+                SyncStore.setEnabled(false)
+                _state.value = _state.value.copy(syncEnabled = false, lastSyncedAt = null)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (version == accountVersion) _state.value = _state.value.copy(accountBusy = false,

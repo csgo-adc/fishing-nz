@@ -1,6 +1,7 @@
 import { handleSocialAuth, type SocialAuthEnv } from "./social-auth";
 import { handlePrivacyRoute, deleteAccountData, cleanupAccountData } from "./privacy";
 import { handleShareRoute } from "./share";
+import { handleSyncRoute } from "./sync";
 import { identificationDay, identificationQuota, reserveIdentification, releaseIdentification } from "./identification-quota";
 import { changePassword, handlePasswordRoute } from "./password-reset";
 import { HOUR, MINUTE, allowAttempt, clientAddress, isRateLimited, rateKey, recordAttempt, tooManyRequests } from "./rate-limit";
@@ -540,6 +541,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (shareResponse) return shareResponse;
     const passwordResponse = await handlePasswordRoute(request, env);
     if (passwordResponse) return passwordResponse;
+    const syncResponse = await handleSyncRoute(request, env, authenticate);
+    if (syncResponse) return syncResponse;
     if (pathname === "/v1/auth/providers" || pathname.startsWith("/v1/auth/oauth/") || pathname.startsWith("/v1/auth/apple/")) {
       return await handleSocialAuth(request, env, { authenticate, createSessionResponse });
     }

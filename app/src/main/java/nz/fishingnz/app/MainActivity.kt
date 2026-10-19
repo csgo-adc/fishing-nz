@@ -10,6 +10,7 @@ import nz.fishingnz.app.ui.CatchCheckApp
 import nz.fishingnz.app.data.AccountSessionStore
 import nz.fishingnz.app.data.CatchLogStore
 import nz.fishingnz.app.data.OfflineCache
+import nz.fishingnz.app.data.SyncStore
 import nz.fishingnz.app.data.TripReminders
 import nz.fishingnz.app.data.TripStore
 import nz.fishingnz.app.data.Analytics
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
         OfflineCache.initialize(applicationContext)
         TripStore.initialize(applicationContext)
         TripReminders.initialize(applicationContext)
+        SyncStore.initialize(applicationContext)
         PrivacyPreferences.initialize(applicationContext)
         if (PrivacyPreferences.firebaseEnabled()) FirebaseAnalytics.getInstance(this).logEvent("app_opened", Bundle().apply { putString("app_version", BuildConfig.VERSION_NAME) })
         Analytics.track("app_open")

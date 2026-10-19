@@ -324,6 +324,19 @@ class FishingRepository {
         accountRequest("/v1/share/$id", "GET", platform = "android")
     }
 
+    /** Merges this device's trips and catches into the account's synced copy and returns the merged set. */
+    suspend fun sync(items: org.json.JSONArray): JSONObject = withContext(Dispatchers.IO) {
+        val token = AccountSessionStore.token() ?: error("Sign in to sync.")
+        accountRequest("/v1/me/sync", "POST", JSONObject().put("items", items), token, "android")
+    }
+
+    /** Removes the account's synced trips and catch log; this device keeps its own copy. */
+    suspend fun deleteSynced() = withContext(Dispatchers.IO) {
+        val token = AccountSessionStore.token() ?: error("Sign in to delete the synced copy.")
+        accountRequest("/v1/me/sync", "DELETE", null, token, "android")
+        Unit
+    }
+
     suspend fun eraseAnalyticsDevice(deviceId: String): JSONObject = withContext(Dispatchers.IO) {
         accountRequest("/v1/analytics/device", "DELETE", deviceId = deviceId)
     }

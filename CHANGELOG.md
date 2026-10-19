@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.40 — 2026-10-20 (build code 41)
+
+- **Sync trips and catch log with your account (opt-in).** A new **Sync trips and catch log** switch on the Account
+  page keeps saved spots, the active trip (with its back-by time) and the catch log with the account, so they appear on
+  your other signed-in Android and iPhone devices. It is off until you turn it on. Catch photos never leave the phone.
+  The newest change wins for each catch and for the trips list; deleting a catch removes it everywhere. Syncing happens
+  when the app opens, after sign-in and a few seconds after a change; **Sync now** and the last sync time are on the
+  same card. Turning it off asks whether to keep or delete the copy kept with the account. Signing out turns sync off,
+  so another account on the same phone never receives your log. Deleting the account deletes the synced copy.
+- **API:** new `/v1/me/sync` (GET, POST to merge, DELETE) and migration `0013_user_sync.sql` (`user_sync_items`).
+  Merges run as one SQL statement, so a 600-catch log fits D1's per-request limits. Up to 2,000 catches; deleted
+  entries are kept 180 days for other devices, then removed by the daily cleanup.
+- **Privacy policy** (updated 20 October 2026) describes the trips and catch log data, sync, Tell someone and trip
+  reminders; account deletion text in both apps and on the web now lists synced data.
+- **Before release:** deploy the API (Actions → Deploy) to apply the migration; until then the apps say sync isn't
+  available yet. Review App Store App Privacy and Google Play Data safety: with sync on, the account stores precise
+  location (catch positions) and user content (catch log notes) linked to the user.
+
 ## 1.0.39 — 2026-10-20 (build code 40)
 
 - **Tell someone.** The active trip has a **Tell someone** button that sends your trip plan to a friend or family

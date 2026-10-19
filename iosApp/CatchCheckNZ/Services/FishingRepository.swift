@@ -218,6 +218,22 @@ struct FishingRepository {
     }
 
     private func accountRequest<T: Decodable>(_ path: String, method: String, body: Any? = nil, token: String? = nil, platform: String? = nil) async throws -> T {
+        try decoder.decode(T.self, from: try await accountData(path, method: method, body: body, token: token, platform: platform))
+    }
+
+    /// Merges this device's trips and catches into the account's synced copy; the reply is the merged set as JSON.
+    func sync(items: [[String: Any]]) async throws -> Data {
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to sync.", status: 401, code: nil) }
+        return try await accountData("/v1/me/sync", method: "POST", body: ["items": items], token: token, platform: "ios")
+    }
+
+    /// Removes the account's synced trips and catch log; this device keeps its own copy.
+    func deleteSynced() async throws {
+        guard let token = KeychainSession.load() else { throw AccountAPIError(message: "Sign in to delete the synced copy.", status: 401, code: nil) }
+        _ = try await accountData("/v1/me/sync", method: "DELETE", token: token, platform: "ios")
+    }
+
+    private func accountData(_ path: String, method: String, body: Any? = nil, token: String? = nil, platform: String? = nil) async throws -> Data {
         var request = URLRequest(url: URL(string: accountBaseURL + path)!)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -233,7 +249,7 @@ struct FishingRepository {
             let payload = (try? JSONDecoder().decode(AccountErrorResponse.self, from: data))
             throw AccountAPIError(message: payload?.error ?? "Account request failed.", status: status, code: payload?.code)
         }
-        return try decoder.decode(T.self, from: data)
+        return data
     }
 
     func conditions(at point: GeoPoint) async throws -> (WeatherState, TideState?) {

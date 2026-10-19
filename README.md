@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.39 (build code 40)**. The original code is preserved
+Current project version: **1.0.40 (build code 41)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -30,7 +30,7 @@ The Tide page selects the nearest supported tide station from your location. You
 - **Catch log:** Log each catch with its length, a photo and notes. The app checks the length against the MPI summary for the area, records the tide, wind, waves and moon at the time, and shows patterns once you have a few catches. Export it as CSV.
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location for a short rule summary, then open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
 - **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and up to 16 forecast days with familiar weather icons and plain labels. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
-- **Account:** Create an account in the mobile app with an 8-character minimum password entered twice, or use Google or Apple once sign-in is configured. Manage your profile, connect sign-in options, and send feedback. The website is for administrators. [Sign-in setup](docs/account-sign-in.md).
+- **Account:** Create an account in the mobile app with an 8-character minimum password entered twice, or use Google or Apple once sign-in is configured. Manage your profile, connect sign-in options, turn on **Sync trips and catch log** to use them on your other devices (photos stay on the phone), and send feedback. The website is for administrators. [Sign-in setup](docs/account-sign-in.md).
 - **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information. Each account has five identifications per day, shared across devices and reset at midnight New Zealand time. Failed requests do not use the allowance. The app asks before each upload unless you tick “Don’t ask me again” (undo it in Settings → Terms & privacy), and **Report this AI result** flags a wrong or offensive suggestion.
 
 ## Good to know

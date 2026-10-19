@@ -223,6 +223,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     func tripPlanShared(backBy: Date) {
         guard let trip = activeTrip else { return }
         tripBackBy = backBy
+        SyncStore.tripsUpdatedAt = Int(Date.now.timeIntervalSince1970)
+        requestSync()
         Task { await TripReminders.scheduleCheckIn(trip, at: backBy) }
         Analytics.track("trip_plan_shared")
     }
@@ -978,6 +980,89 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     private func saveTrips() {
         guard !restoringTrips else { return }
         TripStore.save(saved: savedRecommendations.values.sorted { ($0.startsAt ?? .distantPast) < ($1.startsAt ?? .distantPast) }, active: activeTrip)
+        guard !applyingRemoteTrips else { return }
+        SyncStore.tripsUpdatedAt = Int(Date.now.timeIntervalSince1970)
+        requestSync()
+    }
+
+    // MARK: Account sync (Android has the same in FishingViewModel.kt)
+    @Published private(set) var syncEnabled = SyncStore.enabled
+    @Published private(set) var syncing = false
+    @Published private(set) var syncError: String?
+    @Published private(set) var lastSyncedAt = SyncStore.lastSyncedAt
+    private var applyingRemoteTrips = false
+    private var syncTask: Task<Void, Never>?
+
+    /// Syncs a few seconds after the last change, so a burst of edits makes one request.
+    private func requestSync(after seconds: Double = 3) {
+        guard SyncStore.enabled, account != nil else { return }
+        syncTask?.cancel()
+        syncTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            await self?.syncNow()
+        }
+    }
+
+    /// Sends this device's trips and catches and applies whatever is newer on the account.
+    func syncNow() async {
+        guard SyncStore.enabled, account != nil, !syncing else { return }
+        let sentTrips = SyncStore.tripsUpdatedAt
+        let sentCatches = catches
+        let trips = AccountSync.Trips(saved: Array(savedRecommendations.values), active: activeTrip, backBy: tripBackBy)
+        syncing = true; syncError = nil
+        defer { syncing = false }
+        do {
+            let response = try await repository.sync(items: AccountSync.items(trips: trips, tripsUpdatedAt: sentTrips, catches: sentCatches))
+            // Changes made while the request was out stay: they are sent with the next sync.
+            guard catches == sentCatches, SyncStore.tripsUpdatedAt == sentTrips else { requestSync(); return }
+            let merged = AccountSync.merge(response, tripsUpdatedAt: sentTrips, catches: sentCatches)
+            if let remote = merged.trips {
+                applyingRemoteTrips = true
+                savedRecommendations = Dictionary(remote.saved.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+                savedSpotNames = Set(savedRecommendations.keys)
+                activeTrip = remote.active
+                tripBackBy = remote.backBy
+                applyingRemoteTrips = false
+                SyncStore.tripsUpdatedAt = merged.tripsUpdatedAt
+            }
+            catches = merged.catches
+            let snapshot = merged.catches
+            Task.detached(priority: .utility) { CatchLogStore.save(snapshot) }
+            lastSyncedAt = .now
+            SyncStore.lastSyncedAt = lastSyncedAt
+        } catch {
+            syncError = (error as? AccountAPIError)?.status == 404 ? "Sync isn't available on the service yet. Your trips and catch log are safe on this phone."
+                : (error as? AccountAPIError)?.message ?? "Couldn't sync. It will try again later."
+        }
+    }
+
+    /// Turns account sync on or off for this device; turning it off can also delete the account's synced copy.
+    func setSyncEnabled(_ enabled: Bool, deleteSyncedCopy: Bool = false) {
+        SyncStore.enabled = enabled
+        syncEnabled = enabled
+        syncError = nil
+        Analytics.track(enabled ? "sync_enabled" : "sync_disabled")
+        if enabled {
+            // A first sync sends everything on this phone.
+            if SyncStore.tripsUpdatedAt == 0 { SyncStore.tripsUpdatedAt = Int(Date.now.timeIntervalSince1970) }
+            Task { await syncNow() }
+        } else if deleteSyncedCopy {
+            Task {
+                do {
+                    try await repository.deleteSynced()
+                    SyncStore.lastSyncedAt = nil; lastSyncedAt = nil
+                    accountNotice = "The synced copy was deleted from your account."
+                } catch { syncError = "Couldn't delete the synced copy. Check your connection and try again." }
+            }
+        }
+    }
+
+    /// Sync belongs to the signed-in account: another account signing in on this phone must not receive this log.
+    private func stopSyncForSignOut() {
+        SyncStore.enabled = false
+        syncEnabled = false
+        syncTask?.cancel()
     }
     /// Fetches the forecast, a year of LINZ tides and the MPI rules for each window's place while there is a signal,
     /// so the active trip and saved spots still show conditions at the water. Failures are ignored.
@@ -1077,6 +1162,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         catches = change(catches)
         let snapshot = catches
         Task.detached(priority: .utility) { CatchLogStore.save(snapshot) }
+        requestSync()
     }
     /// MPI rows for `species` in an area, for the catch log's size check. Remembered for this session.
     func rulesFor(species: String, areaID: String) async throws -> FishRulesResult {
@@ -1099,7 +1185,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 fishIdentityQuota = snapshot?.permissions?.fishIdentityQuota
                 hasStoredSession = repository.hasStoredSession()
                 accountLoading = false
-                if snapshot != nil { await repository.trackEvent("app_opened", feature: nil, platform: "ios") }
+                if snapshot != nil { await repository.trackEvent("app_opened", feature: nil, platform: "ios"); await syncNow() }
             } catch {
                 guard version == accountRequestVersion else { return }
                 accountLoading = false
@@ -1123,6 +1209,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 let snapshot = try await repository.registerOrLogin(email: email, password: password)
                 Analytics.track("sign_in_succeeded", ["method": .text("password")])
                 account = snapshot.user; fishIdentityQuota = snapshot.permissions?.fishIdentityQuota; hasStoredSession = true; accountNotice = "You’re signed in."; verificationPending = false
+                Task { await syncNow() }
                 await refreshSignInProviders()
             }
             accountBusy = false
@@ -1174,6 +1261,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             account = snapshot.user; fishIdentityQuota = snapshot.permissions?.fishIdentityQuota; hasStoredSession = true; verificationPending = false
             accountNotice = linking ? "Account connected. You can use it to sign in next time." : "You’re signed in."
             await refreshSignInProviders()
+            await syncNow()
         } catch {
             guard version == accountRequestVersion else { return }
             if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin || (error as? ASAuthorizationError)?.code == .canceled {
@@ -1246,6 +1334,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             do {
                 try await repository.logoutEverywhere()
                 Analytics.track("signed_out_everywhere")
+                stopSyncForSignOut()
                 PhotoUploadConsent.isRemembered = false
                 account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false
                 accountNotice = "You’re signed out of every device."
@@ -1275,6 +1364,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
                 AnalyticsPreferences.setEnabled(false)
                 PhotoUploadConsent.isRemembered = false
                 accountNotice = "Your account and associated data have been deleted."
+                stopSyncForSignOut()
+                SyncStore.lastSyncedAt = nil; lastSyncedAt = nil
             } catch { accountError = error.localizedDescription }
             accountBusy = false
         }
@@ -1286,6 +1377,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         accountLoading = false
         accountBusy = true; accountError = nil; accountNotice = nil
         PhotoUploadConsent.isRemembered = false
+        stopSyncForSignOut()
         Task { await repository.signOut(); account = nil; fishIdentityQuota = nil; hasStoredSession = false; verificationPending = false; accountBusy = false; accountNotice = "You’re signed out." }
     }
     func identifyFish() {

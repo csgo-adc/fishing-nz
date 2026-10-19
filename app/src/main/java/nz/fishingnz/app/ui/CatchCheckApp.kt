@@ -271,7 +271,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
                 Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
                 Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
-                Text("Your catch log, with its photos and positions, stays on this phone. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
+                Text("Your catch log, with its photos and positions, stays on this phone unless you turn on sync on the Account page; photos never sync. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
                 Text("Publisher: Tristan · tc199558@gmail.com")
                 TextButton(onClick = { uriHandler.openUri(PrivacyLinks.policy) }) { Text("Read full privacy policy") }
                 Row(verticalAlignment = Alignment.CenterVertically) {

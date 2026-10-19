@@ -263,7 +263,7 @@ private struct TermsPrivacyView: View {
                     Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
                     Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device. You can delete your account from the Account page.")
                     Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
-                    Text("Your catch log, with its photos and positions, stays on this phone. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
+                    Text("Your catch log, with its photos and positions, stays on this phone unless you turn on sync on the Account page; photos never sync. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
                     Text("Publisher: Tristan · tc199558@gmail.com")
                     if let privacyPolicyURL { Link("Read the full privacy policy", destination: privacyPolicyURL).font(.subheadline.weight(.semibold)) }
                     Toggle(isOn: $analyticsOn) {
@@ -1012,6 +1012,7 @@ struct AccountView: View {
     @State private var showChangePassword = false
     @State private var showSignOutEverywhere = false
     @State private var showDeleteConfirmation = false
+    @State private var showSyncOff = false
     @State private var createAccount = false
     @State private var email = ""
     @State private var password = ""
@@ -1094,6 +1095,23 @@ struct AccountView: View {
                                     .frame(maxWidth: .infinity)
                             }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
                         }
+                        accountSection("Sync trips and catch log", subtitle: "Use them on your other signed-in devices", icon: "arrow.triangle.2.circlepath") {
+                            Toggle("Sync on this device", isOn: Binding(get: { vm.syncEnabled }, set: { if $0 { vm.setSyncEnabled(true) } else { showSyncOff = true } }))
+                                .font(.subheadline.weight(.semibold))
+                            Text("Saved spots, the active trip and your catch log, including each catch's position and notes, are kept with your account. Photos stay on this phone.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            if vm.syncEnabled {
+                                Text(vm.syncing ? "Syncing…" : vm.syncError ?? vm.lastSyncedAt.map { "Last synced \(OfflineCache.savedLabel($0))" } ?? "Not synced yet")
+                                    .font(.caption).foregroundStyle(vm.syncError == nil ? Color.secondary : CatchCheckColor.warning)
+                                Button("Sync now") { Task { await vm.syncNow() } }.font(.subheadline.weight(.semibold)).disabled(vm.syncing)
+                            }
+                        }
+                        .confirmationDialog("Turn off sync?", isPresented: $showSyncOff, titleVisibility: .visible) {
+                            Button("Turn off and delete copy", role: .destructive) { vm.setSyncEnabled(false, deleteSyncedCopy: true) }
+                            Button("Turn off, keep copy") { vm.setSyncEnabled(false) }
+                        } message: {
+                            Text("This phone keeps its trips and catch log. You can also delete the copy kept with your account; your other devices keep theirs.")
+                        }
                         if !offeredSignInProviders.isEmpty {
                             accountSection("Sign-in options", subtitle: "Google or Apple", icon: "lock.shield") {
                                 socialSignInButtons
@@ -1126,7 +1144,7 @@ struct AccountView: View {
                                 Button("Delete permanently", role: .destructive) { vm.deleteAccount() }
                                 Button("Cancel", role: .cancel) {}
                             } message: {
-                                Text("This removes your profile, sign-in connections, sessions, feedback and account-linked usage records from our live database. It also clears this phone’s selected fish photo and trip shortlist and turns off usage statistics. It does not delete your Google or Apple account or photos saved on your phone. It cannot be undone.")
+                                Text("This removes your profile, sign-in connections, sessions, feedback, synced trips and catch log, and account-linked usage records from our live database. It also clears this phone’s selected fish photo and trip shortlist and turns off usage statistics. It does not delete your Google or Apple account or photos saved on your phone. It cannot be undone.")
                             }
                     } else if vm.hasStoredSession {
                         Card {
