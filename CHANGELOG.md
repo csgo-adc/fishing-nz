@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.44 — 2026-10-22 (build code 45)
+
+- **Google Play production access applied for.** `docs/google-play-release.md` records the closed test result (testers
+  from friends, fishing clubs and a paid testing service; around 15 using the app almost daily; mostly positive
+  feedback), the answers given in the 22 October production access application and what is left after approval: a
+  signed bundle with a new version code, updated Data safety answers and a production release. Documentation only.
+
 ## 1.0.43 — 2026-10-20 (build code 44)
 
 - **Boat ramps in boat mode.** With **Boat fishing** chosen, the map shows public boat ramps as teal pins (on Android
