@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.45 — 2026-10-24 (build code 46)
+
+- **First Google Play production release sent for review.** Google granted production access; the production release
+  is bundle 45 (1.0.44) for all countries and regions, full rollout, publishing as soon as Google approves it.
+  `docs/google-play-release.md` records the bundle checks, release notes, why the Data safety answers already cover
+  account sync, and what to do once the app is live. Documentation only.
+
 ## 1.0.44 — 2026-10-22 (build code 45)
 
 - **Google Play production access applied for.** `docs/google-play-release.md` records the closed test result (testers
