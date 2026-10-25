@@ -141,8 +141,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var showConditions by remember { mutableStateOf(false) }
     var navigationError by remember { mutableStateOf(false) }
     var selectedCardHeightPx by remember { mutableIntStateOf(0) }
-    // The Spots tab opens on the list, nearest first; the map is one tap away.
-    var showMap by rememberSaveable { mutableStateOf(false) }
+    // The Spots tab opens on the map; the list, nearest first, is one tap away.
+    var showMap by rememberSaveable { mutableStateOf(true) }
     var spotQuery by rememberSaveable { mutableStateOf("") }
     var showMapStyles by remember { mutableStateOf(false) }
     var baseMap by remember { mutableStateOf(BaseMap.STANDARD) }

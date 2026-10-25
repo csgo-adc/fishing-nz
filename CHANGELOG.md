@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.54 — 2026-10-26 (build code 55)
+
+- **Spots opens on the map.** The Spots tab now starts on **Map** instead of **List**; the nearest-first list is one tap
+  away and still opens a spot on the map. Android and iPhone.
+
 ## 1.0.53 — 2026-10-26 (build code 54)
 
 - **Pāua picture on South-East's place-named pāua rows.** MPI's South-East table lists two pāua rules by place only,

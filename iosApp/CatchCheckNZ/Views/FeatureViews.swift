@@ -54,8 +54,8 @@ struct FishingMapView: View {
     @State private var selectedPlace: ConditionPlace?
     @State private var conditionsPlace: ConditionPlace?
     @State private var showPlaceSearch = false
-    /// The Spots tab opens on the list, nearest first; the map is one tap away.
-    @State private var showMap = false
+    /// The Spots tab opens on the map; the list, nearest first, is one tap away.
+    @State private var showMap = true
     @State private var spotQuery = ""
     /// Set after "Show on map" moves the camera, so returning to the tab does not jump back to the current location.
     @State private var keepCameraOnAppear = false
