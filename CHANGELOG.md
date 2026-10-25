@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.49 — 2026-10-25 (build code 50)
+
+- **Tides widgets with figures.** The widget now draws the tide from 8 hours ago to 16 hours ahead, eased between the
+  LINZ highs and lows like the app's curve, with each high and low labelled ("H 9:40 PM") and a dot at now, plus
+  "Coming in ↑ · 1.9 m" or "Going out ↓". Android's widget draws the curve for each widget's own size and redraws
+  when resized; the next tide, moon and wind stay below it. On iPhone the medium widget shows the curve with the next
+  tide, moon and wind (the wind now loads on iPhone too), the small widget has a bar showing how far the tide is
+  between low and high, and a new round lock-screen widget shows the same as a gauge with the next tide time. The
+  iPhone timeline has an entry every half hour so the dot moves along the curve.
+
 ## 1.0.48 — 2026-10-25 (build code 49)
 
 - **First-launch setup.** A new install asks two questions before Home: fishing from land or a boat, and the phone's

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget's tide curve before the first real one is drawn, and in the widget picker's preview. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="300dp" android:height="80dp" android:viewportWidth="300" android:viewportHeight="80">
+    <path android:fillColor="#4085B7EB"
+        android:pathData="M0,60 C30,60 45,15 80,15 S130,68 160,68 S220,10 255,10 S290,45 300,52 L300,80 L0,80 Z" />
+    <path android:strokeColor="#FF85B7EB" android:strokeWidth="2.5" android:strokeLineCap="round"
+        android:pathData="M0,60 C30,60 45,15 80,15 S130,68 160,68 S220,10 255,10 S290,45 300,52" />
+    <path android:fillColor="#FFFAC775" android:pathData="M110,40 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>

@@ -30,4 +30,18 @@ class TideWidgetTextTest {
             TideWidgetText.extra(LocalDate.of(2026, 3, 4), WeatherState("14°C", "12 km/h", "0.0 mm")))
         assertEquals("🌕 Full moon · Spring tides", TideWidgetText.extra(LocalDate.of(2026, 3, 4), null))
     }
+
+    @Test fun readsTheCurveBetweenHighsAndLows() {
+        assertEquals(0.5, TideWidgetCurve.level(tides, Instant.parse("2026-10-17T19:00:00Z"))!!, 1e-9)
+        // Halfway from the 8:00 AM low to the 2:10 PM high is halfway up.
+        assertEquals((0.5 + 2.43) / 2, TideWidgetCurve.level(tides, Instant.parse("2026-10-17T22:05:00Z"))!!, 1e-9)
+        assertNull(TideWidgetCurve.level(tides, Instant.parse("2026-10-17T18:00:00Z")))
+        assertNull(TideWidgetCurve.level(tides, Instant.parse("2026-10-18T14:00:00Z")))
+    }
+
+    @Test fun saysWhetherTheTideIsComingIn() {
+        assertEquals("Coming in ↑ · 1.5 m", TideWidgetCurve.trend(tides, Instant.parse("2026-10-17T22:05:00Z")))
+        assertEquals("Going out ↓ · 2.4 m", TideWidgetCurve.trend(tides, Instant.parse("2026-10-18T01:20:00Z")))
+        assertNull(TideWidgetCurve.trend(tides, Instant.parse("2026-10-18T14:00:00Z")))
+    }
 }
