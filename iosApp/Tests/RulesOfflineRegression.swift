@@ -22,7 +22,12 @@ enum AnalyticsPreferences { static func deviceID() -> String? { nil } }
         try expect(catalog.forRule("Blue cod –Te Whaka ā Te Wera/Paterson Inlet Mātaitai")?.id == "blue-cod", "Blue cod with a mātaitai")
         try expect(catalog.forRule("All other finfish") == nil, "No picture for a catch-all row")
         try expect(catalog.forRule("Ringed something") == nil, "Whole words only")
-        try expect(catalog.pictures.count == 77, "Each picture once")
+        try expect(catalog.pictures.count == 94, "Each picture once")
+        let common = catalog.commonCatches(["Snapper", "Kahawai"])
+        try expect(common.map(\.id) == ["john-dory", "leatherjacket", "porae", "sweep", "blue-maomao", "red-snapper", "blue-mackerel"], "Common catches in order")
+        try expect(catalog.commonCatches(["John dory"]).count == 6, "A common catch with its own rule shows with that rule")
+        try expect(catalog.forRule("Groper (Hapuku) / Bass")?.pictures.map(\.caption) == ["Hāpuku", "Bass"], "Hāpuku and bass")
+        try expect(catalog.forRule("Flatfish (except Sand flounder)")?.pictures.count == 7, "Seven flatfish")
         try expect(RulesSync.sha256(Data("abc".utf8)) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "SHA-256")
         print("Rules offline regression passed (\(checks) checks)")
     }

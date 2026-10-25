@@ -236,7 +236,11 @@
    "pictures": [
     {
      "id": "hapuku",
-     "caption": "Adult"
+     "caption": "Hāpuku"
+    },
+    {
+     "id": "bass",
+     "caption": "Bass"
     }
    ]
   },
@@ -433,6 +437,22 @@
     {
      "id": "sole",
      "caption": "New Zealand sole"
+    },
+    {
+     "id": "black-flounder",
+     "caption": "Black flounder"
+    },
+    {
+     "id": "greenback-flounder",
+     "caption": "Greenback flounder"
+    },
+    {
+     "id": "brill",
+     "caption": "Brill"
+    },
+    {
+     "id": "turbot",
+     "caption": "Turbot"
     }
    ]
   },
@@ -467,6 +487,14 @@
     {
      "id": "spotty",
      "caption": "Spotty"
+    },
+    {
+     "id": "orange-wrasse",
+     "caption": "Orange wrasse"
+    },
+    {
+     "id": "girdled-wrasse",
+     "caption": "Girdled wrasse"
     }
    ]
   },
@@ -837,7 +865,7 @@
   },
   {
    "id": "skate",
-   "name": "Skate",
+   "name": "Skates and rays",
    "scientific": "Zearaja nasuta",
    "group": "shark",
    "match": [
@@ -848,6 +876,18 @@
     {
      "id": "rough-skate",
      "caption": "Rough skate, seen from above"
+    },
+    {
+     "id": "smooth-skate",
+     "caption": "Smooth skate, seen from above"
+    },
+    {
+     "id": "stingray",
+     "caption": "Short-tailed stingray"
+    },
+    {
+     "id": "eagle-ray",
+     "caption": "Eagle ray"
     }
    ]
   },
@@ -1071,6 +1111,123 @@
    "pictures": [
     {
      "id": "pupu",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "john-dory",
+   "name": "John dory",
+   "maori": "Kuparu",
+   "scientific": "Zeus faber",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "john dory"
+   ],
+   "pictures": [
+    {
+     "id": "john-dory",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "leatherjacket",
+   "name": "Leatherjacket",
+   "maori": "Kōkiri",
+   "scientific": "Meuschenia scaber",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "leatherjacket"
+   ],
+   "pictures": [
+    {
+     "id": "leatherjacket",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "porae",
+   "name": "Pōrae",
+   "scientific": "Nemadactylus douglasii",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "porae",
+    "pōrae"
+   ],
+   "pictures": [
+    {
+     "id": "porae",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "sweep",
+   "name": "Sweep",
+   "scientific": "Scorpis lineolata",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "sweep"
+   ],
+   "pictures": [
+    {
+     "id": "sweep",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "blue-maomao",
+   "name": "Blue maomao",
+   "scientific": "Scorpis violacea",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "blue maomao"
+   ],
+   "pictures": [
+    {
+     "id": "blue-maomao",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "red-snapper",
+   "name": "Red snapper",
+   "scientific": "Centroberyx affinis",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "red snapper",
+    "redfish"
+   ],
+   "pictures": [
+    {
+     "id": "red-snapper",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "blue-mackerel",
+   "name": "Blue mackerel",
+   "maori": "Tawatawa",
+   "scientific": "Scomber australasicus",
+   "group": "finfish",
+   "combined": true,
+   "match": [
+    "blue mackerel"
+   ],
+   "pictures": [
+    {
+     "id": "blue-mackerel",
      "caption": "Adult"
     }
    ]

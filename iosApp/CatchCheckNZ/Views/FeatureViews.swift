@@ -1256,6 +1256,7 @@ struct RulesView: View {
     @State private var checking = false
     @State private var reloadToken = 0
     @State private var detail: SavedRuleQuickRow?
+    @State private var commonDetail: SpeciesInfo?
     @State private var loadToken = UUID()
     private var catalog: SpeciesCatalog? { _ = sync.revision; return RulesSync.catalog() }
     private var nearRaglanWest: Bool {
@@ -1283,6 +1284,8 @@ struct RulesView: View {
         }
     }
     private var officialURL: URL { selectedArea?.officialURL ?? page?.sourceURL ?? URL(string: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules")! }
+    private var commonCatches: [SpeciesInfo] { catalog?.commonCatches(allRows.map(\.species)) ?? [] }
+    private var combinedLimit: Int? { page?.areaName.localizedCaseInsensitiveContains("Fiordland") == true ? nil : page?.combinedFinfishLimit }
 
     var body: some View {
         NavigationStack {
@@ -1323,7 +1326,7 @@ struct RulesView: View {
                                 Link("Open current MPI rules", destination: officialURL).buttonStyle(.borderedProminent)
                             }
                         } else {
-                            CombinedLimitCard(page: page)
+                            CombinedLimitCard(page: page, common: commonCatches) { commonDetail = $0 }
                             let popular = popularRuleRows(allRows).filter { $0.minimum != nil }
                             let checkable = popular + allRows.filter { row in row.minimum != nil && !popular.contains { $0.id == row.id } }
                             if !checkable.isEmpty { CheckMyCatchCard(rows: checkable, catalog: catalog) }
@@ -1347,11 +1350,23 @@ struct RulesView: View {
                                 }
                             }
                             let rows = shownRows
-                            if rows.isEmpty {
+                            let text = query.trimmingCharacters(in: .whitespaces)
+                            let commonMatches = text.isEmpty ? [] : commonCatches.filter { info in
+                                info.name.localizedStandardContains(text) || (info.maori?.localizedStandardContains(text) ?? false)
+                                    || info.match.contains { $0.localizedStandardContains(text) }
+                            }
+                            if rows.isEmpty && commonMatches.isEmpty {
                                 Card { Text(query.isEmpty ? "No species in this group have a simple limit for \(page.areaName). Try All or check MPI." : "No reliable simple limit can be shown for “\(query)”. Check MPI for this species and exact subarea.").foregroundStyle(.secondary) }
                             }
                             ForEach(rows) { row in
                                 Button { detail = row } label: { SpeciesRuleCard(row: row, info: catalog?.forRule(row.species)) }.buttonStyle(.plain)
+                            }
+                            ForEach(commonMatches) { info in
+                                Button { commonDetail = info } label: {
+                                    CommonCatchRow(info: info, limit: combinedLimit).padding(.vertical, 6)
+                                        .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+                                }
+                                .buttonStyle(.plain)
                             }
                             Text("Summary only. Closures, gear rules and subareas can change what applies: check MPI for your exact spot. \(catalog?.note ?? "")")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -1369,6 +1384,9 @@ struct RulesView: View {
             .sheet(item: $detail) { row in
                 SpeciesRuleDetail(row: row, info: catalog?.forRule(row.species), catalog: catalog, officialURL: officialURL)
                     .presentationDetents([.large])
+            }
+            .sheet(item: $commonDetail) { info in
+                CommonCatchDetail(info: info, limit: combinedLimit, catalog: catalog, officialURL: officialURL).presentationDetents([.large])
             }
             .sheet(isPresented: $showAreas) {
                 NavigationStack {
@@ -1510,19 +1528,112 @@ private func checkCatch(_ row: SavedRuleQuickRow, length: Double) -> CatchCheckR
         : CatchCheckResult(meets: false, text: "\(shown) is under the \(number(minimum)) \(unit) minimum. Release it carefully.")
 }
 
-/// The area's combined daily finfish limit as a big number.
+/// The area's combined daily finfish limit as a big number, then the common catches with no limit of their own, which
+/// count toward it: three at first, all on request.
 private struct CombinedLimitCard: View {
     let page: SavedRulesPage
+    let common: [SpeciesInfo]
+    let open: (SpeciesInfo) -> Void
+    @State private var showAll = false
+    private var limit: Int? { page.areaName.localizedCaseInsensitiveContains("Fiordland") ? nil : page.combinedFinfishLimit }
+
     var body: some View {
         Card {
-            if let limit = page.combinedFinfishLimit, !page.areaName.localizedCaseInsensitiveContains("Fiordland") {
+            if let limit {
                 HStack(spacing: 14) {
                     Text("\(limit)").font(.system(size: 44, weight: .bold, design: .rounded)).foregroundStyle(CatchCheckColor.accent)
-                    Text("finfish per person per day, all species combined. Each species also has its own limit.").foregroundStyle(CatchCheckColor.navy)
+                    Text("finfish per person per day, all species combined. Species with their own rule also have their own limit.").foregroundStyle(CatchCheckColor.navy)
                 }
             } else {
                 Text(page.combinedFinfishSummary ?? "Daily limits vary by species and place. Check the MPI page for your exact spot.").foregroundStyle(CatchCheckColor.navy)
             }
+            if !common.isEmpty {
+                Divider()
+                Text("Common catches with no limit of their own").font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text(limit.map { "Each counts toward the \($0) a day above." } ?? "Each counts toward the area's combined finfish limit.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(showAll ? common : Array(common.prefix(3))) { info in
+                    Button { open(info) } label: { CommonCatchRow(info: info, limit: limit) }.buttonStyle(.plain)
+                }
+                if common.count > 3 {
+                    Button(showAll ? "Show fewer" : "Show all \(common.count)") { withAnimation { showAll.toggle() } }.font(.subheadline.weight(.semibold))
+                }
+            }
+        }
+    }
+}
+
+/// A common catch as a compact row: picture, names and what limit it comes under.
+private struct CommonCatchRow: View {
+    let info: SpeciesInfo
+    let limit: Int?
+    var body: some View {
+        HStack(spacing: 12) {
+            SpeciesPictureView(picture: info.pictures.first, description: info.name).frame(width: 84, height: 56)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.name).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                Text([info.maori, limit.map { "in the \($0) combined" } ?? "in the combined limit"].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 4)
+        .contentShape(Rectangle())
+    }
+}
+
+/// A species' pictures, large, with a button for each form when there are several.
+private struct SpeciesPictures: View {
+    let info: SpeciesInfo
+    @State private var selected = 0
+    var body: some View {
+        if !info.pictures.isEmpty {
+            let picture = info.pictures[min(selected, info.pictures.count - 1)]
+            SpeciesPictureView(picture: picture, description: "\(info.name), \(picture.caption)").aspectRatio(1.5, contentMode: .fit)
+            if info.pictures.count > 1 {
+                FlowLayout {
+                    ForEach(Array(info.pictures.enumerated()), id: \.offset) { index, item in
+                        Button(item.caption) { selected = index }.buttonStyle(ChoiceButton(selected: index == selected))
+                    }
+                }
+            }
+            Text("Illustration · \(picture.caption)").font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A common catch: its pictures, that it has no limit of its own, and the combined limit it counts toward.
+private struct CommonCatchDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    let info: SpeciesInfo
+    let limit: Int?
+    let catalog: SpeciesCatalog?
+    let officialURL: URL
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    SpeciesPictures(info: info)
+                    Text(info.name).font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text([info.maori, info.scientific.isEmpty ? nil : info.scientific].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary)
+                    HStack(spacing: 16) {
+                        RuleFigure(value: "None", unit: "", label: "own minimum")
+                        RuleFigure(value: limit.map(String.init) ?? "—", unit: "", label: "combined per day")
+                    }
+                    Text("MPI sets no size or daily limit of its own for this fish in this area. It counts toward the combined \(limit.map { "limit of \($0) finfish per person per day" } ?? "finfish limit"), together with every other finfish you keep.")
+                        .foregroundStyle(CatchCheckColor.navy)
+                    Text("Local closures and rules can still apply. Check MPI for your exact spot.").font(.caption).foregroundStyle(.secondary)
+                    Link("See this area's rules on MPI", destination: officialURL).buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    if let note = catalog?.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+                }
+                .padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle(info.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }
 }
@@ -1625,24 +1736,12 @@ private struct SpeciesRuleDetail: View {
     let info: SpeciesInfo?
     let catalog: SpeciesCatalog?
     let officialURL: URL
-    @State private var selected = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let pictures = info?.pictures, !pictures.isEmpty {
-                        let picture = pictures[min(selected, pictures.count - 1)]
-                        SpeciesPictureView(picture: picture, description: "\(info?.name ?? row.species), \(picture.caption)").aspectRatio(1.5, contentMode: .fit)
-                        if pictures.count > 1 {
-                            FlowLayout {
-                                ForEach(Array(pictures.enumerated()), id: \.offset) { index, item in
-                                    Button(item.caption) { selected = index }.buttonStyle(ChoiceButton(selected: index == selected))
-                                }
-                            }
-                        }
-                        Text("Illustration · \(picture.caption)").font(.caption2).foregroundStyle(.secondary)
-                    }
+                    if let info { SpeciesPictures(info: info) }
                     Text(row.species).font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     if let info { Text([info.maori, info.scientific.isEmpty ? nil : info.scientific].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary) }
                     ForEach(Array(row.facts.enumerated()), id: \.offset) { item in

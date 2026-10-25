@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -79,6 +80,7 @@ import java.time.Instant
     var reloadToken by remember { mutableIntStateOf(0) }
     var checking by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<RuleSpeciesRow?>(null) }
+    var commonDetail by remember { mutableStateOf<SpeciesInfo?>(null) }
     var locationLoading by remember { mutableStateOf(false) }
     var locationNotice by remember { mutableStateOf<String?>(null) }
     val revision by RulesSync.revision.collectAsState()
@@ -179,6 +181,8 @@ import java.time.Instant
         else -> speciesRules.filter { infoFor(it)?.group == group.id }
     }
     val officialUrl = area?.officialUrl ?: page?.sourceUrl ?: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules"
+    val commonCatches = catalog?.commonCatches(speciesRules.map { it.species }).orEmpty()
+    val combinedLimit = page?.let(::combinedFinfishLimit)?.takeIf { selectedAreaId != "fiordland" }
 
     LazyColumn(modifier.fillMaxSize().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -229,7 +233,7 @@ import java.time.Instant
                 }
             } }
             else {
-                item { CombinedLimit(rules, selectedAreaId) }
+                item { CombinedLimit(rules, selectedAreaId, commonCatches) { commonDetail = it } }
                 val popular = popularRows(speciesRules).filter { it.minimum != null }
                 val checkable = popular + speciesRules.filter { row -> row.minimum != null && popular.none { it.id == row.id } }
                 if (checkable.isNotEmpty()) item { CheckMyCatch(checkable, catalog) }
@@ -247,7 +251,15 @@ import java.time.Instant
                     }
                 }
                 shown.forEach { row -> item(key = "species-${row.id}") { SpeciesRuleCard(row, infoFor(row)) { detail = row } } }
-                if (shown.isEmpty()) item {
+                val commonMatches = if (search.isEmpty()) emptyList() else commonCatches.filter { info ->
+                    info.name.contains(search, true) || info.maori?.contains(search, true) == true || info.match.any { it.contains(search, true) }
+                }
+                commonMatches.forEach { info -> item(key = "common-${info.id}") {
+                    Card(onClick = { commonDetail = info }, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                        CommonCatchRow(info, combinedLimit)
+                    }
+                } }
+                if (shown.isEmpty() && commonMatches.isEmpty()) item {
                     Text(if (search.isEmpty()) "No species in this group have a simple limit for ${rules.areaName}. Try All or check MPI."
                         else "No reliable simple limit can be shown for “$search” in ${rules.areaName}. Check MPI for this species and exact subarea.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -264,6 +276,9 @@ import java.time.Instant
 
     detail?.let { row ->
         ModalBottomSheet(onDismissRequest = { detail = null }) { SpeciesDetail(row, infoFor(row), catalog, officialUrl) }
+    }
+    commonDetail?.let { info ->
+        ModalBottomSheet(onDismissRequest = { commonDetail = null }) { CommonCatchDetail(info, combinedLimit, catalog, officialUrl) }
     }
 }
 
@@ -285,17 +300,48 @@ import java.time.Instant
     }
 }
 
-/** The area's combined daily finfish limit as a big number. */
-@Composable private fun CombinedLimit(page: FishingRulesPage, areaId: String?) {
+/**
+ * The area's combined daily finfish limit as a big number, then the common catches with no limit of their own, which
+ * count toward it: three at first, all on request.
+ */
+@Composable private fun CombinedLimit(page: FishingRulesPage, areaId: String?, common: List<SpeciesInfo>, open: (SpeciesInfo) -> Unit) {
     val limit = combinedFinfishLimit(page).takeIf { areaId != "fiordland" }
+    var showAll by rememberSaveable { mutableStateOf(false) }
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (limit != null) {
                 Text("$limit", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(14.dp))
-                Text("finfish per person per day, all species combined. Each species also has its own limit.", color = Navy)
+                Text("finfish per person per day, all species combined. Species with their own rule also have their own limit.", color = Navy)
             } else Text(if (areaId == "fiordland") "Daily limits differ between the outer Fiordland Marine Area and the inner fiords. Check the exact subarea on MPI."
                 else "Daily limits vary by species and place. Check the MPI page for your exact spot.", color = Navy)
+        }
+        if (common.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                Text("Common catches with no limit of their own", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Navy)
+                Text(limit?.let { "Each counts toward the $it a day above." } ?: "Each counts toward the area's combined finfish limit.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            (if (showAll) common else common.take(3)).forEach { info ->
+                Box(Modifier.fillMaxWidth().clickable { open(info) }) { CommonCatchRow(info, limit) }
+            }
+            if (common.size > 3) TextButton(onClick = { showAll = !showAll }, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)) {
+                Text(if (showAll) "Show fewer" else "Show all ${common.size}")
+            }
+        }
+    }
+}
+
+/** A common catch as a compact row: picture, names and what limit it comes under. */
+@Composable private fun CommonCatchRow(info: SpeciesInfo, limit: Int?) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        SpeciesPictureView(info.pictures.firstOrNull(), info.name, Modifier.size(width = 84.dp, height = 56.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(info.name, fontWeight = FontWeight.SemiBold, color = Navy)
+            Text(listOfNotNull(info.maori, limit?.let { "in the $it combined" } ?: "in the combined limit").joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -369,20 +415,47 @@ private fun figure(value: Double) = if (value % 1.0 == 0.0) value.toInt().toStri
     }
 }
 
+/** A species' pictures, large, with a chip for each form when there are several. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun SpeciesPictures(info: SpeciesInfo) {
+    var selected by remember(info.id) { mutableIntStateOf(0) }
+    val pictures = info.pictures.takeIf { it.isNotEmpty() } ?: return
+    val picture = pictures[selected.coerceIn(pictures.indices)]
+    SpeciesPictureView(picture, "${info.name}, ${picture.caption}", Modifier.fillMaxWidth().aspectRatio(1.5f))
+    if (pictures.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        pictures.forEachIndexed { index, item -> FilterChip(selected = index == selected, onClick = { selected = index }, label = { Text(item.caption) }) }
+    }
+    Text("Illustration · ${picture.caption}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** A common catch: its pictures, that it has no limit of its own, and the combined limit it counts toward. */
+@Composable private fun CommonCatchDetail(info: SpeciesInfo, limit: Int?, catalog: SpeciesCatalog?, officialUrl: String) {
+    val uriHandler = LocalUriHandler.current
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SpeciesPictures(info)
+        Text(info.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
+        Text(listOfNotNull(info.maori, info.scientific.takeIf(String::isNotBlank)).joinToString(" · "),
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RuleFigure("None", "", "own minimum")
+            RuleFigure(limit?.toString() ?: "—", "", "combined per day")
+        }
+        Text("MPI sets no size or daily limit of its own for this fish in this area. It counts toward the combined " +
+            (limit?.let { "limit of $it finfish per person per day" } ?: "finfish limit") + ", together with every other finfish you keep.", color = Navy)
+        Text("Local closures and rules can still apply. Check MPI for your exact spot.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = { uriHandler.openUri(officialUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See this area's rules on MPI") }
+        catalog?.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
 /** A species' pictures, every rule fact, the catch check for it and the MPI link. */
 @Composable private fun SpeciesDetail(row: RuleSpeciesRow, info: SpeciesInfo?, catalog: SpeciesCatalog?, officialUrl: String) {
     val uriHandler = LocalUriHandler.current
-    var selected by remember(row.id) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        info?.pictures?.takeIf { it.isNotEmpty() }?.let { pictures ->
-            val picture = pictures[selected.coerceIn(pictures.indices)]
-            SpeciesPictureView(picture, "${info.name}, ${picture.caption}", Modifier.fillMaxWidth().aspectRatio(1.5f))
-            if (pictures.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pictures.forEachIndexed { index, item -> FilterChip(selected = index == selected, onClick = { selected = index }, label = { Text(item.caption) }) }
-            }
-            Text("Illustration · ${picture.caption}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        info?.let { SpeciesPictures(it) }
         Text(row.species, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
         info?.let { Text(listOfNotNull(it.maori, it.scientific.takeIf(String::isNotBlank)).joinToString(" · "),
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }

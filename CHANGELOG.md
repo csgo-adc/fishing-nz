@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.51 — 2026-10-25 (build code 52)
+
+- **17 more species pictures.** MPI's grouped rules now show every common member: bass alongside hāpuku under
+  Groper (Hāpuku)/Bass; black and greenback flounder, NZ brill and NZ turbot under Flatfish; orange and girdled wrasse
+  under Wrasse; smooth skate, short-tailed stingray and eagle ray under Skates and rays (renamed from Skate). 94
+  illustrations in all, drawn from written descriptions and checked like the first set.
+- **Common catches with no limit of their own.** Under the combined finfish limit, the rules page lists John dory,
+  leatherjacket, pōrae, sweep, blue maomao, red snapper and blue mackerel ("in the 20 combined"), three at first and
+  **Show all 7**; search finds them too. Each opens a sheet with its pictures, "None" for its own minimum and the
+  combined limit it counts toward. A common catch that gets its own rule in an area shows with that rule instead.
+  The species catalogue marks them `"combined": true`; older app versions ignore them. Android and iPhone.
+
 ## 1.0.50 — 2026-10-25 (build code 51)
 
 - **Fishing rules, redesigned.** Each species shows an illustration, its minimum size and daily limit as big figures

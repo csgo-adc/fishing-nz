@@ -56,6 +56,14 @@ class RuleRowsTest {
         assertEquals("mussel", catalog.forRule("Mussels")?.id)
         assertEquals("blue-cod", catalog.forRule("Blue cod –Te Whaka ā Te Wera/Paterson Inlet Mātaitai")?.id)
         assertNull(catalog.forRule("All other finfish"))
+        assertEquals(94, catalog.pictures.size)
+        val common = catalog.commonCatches(listOf("Snapper", "Kahawai"))
+        assertEquals(listOf("john-dory", "leatherjacket", "porae", "sweep", "blue-maomao", "red-snapper", "blue-mackerel"), common.map { it.id })
+        assertTrue(common.all { it.combined && it.pictures.isNotEmpty() })
+        // A common catch that gets a rule of its own in an area shows with that rule instead.
+        assertEquals(6, catalog.commonCatches(listOf("John dory")).size)
+        assertEquals(listOf("Hāpuku", "Bass"), catalog.forRule("Groper (Hapuku) / Bass")?.pictures?.map { it.caption })
+        assertEquals(7, catalog.forRule("Flatfish (except Sand flounder)")?.pictures?.size)
         assertNull(catalog.forRule("Ringed something"))
         val rules = bundle.getJSONArray("rules")
         val names = (0 until rules.length()).flatMap { index ->

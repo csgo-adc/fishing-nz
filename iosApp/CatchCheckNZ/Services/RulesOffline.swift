@@ -10,8 +10,9 @@ struct SpeciesPicture: Codable, Hashable, Sendable {
     let sha256: String
 }
 
-/// A species on the rules page: its names, group (finfish, shark, shellfish or crayfish) and pictures.
-struct SpeciesInfo: Codable, Hashable, Sendable {
+/// A species on the rules page: its names, group (finfish, shark, shellfish or crayfish) and pictures. `combined` marks a
+/// common catch with no MPI limit of its own, which counts toward the area's combined finfish limit.
+struct SpeciesInfo: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
     let maori: String?
@@ -19,6 +20,8 @@ struct SpeciesInfo: Codable, Hashable, Sendable {
     let group: String
     let match: [String]
     let pictures: [SpeciesPicture]
+    var combined: Bool? = nil
+    var isCommonCatch: Bool { combined == true }
 }
 
 /// The species pictures and the MPI rule names each covers, from the service's rules manifest or the copy built into the
@@ -37,6 +40,12 @@ struct SpeciesCatalog: Codable, Sendable {
         return candidates.first { prefix, _ in
             name.starts(with: prefix) && (wordEnds(prefix.count) || (prefix.count < name.count && name[prefix.count] == "s" && wordEnds(prefix.count + 1)))
         }?.1
+    }
+
+    /// Common catches with no rule of their own among `ruleSpecies`, the area's rule rows.
+    func commonCatches(_ ruleSpecies: [String]) -> [SpeciesInfo] {
+        let ruled = Set(ruleSpecies.compactMap { forRule($0)?.id })
+        return species.filter { $0.isCommonCatch && !ruled.contains($0.id) }
     }
 
     var pictures: [SpeciesPicture] {
