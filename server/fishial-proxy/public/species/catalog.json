@@ -594,7 +594,9 @@
    "group": "shellfish",
    "match": [
     "pāua",
-    "paua"
+    "paua",
+    "moeraki mātaitai",
+    "east otago taiāpure"
    ],
    "pictures": [
     {
@@ -1778,5 +1780,5 @@
    "other_shellfish": true
   }
  ],
- "version": "67a4cc3ce5071af8"
+ "version": "fb1fb3a857e9427c"
 }

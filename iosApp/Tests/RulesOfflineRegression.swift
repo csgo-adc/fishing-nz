@@ -15,6 +15,8 @@ enum AnalyticsPreferences { static func deviceID() -> String? { nil } }
         let catalog = try JSONDecoder().decode(Bundle.self, from: Data(contentsOf: root.appendingPathComponent("data/offline_rules.json"))).species
         try expect(catalog.forRule("Snapper: Paringa, Popotai Taumaka/Open Bay Islands Mātaitai Reserves")?.id == "snapper", "Snapper with a qualifier")
         try expect(catalog.forRule("Paua – Ordinary – Yellow foot")?.id == "paua", "Pāua without a macron")
+        try expect(catalog.forRule("Moeraki Mātaitai (outside closed areas) - Ordinary blackfoot - Yellowfoot")?.id == "paua"
+                   && catalog.forRule("East Otago Taiāpure")?.id == "paua", "South-East pāua rows named by place")
         try expect(catalog.forRule("Packhorse rock lobster")?.id == "packhorse-lobster", "Packhorse before rock lobster")
         try expect(catalog.forRule("Red or spiny rock lobster")?.id == "rock-lobster", "Red rock lobster")
         try expect(catalog.forRule("Green-lipped mussels")?.id == "green-lipped-mussel", "A plural name")

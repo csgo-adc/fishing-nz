@@ -68,6 +68,9 @@ class RuleRowsTest {
         val catalog = SpeciesCatalog.parse(bundle.getJSONObject("species"))
         assertEquals("snapper", catalog.forRule("Snapper: Paringa, Popotai Taumaka/Open Bay Islands Mātaitai Reserves")?.id)
         assertEquals("paua", catalog.forRule("Paua – Ordinary – Yellow foot")?.id)
+        // MPI's South-East table names two pāua rows by place only.
+        assertEquals("paua", catalog.forRule("Moeraki Mātaitai (outside closed areas) - Ordinary blackfoot - Yellowfoot")?.id)
+        assertEquals("paua", catalog.forRule("East Otago Taiāpure")?.id)
         assertEquals("packhorse-lobster", catalog.forRule("Packhorse rock lobster")?.id)
         assertEquals("rock-lobster", catalog.forRule("Red or spiny rock lobster")?.id)
         assertEquals("green-lipped-mussel", catalog.forRule("Green-lipped mussels")?.id)

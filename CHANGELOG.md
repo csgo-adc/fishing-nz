@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.53 — 2026-10-26 (build code 54)
+
+- **Pāua picture on South-East's place-named pāua rows.** MPI's South-East table lists two pāua rules by place only,
+  Moeraki Mātaitai and East Otago Taiāpure; both now show the pāua picture. Catalogue change only, Android and iPhone.
+
 ## 1.0.52 — 2026-10-26 (build code 53)
 
 - **Every species MPI's NZ Fishing Rules app lists.** 12 new species with pictures: gemfish, Ray's bream, red pigfish,
