@@ -10,8 +10,9 @@ struct SpeciesPicture: Codable, Hashable, Sendable {
     let sha256: String
 }
 
-/// A species on the rules page: its names, group (finfish, shark, shellfish or crayfish) and pictures. `combined` marks a
-/// common catch with no MPI limit of its own, which counts toward the area's combined finfish limit.
+/// A species on the rules page: its names, group (finfish, shark, shellfish or crayfish) and pictures. Where an area has
+/// no rule of its own for it, `combined` marks a fish that counts toward the area's combined finfish limit, and
+/// `otherShellfish` a shellfish that counts toward MPI's "All others (combined)" shellfish limit.
 struct SpeciesInfo: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let name: String
@@ -21,7 +22,12 @@ struct SpeciesInfo: Codable, Hashable, Identifiable, Sendable {
     let match: [String]
     let pictures: [SpeciesPicture]
     var combined: Bool? = nil
+    var otherShellfish: Bool? = nil
     var isCommonCatch: Bool { combined == true }
+    var isOtherShellfish: Bool { otherShellfish == true }
+    enum CodingKeys: String, CodingKey {
+        case id, name, maori, scientific, group, match, pictures, combined, otherShellfish = "other_shellfish"
+    }
 }
 
 /// The species pictures and the MPI rule names each covers, from the service's rules manifest or the copy built into the
@@ -46,6 +52,13 @@ struct SpeciesCatalog: Codable, Sendable {
     func commonCatches(_ ruleSpecies: [String]) -> [SpeciesInfo] {
         let ruled = Set(ruleSpecies.compactMap { forRule($0)?.id })
         return species.filter { $0.isCommonCatch && !ruled.contains($0.id) }
+    }
+
+    /// Shellfish with no rule of their own among `ruleSpecies`, when the area has an "All others (combined)" row.
+    func otherShellfish(_ ruleSpecies: [String]) -> [SpeciesInfo] {
+        guard ruleSpecies.contains(where: { Self.normalize($0).hasPrefix("all others") }) else { return [] }
+        let ruled = Set(ruleSpecies.compactMap { forRule($0)?.id })
+        return species.filter { $0.isOtherShellfish && !ruled.contains($0.id) }
     }
 
     var pictures: [SpeciesPicture] {

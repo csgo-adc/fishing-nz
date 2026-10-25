@@ -40,6 +40,24 @@ class RuleRowsTest {
         assertNull(checkCatch(snapper, 0.0))
     }
 
+    @Test fun readsATableWithItsHeaderLast() {
+        // MPI's Southland page lists the header row of its second finfish table last.
+        val southland = FishingRulesPage("Southland", "https://example.com", null, false, emptyList(),
+            listOf(listOf(listOf("Flatfish (except Sand flounder)", "25", "100"), listOf("Snapper", "25", "125"),
+                listOf("Finfish species", "Min fish length (cm)", "Min set net mesh size (mm)"))))
+        val parsed = ruleSpeciesRows(southland)
+        assertEquals(listOf("Flatfish (except Sand flounder)", "Snapper"), parsed.map { it.species })
+        assertEquals(25.0 to "cm", parsed.last().minimum)
+    }
+
+    @Test fun readsTheAllOthersShellfishLimit() {
+        val shellfish = ruleSpeciesRows(FishingRulesPage("Auckland", "https://example.com", null, false, emptyList(),
+            listOf(listOf(listOf("Shellfish Species", "Daily limit per fisher", "Auckland Coromandel area daily limit per fisher"),
+                listOf("Pipi", "150", "50"), listOf("All others (combined) •", "50", "50")))))
+        assertEquals(50, otherShellfishLimit(shellfish))
+        assertNull(otherShellfishLimit(shellfish.filter { it.species == "Pipi" }))
+    }
+
     @Test fun listsPopularSpeciesFirst() {
         assertEquals(listOf("Snapper", "Blue cod – Titahi Bay to Cape Runaway", "Kahawai", "Pāua – Ordinary black foot"), popularRows(rows).map { it.species })
     }
@@ -56,12 +74,23 @@ class RuleRowsTest {
         assertEquals("mussel", catalog.forRule("Mussels")?.id)
         assertEquals("blue-cod", catalog.forRule("Blue cod –Te Whaka ā Te Wera/Paterson Inlet Mātaitai")?.id)
         assertNull(catalog.forRule("All other finfish"))
-        assertEquals(94, catalog.pictures.size)
+        assertEquals(106, catalog.pictures.size)
         val common = catalog.commonCatches(listOf("Snapper", "Kahawai"))
-        assertEquals(listOf("john-dory", "leatherjacket", "porae", "sweep", "blue-maomao", "red-snapper", "blue-mackerel"), common.map { it.id })
-        assertTrue(common.all { it.combined && it.pictures.isNotEmpty() })
+        assertEquals(listOf("john-dory", "leatherjacket", "porae", "grey-mullet"), common.take(4).map { it.id })
+        assertEquals(39, common.size)
+        assertTrue(common.all { it.combined && it.group in setOf("finfish", "shark") && it.pictures.isNotEmpty() })
+        // Protected species, salmon, eels and baitfish never count toward the combined finfish limit.
+        listOf("white-pointer", "spotted-black-groper", "salmon", "eel", "piper").forEach { id -> assertFalse(id, catalog.species.first { it.id == id }.combined) }
         // A common catch that gets a rule of its own in an area shows with that rule instead.
-        assertEquals(6, catalog.commonCatches(listOf("John dory")).size)
+        assertEquals(39, catalog.commonCatches(listOf("John dory")).size)
+        // Shellfish without a limit of their own show only where MPI lists "All others (combined)".
+        assertTrue(catalog.otherShellfish(listOf("Pipi")).isEmpty())
+        assertEquals(listOf("pupu", "octopus", "knobbed-whelk", "trough-shell", "koura", "slipper-lobster"),
+            catalog.otherShellfish(listOf("Pipi", "All others (combined)")).map { it.id })
+        assertEquals("octopus", catalog.otherShellfish(listOf("Pupu (Cats eye)", "All others (combined)")).first().id)
+        assertTrue(catalog.otherShellfish(listOf("All others (combined)")).none { it.combined })
+        assertEquals("octopus", catalog.forRule("Octopus (all species)")?.id)
+        assertNull(catalog.forRule("Kōura"))
         assertEquals(listOf("Hāpuku", "Bass"), catalog.forRule("Groper (Hapuku) / Bass")?.pictures?.map { it.caption })
         assertEquals(7, catalog.forRule("Flatfish (except Sand flounder)")?.pictures?.size)
         assertNull(catalog.forRule("Ringed something"))

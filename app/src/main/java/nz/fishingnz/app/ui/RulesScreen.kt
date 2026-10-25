@@ -183,6 +183,18 @@ import java.time.Instant
     val officialUrl = area?.officialUrl ?: page?.sourceUrl ?: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules"
     val commonCatches = catalog?.commonCatches(speciesRules.map { it.species }).orEmpty()
     val combinedLimit = page?.let(::combinedFinfishLimit)?.takeIf { selectedAreaId != "fiordland" }
+    val shellfishLimit = otherShellfishLimit(speciesRules)
+    val noOwnLimit = commonCatches + catalog?.otherShellfish(speciesRules.map { it.species }).orEmpty()
+    fun countsToward(info: SpeciesInfo) = if (info.otherShellfish) otherShellfishNote(shellfishLimit) else combinedNote(combinedLimit)
+    // Species with no rule of their own in this area, listed after the rule rows of their group, like MPI's app.
+    val extras = when {
+        search.isNotEmpty() -> noOwnLimit.filter { info ->
+            info.name.contains(search, true) || info.maori?.contains(search, true) == true || info.match.any { it.contains(search, true) }
+        }
+        group == SpeciesGroup.POPULAR -> emptyList()
+        group == SpeciesGroup.ALL -> noOwnLimit
+        else -> noOwnLimit.filter { it.group == group.id }
+    }
 
     LazyColumn(modifier.fillMaxSize().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -251,15 +263,19 @@ import java.time.Instant
                     }
                 }
                 shown.forEach { row -> item(key = "species-${row.id}") { SpeciesRuleCard(row, infoFor(row)) { detail = row } } }
-                val commonMatches = if (search.isEmpty()) emptyList() else commonCatches.filter { info ->
-                    info.name.contains(search, true) || info.maori?.contains(search, true) == true || info.match.any { it.contains(search, true) }
+                if (search.isEmpty() && extras.isNotEmpty()) item {
+                    Column(Modifier.padding(top = 8.dp)) {
+                        Text("No limit of their own", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Navy)
+                        Text("Each counts toward a combined daily limit, shown on its row.", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                commonMatches.forEach { info -> item(key = "common-${info.id}") {
+                extras.forEach { info -> item(key = "common-${info.id}") {
                     Card(onClick = { commonDetail = info }, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
-                        CommonCatchRow(info, combinedLimit)
+                        CommonCatchRow(info, countsToward(info))
                     }
                 } }
-                if (shown.isEmpty() && commonMatches.isEmpty()) item {
+                if (shown.isEmpty() && extras.isEmpty()) item {
                     Text(if (search.isEmpty()) "No species in this group have a simple limit for ${rules.areaName}. Try All or check MPI."
                         else "No reliable simple limit can be shown for “$search” in ${rules.areaName}. Check MPI for this species and exact subarea.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -278,7 +294,10 @@ import java.time.Instant
         ModalBottomSheet(onDismissRequest = { detail = null }) { SpeciesDetail(row, infoFor(row), catalog, officialUrl) }
     }
     commonDetail?.let { info ->
-        ModalBottomSheet(onDismissRequest = { commonDetail = null }) { CommonCatchDetail(info, combinedLimit, catalog, officialUrl) }
+        ModalBottomSheet(onDismissRequest = { commonDetail = null }) {
+            if (info.otherShellfish) OtherShellfishDetail(info, shellfishLimit, catalog, officialUrl)
+            else CommonCatchDetail(info, combinedLimit, catalog, officialUrl)
+        }
     }
 }
 
@@ -319,12 +338,12 @@ import java.time.Instant
         if (common.isNotEmpty()) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
-                Text("Common catches with no limit of their own", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Navy)
+                Text("Fish with no limit of their own", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Navy)
                 Text(limit?.let { "Each counts toward the $it a day above." } ?: "Each counts toward the area's combined finfish limit.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             (if (showAll) common else common.take(3)).forEach { info ->
-                Box(Modifier.fillMaxWidth().clickable { open(info) }) { CommonCatchRow(info, limit) }
+                Box(Modifier.fillMaxWidth().clickable { open(info) }) { CommonCatchRow(info, combinedNote(limit)) }
             }
             if (common.size > 3) TextButton(onClick = { showAll = !showAll }, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)) {
                 Text(if (showAll) "Show fewer" else "Show all ${common.size}")
@@ -333,14 +352,20 @@ import java.time.Instant
     }
 }
 
-/** A common catch as a compact row: picture, names and what limit it comes under. */
-@Composable private fun CommonCatchRow(info: SpeciesInfo, limit: Int?) {
+/** Which limit a fish with none of its own comes under, such as "in the 20 combined". */
+private fun combinedNote(limit: Int?) = limit?.let { "in the $it combined" } ?: "in the combined limit"
+
+/** Which limit a shellfish with none of its own comes under, such as "in the 50 other shellfish". */
+private fun otherShellfishNote(limit: Int?) = limit?.let { "in the $it other shellfish" } ?: "in all other shellfish"
+
+/** A species with no limit of its own as a compact row: picture, names and [countsToward], the limit it comes under. */
+@Composable private fun CommonCatchRow(info: SpeciesInfo, countsToward: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         SpeciesPictureView(info.pictures.firstOrNull(), info.name, Modifier.size(width = 84.dp, height = 56.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(info.name, fontWeight = FontWeight.SemiBold, color = Navy)
-            Text(listOfNotNull(info.maori, limit?.let { "in the $it combined" } ?: "in the combined limit").joinToString(" · "),
+            Text(listOfNotNull(info.maori, countsToward).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -443,6 +468,28 @@ private fun figure(value: Double) = if (value % 1.0 == 0.0) value.toInt().toStri
         }
         Text("MPI sets no size or daily limit of its own for this fish in this area. It counts toward the combined " +
             (limit?.let { "limit of $it finfish per person per day" } ?: "finfish limit") + ", together with every other finfish you keep.", color = Navy)
+        Text("Local closures and rules can still apply. Check MPI for your exact spot.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = { uriHandler.openUri(officialUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See this area's rules on MPI") }
+        catalog?.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+/** A shellfish with no rule of its own: its pictures and MPI's "All others (combined)" limit it counts toward. */
+@Composable private fun OtherShellfishDetail(info: SpeciesInfo, limit: Int?, catalog: SpeciesCatalog?, officialUrl: String) {
+    val uriHandler = LocalUriHandler.current
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SpeciesPictures(info)
+        Text(info.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
+        Text(listOfNotNull(info.maori, info.scientific.takeIf(String::isNotBlank)).joinToString(" · "),
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RuleFigure("None", "", "own limit")
+            RuleFigure(limit?.toString() ?: "See MPI", "", "all others per day")
+        }
+        Text("MPI sets no limit of its own for this species in this area. It counts toward MPI's “All others (combined)” " +
+            (limit?.let { "limit of $it per person per day" } ?: "shellfish limit") + ", together with every other shellfish without a limit of its own.", color = Navy)
         Text("Local closures and rules can still apply. Check MPI for your exact spot.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = { uriHandler.openUri(officialUrl) }, modifier = Modifier.fillMaxWidth()) { Text("See this area's rules on MPI") }

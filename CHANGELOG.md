@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.52 — 2026-10-26 (build code 53)
+
+- **Every species MPI's NZ Fishing Rules app lists.** 12 new species with pictures: gemfish, Ray's bream, red pigfish,
+  cardinalfish, skipjack tuna, yellowfin tuna and swordfish; octopus, knobbed whelk and trough shell; kōura (freshwater
+  crayfish) and slipper lobster. 106 illustrations in all, drawn from written descriptions like the earlier sets.
+- **Species with no limit of their own now show in every area.** Fish and sharks with no size or daily limit of their
+  own in an area are listed "in the 20 combined" (the area's figure): in Auckland that adds kahawai, rig, school shark,
+  elephant fish, grey mullet and parore (MPI gives them only net mesh sizes there, so they were missing), mako,
+  hammerhead, marlin, albacore, barracouta, hoki, wrasse and more. Shellfish with none (octopus, whelk, trough
+  shell, kōura, slipper lobster, pūpū) are listed "in the 50 other shellfish", from MPI's "All others (combined)" row. They follow the rule rows under each chip
+  (Finfish, Sharks and rays, Shellfish, Crayfish, All) under "No limit of their own", search finds them, and each
+  opens a sheet with its pictures and the limit it counts toward. The card at the top is now "Fish with no limit of
+  their own". Protected species, salmon, eels and baitfish are never listed this way. Shellfish use a new
+  `"other_shellfish": true` flag, so older app versions don't show them under the finfish limit. Android and iPhone.
+- **Southland's sizes for snapper, red gurnard, trevally and flatfish show again.** MPI's page puts that table's
+  header row last; both apps now read it.
+
 ## 1.0.51 — 2026-10-25 (build code 52)
 
 - **17 more species pictures.** MPI's grouped rules now show every common member: bass alongside hāpuku under

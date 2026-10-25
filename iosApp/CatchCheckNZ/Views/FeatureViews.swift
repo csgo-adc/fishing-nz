@@ -1286,6 +1286,26 @@ struct RulesView: View {
     private var officialURL: URL { selectedArea?.officialURL ?? page?.sourceURL ?? URL(string: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules")! }
     private var commonCatches: [SpeciesInfo] { catalog?.commonCatches(allRows.map(\.species)) ?? [] }
     private var combinedLimit: Int? { page?.areaName.localizedCaseInsensitiveContains("Fiordland") == true ? nil : page?.combinedFinfishLimit }
+    private var shellfishLimit: Int? { otherShellfishLimit(allRows) }
+    /// Species with no rule of their own in this area, listed after the rule rows of their group, like MPI's app.
+    private var extras: [SpeciesInfo] {
+        let noOwnLimit = commonCatches + (catalog?.otherShellfish(allRows.map(\.species)) ?? [])
+        let text = query.trimmingCharacters(in: .whitespaces)
+        if !text.isEmpty {
+            return noOwnLimit.filter { info in
+                info.name.localizedStandardContains(text) || (info.maori?.localizedStandardContains(text) ?? false)
+                    || info.match.contains { $0.localizedStandardContains(text) }
+            }
+        }
+        switch group {
+        case .popular: return []
+        case .all: return noOwnLimit
+        default: return noOwnLimit.filter { $0.group == group.catalogGroup }
+        }
+    }
+    private func countsToward(_ info: SpeciesInfo) -> String {
+        info.isOtherShellfish ? otherShellfishNote(shellfishLimit) : combinedNote(combinedLimit)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1350,20 +1370,23 @@ struct RulesView: View {
                                 }
                             }
                             let rows = shownRows
-                            let text = query.trimmingCharacters(in: .whitespaces)
-                            let commonMatches = text.isEmpty ? [] : commonCatches.filter { info in
-                                info.name.localizedStandardContains(text) || (info.maori?.localizedStandardContains(text) ?? false)
-                                    || info.match.contains { $0.localizedStandardContains(text) }
-                            }
-                            if rows.isEmpty && commonMatches.isEmpty {
+                            let extras = extras
+                            if rows.isEmpty && extras.isEmpty {
                                 Card { Text(query.isEmpty ? "No species in this group have a simple limit for \(page.areaName). Try All or check MPI." : "No reliable simple limit can be shown for “\(query)”. Check MPI for this species and exact subarea.").foregroundStyle(.secondary) }
                             }
                             ForEach(rows) { row in
                                 Button { detail = row } label: { SpeciesRuleCard(row: row, info: catalog?.forRule(row.species)) }.buttonStyle(.plain)
                             }
-                            ForEach(commonMatches) { info in
+                            if query.isEmpty && !extras.isEmpty {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("No limit of their own").font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
+                                    Text("Each counts toward a combined daily limit, shown on its row.").font(.caption).foregroundStyle(.secondary)
+                                }
+                                .padding(.top, 8)
+                            }
+                            ForEach(extras) { info in
                                 Button { commonDetail = info } label: {
-                                    CommonCatchRow(info: info, limit: combinedLimit).padding(.vertical, 6)
+                                    CommonCatchRow(info: info, countsToward: countsToward(info)).padding(.vertical, 6)
                                         .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
                                 }
                                 .buttonStyle(.plain)
@@ -1386,7 +1409,14 @@ struct RulesView: View {
                     .presentationDetents([.large])
             }
             .sheet(item: $commonDetail) { info in
-                CommonCatchDetail(info: info, limit: combinedLimit, catalog: catalog, officialURL: officialURL).presentationDetents([.large])
+                Group {
+                    if info.isOtherShellfish {
+                        OtherShellfishDetail(info: info, limit: shellfishLimit, catalog: catalog, officialURL: officialURL)
+                    } else {
+                        CommonCatchDetail(info: info, limit: combinedLimit, catalog: catalog, officialURL: officialURL)
+                    }
+                }
+                .presentationDetents([.large])
             }
             .sheet(isPresented: $showAreas) {
                 NavigationStack {
@@ -1549,11 +1579,11 @@ private struct CombinedLimitCard: View {
             }
             if !common.isEmpty {
                 Divider()
-                Text("Common catches with no limit of their own").font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text("Fish with no limit of their own").font(.subheadline.bold()).foregroundStyle(CatchCheckColor.navy)
                 Text(limit.map { "Each counts toward the \($0) a day above." } ?? "Each counts toward the area's combined finfish limit.")
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(showAll ? common : Array(common.prefix(3))) { info in
-                    Button { open(info) } label: { CommonCatchRow(info: info, limit: limit) }.buttonStyle(.plain)
+                    Button { open(info) } label: { CommonCatchRow(info: info, countsToward: combinedNote(limit)) }.buttonStyle(.plain)
                 }
                 if common.count > 3 {
                     Button(showAll ? "Show fewer" : "Show all \(common.count)") { withAnimation { showAll.toggle() } }.font(.subheadline.weight(.semibold))
@@ -1563,16 +1593,29 @@ private struct CombinedLimitCard: View {
     }
 }
 
-/// A common catch as a compact row: picture, names and what limit it comes under.
+/// Which limit a fish with none of its own comes under, such as "in the 20 combined".
+private func combinedNote(_ limit: Int?) -> String { limit.map { "in the \($0) combined" } ?? "in the combined limit" }
+
+/// Which limit a shellfish with none of its own comes under, such as "in the 50 other shellfish".
+private func otherShellfishNote(_ limit: Int?) -> String { limit.map { "in the \($0) other shellfish" } ?? "in all other shellfish" }
+
+/// The area's "All others (combined)" shellfish limit, such as 50, when every daily limit in that row is the same number.
+private func otherShellfishLimit(_ rows: [SavedRuleQuickRow]) -> Int? {
+    guard let row = rows.first(where: { $0.species.lowercased().hasPrefix("all others") }) else { return nil }
+    let limits = Set(row.facts.filter { $0.label.hasPrefix("Daily limit") }.map(\.value))
+    return limits.count == 1 ? limits.first.flatMap { Int($0) } : nil
+}
+
+/// A species with no limit of its own as a compact row: picture, names and `countsToward`, the limit it comes under.
 private struct CommonCatchRow: View {
     let info: SpeciesInfo
-    let limit: Int?
+    let countsToward: String
     var body: some View {
         HStack(spacing: 12) {
             SpeciesPictureView(picture: info.pictures.first, description: info.name).frame(width: 84, height: 56)
             VStack(alignment: .leading, spacing: 2) {
                 Text(info.name).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
-                Text([info.maori, limit.map { "in the \($0) combined" } ?? "in the combined limit"].compactMap { $0 }.joined(separator: " · "))
+                Text([info.maori, countsToward].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -1623,6 +1666,41 @@ private struct CommonCatchDetail: View {
                         RuleFigure(value: limit.map(String.init) ?? "—", unit: "", label: "combined per day")
                     }
                     Text("MPI sets no size or daily limit of its own for this fish in this area. It counts toward the combined \(limit.map { "limit of \($0) finfish per person per day" } ?? "finfish limit"), together with every other finfish you keep.")
+                        .foregroundStyle(CatchCheckColor.navy)
+                    Text("Local closures and rules can still apply. Check MPI for your exact spot.").font(.caption).foregroundStyle(.secondary)
+                    Link("See this area's rules on MPI", destination: officialURL).buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    if let note = catalog?.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+                }
+                .padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle(info.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+/// A shellfish with no rule of its own: its pictures and MPI's "All others (combined)" limit it counts toward.
+private struct OtherShellfishDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    let info: SpeciesInfo
+    let limit: Int?
+    let catalog: SpeciesCatalog?
+    let officialURL: URL
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    SpeciesPictures(info: info)
+                    Text(info.name).font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text([info.maori, info.scientific.isEmpty ? nil : info.scientific].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary)
+                    HStack(spacing: 16) {
+                        RuleFigure(value: "None", unit: "", label: "own limit")
+                        RuleFigure(value: limit.map(String.init) ?? "See MPI", unit: "", label: "all others per day")
+                    }
+                    Text("MPI sets no limit of its own for this species in this area. It counts toward MPI's “All others (combined)” \(limit.map { "limit of \($0) per person per day" } ?? "shellfish limit"), together with every other shellfish without a limit of its own.")
                         .foregroundStyle(CatchCheckColor.navy)
                     Text("Local closures and rules can still apply. Check MPI for your exact spot.").font(.caption).foregroundStyle(.secondary)
                     Link("See this area's rules on MPI", destination: officialURL).buttonStyle(.bordered).frame(maxWidth: .infinity)
@@ -1861,7 +1939,11 @@ private extension SavedRulesPage {
     }
 
     func allRows() -> [SavedRuleQuickRow] {
-        tables.enumerated().flatMap { tableIndex, table in
+        tables.enumerated().flatMap { tableIndex, saved in
+            // One of MPI's tables (Southland) has its header row last; read it as the header.
+            let headerLast = saved.first?.first?.localizedCaseInsensitiveContains("species") != true
+                && saved.last?.first?.trimmingCharacters(in: .whitespaces).lowercased().hasSuffix("species") == true
+            let table = headerLast ? [saved[saved.count - 1]] + saved.dropLast() : saved
             guard let headers = table.first, headers.count > 1,
                   headers[0].localizedCaseInsensitiveContains("species") else { return [SavedRuleQuickRow]() }
             let columns = headers.indices.dropFirst().compactMap { index -> (Int, String)? in

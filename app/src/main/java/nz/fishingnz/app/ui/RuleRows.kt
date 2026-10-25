@@ -25,7 +25,10 @@ internal fun ruleFactLabel(header: String): String? {
     }
 }
 
-internal fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page.tables.flatMapIndexed { tableIndex, table ->
+internal fun ruleSpeciesRows(page: FishingRulesPage): List<RuleSpeciesRow> = page.tables.flatMapIndexed { tableIndex, saved ->
+    // One of MPI's tables (Southland) has its header row last; read it as the header.
+    val table = if (saved.firstOrNull()?.firstOrNull()?.contains("species", true) != true && saved.lastOrNull()?.firstOrNull()?.trim()?.endsWith("species", true) == true)
+        listOf(saved.last()) + saved.dropLast(1) else saved
     val headers = table.firstOrNull().orEmpty()
     if (headers.size < 2 || !headers.first().contains("species", ignoreCase = true)) return@flatMapIndexed emptyList()
     val factColumns = headers.indices.drop(1).mapNotNull { index -> ruleFactLabel(headers[index])?.let { index to it } }
@@ -91,6 +94,10 @@ internal fun checkCatch(row: RuleSpeciesRow, length: Double): CatchCheckResult? 
 internal fun combinedFinfishLimit(page: FishingRulesPage): Int? = page.sections.firstNotNullOfOrNull { section ->
     Regex("combined daily bag limit of\\s+(\\d+)\\s+finfish", RegexOption.IGNORE_CASE).find(section.text)?.groupValues?.get(1)?.toIntOrNull()
 }
+
+/** The area's "All others (combined)" shellfish limit, such as 50, when every daily limit in that row is the same number. */
+internal fun otherShellfishLimit(rows: List<RuleSpeciesRow>): Int? = rows.firstOrNull { it.species.startsWith("All others", ignoreCase = true) }
+    ?.facts?.filter { it.first.startsWith("Daily limit") }?.map { it.second }?.distinct()?.singleOrNull()?.toIntOrNull()
 
 /** The rules page's species groups; [id] matches the species catalogue's group. */
 internal enum class SpeciesGroup(val label: String, val id: String?) {
