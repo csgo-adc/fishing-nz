@@ -1,7 +1,8 @@
 import Foundation
 
 struct GeoPoint: Equatable, Sendable { let latitude: Double; let longitude: Double }
-struct WeatherState { let temperature: String; let wind: String; let rain: String }
+/// Current weather for Home. `windFrom` is a compass point such as "SW"; `sunset` is today's, such as "7:48 PM".
+struct WeatherState: Equatable { let temperature: String; let wind: String; let rain: String; var windFrom: String? = nil; var sunset: String? = nil }
 struct TideEvent: Identifiable { let time: String; let height: String; let type: String; var id: String { "\(time)-\(type)" } }
 struct TidePoint: Identifiable { let time: String; let level: Double; let minuteOfDay: Int; var id: Int { minuteOfDay } }
 struct TideState { let currentLevel: String; let nextEvent: String; let eventTime: String; let events: [TideEvent]; let points: [TidePoint]; let stationName: String }

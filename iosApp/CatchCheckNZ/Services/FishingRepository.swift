@@ -253,11 +253,10 @@ struct FishingRepository {
     }
 
     func conditions(at point: GeoPoint) async throws -> (WeatherState, TideState?) {
-        let weatherURL = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(point.latitude)&longitude=\(point.longitude)&current=temperature_2m,wind_speed_10m,precipitation&timezone=auto")!
+        let weatherURL = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(point.latitude)&longitude=\(point.longitude)&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation&daily=sunset&forecast_days=1&timezone=auto")!
         let (data, response) = try await URLSession.shared.data(from: weatherURL)
         guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-        let weather = try decoder.decode(WeatherResponse.self, from: data).current
-        let state = WeatherState(temperature: "\(Int(weather.temperature2m))°C", wind: "\(Int(weather.windSpeed10m)) km/h", rain: "\(weather.precipitation) mm")
+        let state = try Self.currentWeather(data)
         let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
         let nearest = tideStations.min {
             origin.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <
@@ -265,6 +264,24 @@ struct FishingRepository {
         }
         guard let nearest else { return (state, nil) }
         return (state, try? await tide(for: nearest, date: .now))
+    }
+
+    /// Home's current weather from an Open-Meteo response; the wind direction and sunset are left out when missing.
+    static func currentWeather(_ data: Data) throws -> WeatherState {
+        let response = try JSONDecoder().decode(WeatherResponse.self, from: data)
+        let weather = response.current
+        let sunset = response.daily?.sunset?.first.flatMap { text -> String? in
+            let input = DateFormatter()
+            input.locale = Locale(identifier: "en_US_POSIX")
+            input.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            guard let date = input.date(from: text) else { return nil }
+            let output = DateFormatter()
+            output.locale = Locale(identifier: "en_US_POSIX")
+            output.dateFormat = "h:mm a"
+            return output.string(from: date)
+        }
+        return WeatherState(temperature: "\(Int(weather.temperature2m))°C", wind: "\(Int(weather.windSpeed10m)) km/h", rain: "\(weather.precipitation) mm",
+                            windFrom: weather.windDirection10m.map { PlaceConditionRows.direction($0) }, sunset: sunset)
     }
 
     func tide(for station: TideStation, date: Date) async throws -> TideState {
@@ -442,7 +459,15 @@ private extension DateFormatter {
         return formatter
     }
 }
-private struct WeatherResponse: Decodable { let current: Current; struct Current: Decodable { let temperature2m: Double; let windSpeed10m: Double; let precipitation: Double; enum CodingKeys: String, CodingKey { case temperature2m = "temperature_2m", windSpeed10m = "wind_speed_10m", precipitation } } }
+private struct WeatherResponse: Decodable {
+    let current: Current
+    let daily: Daily?
+    struct Current: Decodable {
+        let temperature2m: Double; let windSpeed10m: Double; let windDirection10m: Double?; let precipitation: Double
+        enum CodingKeys: String, CodingKey { case temperature2m = "temperature_2m", windSpeed10m = "wind_speed_10m", windDirection10m = "wind_direction_10m", precipitation }
+    }
+    struct Daily: Decodable { let sunset: [String]? }
+}
 
 // MARK: - Optional analytics
 //

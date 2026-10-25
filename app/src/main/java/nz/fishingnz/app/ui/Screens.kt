@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -196,52 +197,65 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         if (hasLocationPermission()) requestCurrentLocation(context, { point -> vm.completeLocationSearch(point) }, { vm.locationUnavailable() })
         else locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // Home finds the best window as soon as the plan has a place, without waiting for a button.
+    LaunchedEffect(s.originName, s.recommendationSearch == null, s.showResults) {
+        if (s.originName != null && s.recommendationSearch == null && !s.recommendationsLoading && s.recommendationsError == null && !s.showResults)
+            vm.refreshRecommendations()
+    }
+    val results = s.recommendationSearch?.items.orEmpty()
+    val best = results.minWithOrNull(searchOrder)
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), state = listState, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Spacer(Modifier.height(18.dp))
-            Text(s.account?.user?.displayName?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }?.let { "Kia ora, $it" } ?: "Kia ora", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Plan your next catch", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(s.account?.user?.displayName?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }?.let { "Kia ora, $it" } ?: "Kia ora",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                AssistChip(onClick = { showWhere = true }, label = { Text(whereTitle(s, homeLocationLoading), maxLines = 1) },
+                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp)) })
+            }
+        }
+        item { TodayCard(s) { showWhere = true } }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Best fishing window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("${planTimeSummary(s)} · ${if (s.searchesOnePlace) "This spot only" else "${s.radiusKm} km"} · ${planPriorityLabel(s)}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = { showPlan = true }) { Text("Edit plan") }
+            }
+            PlanQuickChips(s, vm)
         }
         item {
-            Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer), shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column {
-                            Text("YOUR PLAN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                            Text(if (s.boat) "Boat fishing" else "Land fishing", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(onClick = { showPlan = true }) { Text("Edit plan") }
-                    }
-                    Text("${planDateSummary(s)}  ·  ${planTimeSummary(s)}${if (s.sessionHours != 2) "  ·  ${hoursLabel(s.sessionHours)}" else ""}  ·  ${if (s.searchesOnePlace) "This spot only" else "${s.radiusKm} km"}",
-                        color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium)
-                    Text(planPriorityLabel(s), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
-                    Row(Modifier.fillMaxWidth().clickable { showWhere = true }.padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(whereTitle(s, homeLocationLoading), color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                        Icon(Icons.Default.ChevronRight, contentDescription = null,
-                            modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                    Button(onClick = ::search, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && s.searchPlaceName == null)
-                            "Choose a fishing location" else "Find fishing windows")
+            when {
+                s.recommendationsLoading -> Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Finding the best times ${whereTitle(s, homeLocationLoading).replaceFirstChar { it.lowercase() }}…", color = Navy)
                     }
                 }
+                best != null -> RecommendationCard(best, showWhy = shouldShowWindowReason(best, results), showOnMap = mapAction(best, vm)) { vm.showResults() }
+                s.originName == null -> HomeNote("Choose where you'll fish, and Home finds the best time.", "Choose a place") { showWhere = true }
+                s.recommendationsError != null -> HomeNote(s.recommendationsError, "Try again") { vm.refreshRecommendations() }
+                s.recommendationSearch != null -> HomeNote("No fishing window fits this plan. Try other days, a longer distance or Anytime.", "Edit plan") { showPlan = true }
+                else -> HomeNote("Compare fishing conditions for your plan.", "Find fishing windows", ::search)
             }
         }
-        item { FishIdentifierCard(s, picker, vm) }
-        item { Text("Quick forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
-            if (s.originName == null) Text("Use current location or choose a city to see local conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(18.dp))
-            else Column(Modifier.padding(18.dp)) {
-                Text("From ${s.originName}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Metric("Wind", s.weather?.wind ?: "—"); Metric("Tide", s.tide?.nextEvent ?: "—"); Metric("Temp", s.weather?.temperature ?: "—") }
+        if (best != null) item {
+            OutlinedButton(onClick = { vm.showResults() }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (results.size == 1) "See this window" else "See all ${results.size} windows")
             }
-        } }
-        item { Text("Your next planning window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy) }
-        item { s.recommendationSearch?.items?.minWithOrNull(searchOrder)?.let {
-            RecommendationCard(it, showWhy = shouldShowWindowReason(it, s.recommendationSearch?.items.orEmpty()), showOnMap = mapAction(it, vm)) { vm.showResults() }
-        } ?: Text("Choose a date and search to compare fishing conditions.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        item {
+            HomeShortcuts(onRules = { vm.selectTab(4) },
+                onIdentify = { scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 2).coerceAtLeast(0)) } },
+                onCatch = { vm.selectTab(12) }, onTrips = { vm.selectTab(3) })
+        }
+        item { NearbySpots(s, onSpot = { vm.showOnMap(it.asConditionPlace()) }, onSeeAll = { vm.selectTab(1) }) }
+        item { FishIdentifierCard(s, picker, vm) }
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showPlan) ModalBottomSheet(onDismissRequest = { showPlan = false }) {
@@ -252,6 +266,28 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
             onTown = { vm.selectManualOrigin(it); showWhere = false },
             onSpot = { vm.selectSearchSpot(it); showWhere = false },
             onStation = { vm.selectSearchStation(it); showWhere = false })
+    }
+}
+
+/** Land or boat and the common date choices, one tap each; the plan sheet keeps everything else. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun PlanQuickChips(s: FishingUiState, vm: FishingViewModel) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = !s.boat, onClick = { if (s.boat) { vm.setBoat(false); vm.refreshRecommendations() } }, label = { Text("Land") })
+        FilterChip(selected = s.boat, onClick = { if (!s.boat) { vm.setBoat(true); vm.refreshRecommendations() } }, label = { Text("Boat") })
+        listOf("Today", "Tomorrow", "This weekend", "Next 3 days").forEach { label ->
+            FilterChip(selected = s.dateLabel == label, onClick = { if (s.dateLabel != label) { vm.setDate(label); vm.refreshRecommendations() } },
+                label = { Text(label) })
+        }
+    }
+}
+
+@Composable private fun HomeNote(text: String, action: String, onAction: () -> Unit) {
+    Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onAction) { Text(action) }
+        }
     }
 }
 
@@ -476,7 +512,7 @@ private fun whereTitle(s: FishingUiState, loading: Boolean): String = when {
 }
 
 /** One place picker for the plan: the phone's location, a town, a fishing spot or a tide station. */
-@Composable private fun WherePicker(s: FishingUiState, onBack: (() -> Unit)?, onUseCurrentLocation: () -> Unit,
+@Composable internal fun WherePicker(s: FishingUiState, onBack: (() -> Unit)?, onUseCurrentLocation: () -> Unit,
     onTown: (SearchOrigin) -> Unit, onSpot: (FishingSpot) -> Unit, onStation: (TideStation) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     val text = query.trim()
@@ -1026,7 +1062,7 @@ private fun mapAction(item: Recommendation, vm: FishingViewModel): (() -> Unit)?
     if (item.sourceNote.isNotEmpty()) Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-@Composable private fun RecommendationCard(item: Recommendation, showWhy: Boolean = true, showOnMap: (() -> Unit)? = null, click: () -> Unit = {}) {
+@Composable internal fun RecommendationCard(item: Recommendation, showWhy: Boolean = true, showOnMap: (() -> Unit)? = null, click: () -> Unit = {}) {
     if (item.hasHighlights) Card(onClick = click, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             WindowTimeHeader(item)

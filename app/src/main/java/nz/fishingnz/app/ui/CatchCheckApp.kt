@@ -102,6 +102,10 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
         Appearance.DARK -> true
     }
     val palette = if (dark) darkPalette else lightPalette
+    // The first launch asks land or boat and where, once. People who used the app before 1.0.48 already chose.
+    val firstRun = remember(context) { context.getSharedPreferences("first_run", Context.MODE_PRIVATE) }
+    val locationOnboarding = remember(context) { context.getSharedPreferences("location_onboarding", Context.MODE_PRIVATE) }
+    var setupDone by remember { mutableStateOf(firstRun.getBoolean("done", false) || locationOnboarding.getBoolean("requested", false)) }
     SideEffect {
         (context as? Activity)?.window?.let { window ->
             window.statusBarColor = palette.background.toArgb()
@@ -118,6 +122,12 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                 confirmButton = { TextButton(onClick = vm::dismissSharedWindowNotice) { Text("OK") } },
                 title = { Text("Shared window") }, text = { Text(notice) })
         }
+        if (!setupDone && !state.showResults && state.selectedSpot == null) FirstRunSetup(state, vm) {
+            firstRun.edit().putBoolean("done", true).apply()
+            // Home asks for location by itself only when it was never asked; the setup has covered that.
+            locationOnboarding.edit().putBoolean("requested", true).apply()
+            setupDone = true
+        } else {
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
         Scaffold(containerColor = palette.background, bottomBar = {
             if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {
@@ -162,6 +172,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
         }
         if (state.showResults) ResultsScreen(state, vm)
         state.selectedSpot?.let { SpotDetailScreen(it, state.savedSpots.contains(recommendationKey(it)), vm) }
+        }
     }
 }
 

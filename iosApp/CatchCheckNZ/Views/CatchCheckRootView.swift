@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 import PhotosUI
 import UIKit
 import AuthenticationServices
@@ -43,6 +44,9 @@ struct CatchCheckRootView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @AppStorage("catchcheckAppearance") private var appearance = "light"
     @State private var moreDestination: MoreDestination?
+    /// The first launch asks land or boat and where, once. People who used the app before 1.0.48 were already asked for
+    /// location at launch, so they skip it.
+    @State private var showSetup = !UserDefaults.standard.bool(forKey: "firstRunSetupDone") && CLLocationManager().authorizationStatus == .notDetermined
 
     private var preferredAppearance: ColorScheme? {
         switch appearance {
@@ -54,7 +58,7 @@ struct CatchCheckRootView: View {
 
     var body: some View {
         TabView(selection: $vm.selectedTab) {
-            HomeView(openAccount: { moreDestination = .account }).tabItem { Label("Home", systemImage: "house.fill") }.tag(0)
+            HomeView(open: { moreDestination = $0 }).tabItem { Label("Home", systemImage: "house.fill") }.tag(0)
             FishingMapView().tabItem { Label("Spots", systemImage: "mappin.and.ellipse") }.tag(1)
             TideForecastView().tabItem { Label("Tide", systemImage: "water.waves") }.tag(2)
             WeatherView().tabItem { Label("Weather", systemImage: "cloud.sun.fill") }.tag(3)
@@ -78,7 +82,13 @@ struct CatchCheckRootView: View {
             case .settings: SettingsView()
             }
         }
-        .task { vm.requestLocation() }
+        .task { if !showSetup { vm.requestLocation() } }
+        .fullScreenCover(isPresented: $showSetup) {
+            FirstRunSetupView {
+                UserDefaults.standard.set(true, forKey: "firstRunSetupDone")
+                showSetup = false
+            }
+        }
         // "Log this catch" and a trip's "Log a catch" open the catch log, which starts the new entry.
         .onChange(of: vm.catchPrefill?.id) { _, id in if id != nil { moreDestination = .catchLog } }
         .onChange(of: vm.openTripsRequest) { _, _ in moreDestination = .trips }
@@ -454,62 +464,57 @@ struct HomeView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var showingPlan = false
+    @State private var showingPlace = false
     @State private var findAfterPlan = false
-    let openAccount: () -> Void
+    fileprivate let open: (MoreDestination) -> Void
+
+    private var greeting: String { vm.account?.displayName.split(separator: " ").first.map { "Kia ora, \($0)" } ?? "Kia ora" }
+
+    /// Changes whenever Home should look for the best window again: a new plan, a new place, or the window list closing.
+    private var autoSearchKey: String { "\(vm.hasSearchedRecommendations)|\(vm.locationSummary)|\(vm.showingResults)|\(vm.planOrigin != nil)" }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(vm.account?.displayName.split(separator: " ").first.map { "Kia ora, \($0)" } ?? "Kia ora")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Text("Plan your next catch")
-                            .font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
-                    }
-                    Card(background: CatchCheckColor.seafoam) {
-                        Button { showingPlan = true } label: {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .font(.title3).foregroundStyle(CatchCheckColor.accent)
-                                        .frame(width: 42, height: 42)
-                                        .background(CatchCheckColor.seafoam, in: RoundedRectangle(cornerRadius: 12))
-                                    Text("Your fishing plan").font(.headline).foregroundStyle(CatchCheckColor.navy)
-                                    Spacer()
-                                    Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.secondary)
-                                }
-                                Text("\(vm.isBoatFishing ? "Boat" : "Land") · \(vm.dateSummary) · \(vm.timeSummary)\(vm.sessionHours != 2 ? " · \(hoursLabel(vm.sessionHours))" : "") · \(vm.searchesOnePlace ? "this spot only" : "\(vm.radiusKm) km")")
-                                    .font(.subheadline.weight(.medium)).foregroundStyle(CatchCheckColor.navy)
-                                    .lineLimit(2)
-                                Text(vm.whatMattersLabel)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text(greeting).font(.subheadline).foregroundStyle(.secondary)
+                            Spacer()
+                            Button { showingPlace = true } label: {
+                                Label(vm.locationSummary, systemImage: "mappin.and.ellipse")
+                                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(CatchCheckColor.surface, in: Capsule())
+                            }
+                            .buttonStyle(.plain).foregroundStyle(CatchCheckColor.accent)
+                            .accessibilityLabel("\(vm.locationSummary). Change place")
+                        }
+                        TodayCard { showingPlace = true }
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Best fishing window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                                Text("\(vm.timeSummary) · \(vm.searchesOnePlace ? "this spot only" : "\(vm.radiusKm) km") · \(vm.whatMattersLabel)")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
+                            Spacer()
+                            Button("Edit plan") { showingPlan = true }.font(.subheadline.weight(.semibold))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Edit fishing plan: \(vm.isBoatFishing ? "boat" : "land"), \(vm.dateSummary), \(vm.timeSummary), \(vm.locationSummary)")
-                        SearchPlaceMenu(compact: true)
-                        Button { vm.showRecommendations() } label: {
-                            Text("Find fishing windows")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 5)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(CatchCheckColor.accent)
-                    }
-                    Text("Quick forecast").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                    Card { HStack { Metric(label: "Wind", value: vm.weather?.wind ?? "—"); Spacer(); Metric(label: "Tide", value: vm.currentTide?.nextEvent ?? "—"); Spacer(); Metric(label: "Temp", value: vm.weather?.temperature ?? "—") } }
-                    if let conditionsError = vm.conditionsError { Text(conditionsError).font(.caption).foregroundStyle(.secondary) }
-                    FishIdentifierView(photoItem: $photoItem, showCamera: $showCamera, openAccount: openAccount)
-                    Text("Your next planning window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                    if let best = vm.bestRecommendation {
-                        RecommendationCard(spot: best, showWhy: shouldShowWindowReason(best, among: vm.recommendations)) { vm.showingResults = true }
-                    } else {
-                        Card { Text("Choose a distance and dates, then search for live fishing windows.").foregroundStyle(.secondary) }
-                    }
-                }.padding(20)
-            }.background(CatchCheckColor.cream)
+                        PlanQuickChips()
+                        bestWindow
+                        HomeShortcuts(rules: { open(.rules) }, identify: { withAnimation { proxy.scrollTo("fishID", anchor: .top) } },
+                                      catchLog: { open(.catchLog) }, trips: { open(.trips) })
+                        NearbySpotsSection()
+                        FishIdentifierView(photoItem: $photoItem, showCamera: $showCamera, openAccount: { open(.account) }).id("fishID")
+                    }.padding(20)
+                }
+            }
+            .background(CatchCheckColor.cream)
+            // Home finds the best window as soon as the plan has a place, without waiting for a button.
+            .task(id: autoSearchKey) {
+                if !vm.hasSearchedRecommendations && !vm.isLoadingRecommendations && !vm.showingResults && vm.planOrigin != nil { vm.searchRecommendations() }
+            }
+            .sheet(isPresented: $showingPlace) { SearchStationPicker() }
             // Searching waits for the plan sheet to close, so the results can open in its place.
             .sheet(isPresented: $showingPlan, onDismiss: {
                 if findAfterPlan { findAfterPlan = false; vm.showRecommendations() }
@@ -519,6 +524,323 @@ struct HomeView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    @ViewBuilder private var bestWindow: some View {
+        if vm.isLoadingRecommendations {
+            Card {
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("Finding the best times \(vm.locationSummary.prefix(1).lowercased() + vm.locationSummary.dropFirst())…").foregroundStyle(CatchCheckColor.navy)
+                }
+            }
+        } else if let best = vm.bestRecommendation {
+            RecommendationCard(spot: best, showWhy: shouldShowWindowReason(best, among: vm.recommendations)) { vm.showingResults = true }
+            Button { vm.showingResults = true } label: {
+                Text(vm.recommendations.count == 1 ? "See this window" : "See all \(vm.recommendations.count) windows").frame(maxWidth: .infinity).padding(.vertical, 4)
+            }
+            .buttonStyle(.bordered).tint(CatchCheckColor.accent)
+        } else if vm.planOrigin == nil {
+            HomeNote(text: "Choose where you'll fish, and Home finds the best time.", action: "Choose a place") { showingPlace = true }
+        } else if let error = vm.recommendationError ?? vm.recommendationLocationError {
+            HomeNote(text: error, action: "Try again") { vm.searchRecommendations() }
+        } else if vm.hasSearchedRecommendations {
+            HomeNote(text: "No fishing window fits this plan. Try other days, a longer distance or Anytime.", action: "Edit plan") { showingPlan = true }
+        } else {
+            HomeNote(text: "Compare fishing conditions for your plan.", action: "Find fishing windows") { vm.showRecommendations() }
+        }
+    }
+}
+
+private struct HomeNote: View {
+    let text: String
+    let action: String
+    let perform: () -> Void
+    var body: some View {
+        Card {
+            Text(text).foregroundStyle(.secondary)
+            Button(action, action: perform).buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+        }
+    }
+}
+
+/// Land or boat and the common date choices, one tap each; the plan sheet keeps everything else.
+private struct PlanQuickChips: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    var body: some View {
+        FlowLayout {
+            Button("Land") { vm.isBoatFishing = false }.buttonStyle(ChoiceButton(selected: !vm.isBoatFishing))
+            Button("Boat") { vm.isBoatFishing = true }.buttonStyle(ChoiceButton(selected: vm.isBoatFishing))
+            ForEach([FishingDatePreset.today, .tomorrow, .thisWeekend, .nextThreeDays], id: \.self) { preset in
+                Button(preset.rawValue) { vm.datePreset = preset }.buttonStyle(ChoiceButton(selected: vm.datePreset == preset))
+            }
+        }
+    }
+}
+
+/// The tide height at `minute` of the day, read off the curve's samples; nil without samples. Android: `HomeViews.kt`.
+func tideLevel(_ points: [TidePoint], at minute: Int) -> Double? {
+    let sorted = points.sorted { $0.minuteOfDay < $1.minuteOfDay }
+    guard let first = sorted.first, let last = sorted.last else { return nil }
+    guard let after = sorted.firstIndex(where: { $0.minuteOfDay >= minute }) else { return last.level }
+    if after == 0 { return first.level }
+    let a = sorted[after - 1], b = sorted[after]
+    let span = b.minuteOfDay - a.minuteOfDay
+    guard span > 0 else { return b.level }
+    return a.level + (b.level - a.level) * Double(minute - a.minuteOfDay) / Double(span)
+}
+
+/// True while the tide is coming in at `minute`, false while it goes out; nil without samples or near midnight.
+func tideRising(_ points: [TidePoint], at minute: Int) -> Bool? {
+    guard minute + 20 <= 1440, let now = tideLevel(points, at: minute), let later = tideLevel(points, at: minute + 20) else { return nil }
+    return later > now
+}
+
+/// Home's "Today" card: the day's tide as a curve with a marker at now, then wind, temperature, moon and sunset.
+private struct TodayCard: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    let choosePlace: () -> Void
+    private let moon = MoonPhase.forDay(.now)
+    private var nowMinute: Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        let parts = calendar.dateComponents([.hour, .minute], from: .now)
+        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+    }
+    private var moonShort: String {
+        switch moon.tideRange { case .spring: "Spring"; case .neap: "Neap"; case .between: "Medium" }
+    }
+
+    var body: some View {
+        Card {
+            HStack {
+                Text("Today").font(.headline).foregroundStyle(CatchCheckColor.navy)
+                Spacer()
+                if let tide = vm.currentTide, let rising = tideRising(tide.points, at: nowMinute) {
+                    Text(rising ? "Tide coming in ↑" : "Tide going out ↓").font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.accent)
+                }
+            }
+            if vm.planOrigin == nil {
+                Text("Choose where you'll fish to see today's tide and weather.").foregroundStyle(.secondary)
+                Button("Choose a place", action: choosePlace).buttonStyle(.bordered)
+            } else {
+                if let tide = vm.currentTide, tide.points.count > 1 {
+                    TideSparkline(points: tide.points, nowMinute: nowMinute).frame(height: 64)
+                    Text(tide.events.map { "\($0.type) \($0.time)" }.joined(separator: "  ·  "))
+                        .font(.caption.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                    if !tide.stationName.isEmpty { Text("\(tide.stationName) tide station · LINZ").font(.caption2).foregroundStyle(.secondary) }
+                } else {
+                    Text(vm.conditionsError == nil ? "Loading today's tide…" : "Today's tide is unavailable right now.").font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
+                HStack(alignment: .top) {
+                    TodayMetric(label: "Wind", value: vm.weather?.wind ?? "—", detail: vm.weather?.windFrom.map { "from \($0)" })
+                    TodayMetric(label: "Temp", value: vm.weather?.temperature ?? "—", detail: nil)
+                    TodayMetric(label: "Moon", value: "\(moon.emoji) \(moonShort)", detail: moon.name)
+                    TodayMetric(label: "Sunset", value: vm.weather?.sunset ?? "—", detail: nil)
+                }
+                if let error = vm.conditionsError { Text(error).font(.caption2).foregroundStyle(.secondary) }
+            }
+        }
+    }
+}
+
+private struct TodayMetric: View {
+    let label: String
+    let value: String
+    let detail: String?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy).lineLimit(1).minimumScaleFactor(0.8)
+            if let detail { Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A small tide curve for one day, midnight to midnight, with a dot where the tide is now.
+struct TideSparkline: View {
+    let points: [TidePoint]
+    let nowMinute: Int
+    var line: Color = CatchCheckColor.accent
+    var marker: Color = .orange
+
+    var body: some View {
+        Canvas { context, size in
+            let sorted = points.sorted { $0.minuteOfDay < $1.minuteOfDay }
+            guard let low = sorted.map(\.level).min(), let high = sorted.map(\.level).max(), let first = sorted.first, let last = sorted.last else { return }
+            let span = high - low > 0.01 ? high - low : 1
+            let inset = 6.0
+            func x(_ minute: Int) -> CGFloat { size.width * CGFloat(minute) / 1440 }
+            func y(_ level: Double) -> CGFloat { inset + (size.height - 2 * inset) * CGFloat(1 - (level - low) / span) }
+            var curve = Path()
+            for (index, point) in sorted.enumerated() {
+                let spot = CGPoint(x: x(point.minuteOfDay), y: y(point.level))
+                if index == 0 { curve.move(to: spot) } else { curve.addLine(to: spot) }
+            }
+            var fill = curve
+            fill.addLine(to: CGPoint(x: x(last.minuteOfDay), y: size.height))
+            fill.addLine(to: CGPoint(x: x(first.minuteOfDay), y: size.height))
+            fill.closeSubpath()
+            context.fill(fill, with: .color(line.opacity(0.14)))
+            context.stroke(curve, with: .color(line), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            if let level = tideLevel(sorted, at: nowMinute) {
+                var guide = Path()
+                guide.move(to: CGPoint(x: x(nowMinute), y: 0))
+                guide.addLine(to: CGPoint(x: x(nowMinute), y: size.height))
+                context.stroke(guide, with: .color(.secondary.opacity(0.6)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                let dot = CGRect(x: x(nowMinute) - 5, y: y(level) - 5, width: 10, height: 10)
+                context.fill(Path(ellipseIn: dot), with: .color(marker))
+            }
+        }
+        .accessibilityLabel("Today's tide curve with the time now marked")
+    }
+}
+
+/// Home's four shortcuts.
+private struct HomeShortcuts: View {
+    let rules: () -> Void
+    let identify: () -> Void
+    let catchLog: () -> Void
+    let trips: () -> Void
+    var body: some View {
+        HStack(spacing: 8) {
+            tile("book.fill", "Rules", rules)
+            tile("camera.fill", "Identify", identify)
+            tile("fish.fill", "Log catch", catchLog)
+            tile("calendar", "Trips", trips)
+        }
+    }
+    private func tile(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: symbol).font(.title3).foregroundStyle(CatchCheckColor.accent).frame(height: 24)
+                Text(label).font(.caption.weight(.semibold)).foregroundStyle(CatchCheckColor.navy).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The three spots nearest the plan's place for the plan's land or boat choice.
+private struct NearbySpotsSection: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    var body: some View {
+        if let origin = vm.planOrigin {
+            let nearest = Array(SpotListing.build(fishingSpots.filter { $0.boat == vm.isBoatFishing }, from: origin, ramps: [], structures: [], protectedAreas: []).prefix(3))
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(vm.isBoatFishing ? "Boat spots near you" : "Spots near you").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Spacer()
+                    Button("See all") { vm.selectedTab = 1 }.font(.subheadline.weight(.semibold))
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(nearest.enumerated()), id: \.element.id) { index, listing in
+                        if index > 0 { Divider().padding(.leading, 52) }
+                        Button { vm.showOnMap(ConditionPlace(listing.spot)) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: listing.spot.boat ? "sailboat.fill" : "figure.fishing").foregroundStyle(CatchCheckColor.accent).frame(width: 28)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(listing.spot.name).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                                    Text(listing.spot.area).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if let km = listing.distanceKm { Text(SpotListing.distanceLabel(km)).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy) }
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 12).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+            }
+        }
+    }
+}
+
+/// The first launch: land or boat, then the phone's location or a town, before Home. Android asks the same in
+/// `HomeViews.kt`. Everything here can be changed later in the plan on Home.
+private struct FirstRunSetupView: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @State private var showingPicker = false
+    @State private var askedForLocation = false
+    let done: () -> Void
+
+    private var status: String {
+        if !vm.searchesFromDeviceLocation { return vm.locationSummary }
+        guard askedForLocation else { return "Nothing leaves your phone until you choose." }
+        if vm.hasDeviceLocation { return vm.locationSummary }
+        return vm.tideLocationIssue == nil ? "Finding your location…" : "Location is off. Choose a town instead."
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Kia ora").foregroundStyle(.secondary)
+                Text("Let's set up your fishing day").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                Text("Two quick questions. You can change both later in your plan on Home.").foregroundStyle(.secondary)
+                Text("How do you usually fish?").font(.headline).foregroundStyle(CatchCheckColor.navy).padding(.top, 6)
+                HStack(spacing: 12) {
+                    choice("figure.fishing", "From land", "Beach, rocks or wharf", selected: !vm.isBoatFishing) { vm.isBoatFishing = false }
+                    choice("sailboat.fill", "From a boat", "Ramps and sea state", selected: vm.isBoatFishing) { vm.isBoatFishing = true }
+                }
+                Text("Where are you?").font(.headline).foregroundStyle(CatchCheckColor.navy).padding(.top, 6)
+                row("location.fill", "Use my location", "Finds your nearest spots, tides and rules",
+                    chosen: askedForLocation && vm.searchesFromDeviceLocation && vm.hasDeviceLocation) {
+                    askedForLocation = true
+                    if !vm.searchesFromDeviceLocation { vm.selectSearchStation(nil) }
+                    vm.requestLocation()
+                }
+                row("magnifyingglass", "Choose a town instead", "Or a fishing spot or tide location", chosen: !vm.searchesFromDeviceLocation) { showingPicker = true }
+                Text(status).font(.caption).foregroundStyle(status.hasPrefix("Location is off") ? .red : .secondary)
+            }
+            .padding(24)
+        }
+        .background(CatchCheckColor.cream)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 4) {
+                Button(action: done) { Text("Show my fishing day").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6) }
+                    .buttonStyle(.borderedProminent).tint(CatchCheckColor.accent)
+                Button("Skip for now", action: done).frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 10)
+            .background(.bar)
+        }
+        .sheet(isPresented: $showingPicker) { SearchStationPicker() }
+    }
+
+    private func choice(_ symbol: String, _ title: String, _ detail: String, selected: Bool, _ pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            VStack(spacing: 6) {
+                Image(systemName: symbol).font(.largeTitle).foregroundStyle(CatchCheckColor.accent)
+                Text(title).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 18).padding(.horizontal, 8)
+            .background(selected ? CatchCheckColor.seafoam : CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(selected ? CatchCheckColor.accent : .clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func row(_ symbol: String, _ title: String, _ detail: String, chosen: Bool, _ pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol).foregroundStyle(CatchCheckColor.accent).frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if chosen { Image(systemName: "checkmark.circle.fill").foregroundStyle(CatchCheckColor.accent) }
+            }
+            .padding(14).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16)).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

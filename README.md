@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.47 (build code 48)**. The original code is preserved
+Current project version: **1.0.48 (build code 49)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -10,6 +10,8 @@ at Git tag `v1.0.0`. For each future change or commit, run
 Fishdays - NZ helps you find a place and time to fish, check nearby tides, and review fishing rules before you head out. The iOS and Android apps bring these tools together for both land and boat fishing.
 
 ## Find a fishing window
+
+The first time the app opens it asks two questions: land or boat, and your location or a town. Home then shows **Today** (the day's tide curve with the time now marked, wind and its direction, temperature, the moon and sunset), the **best fishing window** for your plan, found automatically, shortcuts to rules, fish identification, the catch log and trips, and the spots nearest you.
 
 Start with your current location or choose a town. Pick land or boat fishing, how far you want to travel (10–500 km), and when you want to go. You can search today, in three days, this week, this weekend, or choose your own dates within the next 16 days.
 

@@ -410,6 +410,9 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         return hasDeviceLocation ? location : nil
     }
 
+    /// Where the plan searches from, if known: Home's nearby spots and its automatic search use it.
+    var planOrigin: GeoPoint? { recommendationOrigin }
+
     var recommendations: [Recommendation] {
         scoredWindows.map { window in
             let day = Self.nzDayLabel(window.start)

@@ -3,7 +3,8 @@ package nz.fishingnz.app.model
 import java.time.LocalTime
 
 data class GeoPoint(val latitude: Double, val longitude: Double)
-data class WeatherState(val temperature: String, val wind: String, val rain: String)
+/** Current weather for Home. [windFrom] is a compass point such as "SW"; [sunset] is today's, such as "7:48 PM". */
+data class WeatherState(val temperature: String, val wind: String, val rain: String, val windFrom: String? = null, val sunset: String? = null)
 data class TideEvent(val time: String, val height: String, val type: String)
 data class TidePoint(val time: String, val level: Double, val minuteOfDay: Int)
 data class TideState(val currentLevel: String, val nextEvent: String, val eventTime: String, val events: List<TideEvent> = emptyList(), val points: List<TidePoint> = emptyList(), val stationName: String = "")

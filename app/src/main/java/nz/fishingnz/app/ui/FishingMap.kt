@@ -565,7 +565,7 @@ internal fun Recommendation.mapPlace(): ConditionPlace? {
     return (spot ?: FishingSpot(name, area, latitude, longitude, boat)).asConditionPlace()
 }
 
-private fun FishingSpot.asConditionPlace() = ConditionPlace(name, GeoPoint(latitude, longitude), "$area · ${if (boat) "Boat" else "Land"} fishing", boat, recommendationTideStation(this, null))
+internal fun FishingSpot.asConditionPlace() = ConditionPlace(name, GeoPoint(latitude, longitude), "$area · ${if (boat) "Boat" else "Land"} fishing", boat, recommendationTideStation(this, null))
 
 /** Shows [point] as a pin in the phone's map app, where directions are one more tap; false when nothing can open it. */
 internal fun openPositionInMaps(context: Context, point: GeoPoint, label: String): Boolean {

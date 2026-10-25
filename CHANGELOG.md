@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.48 — 2026-10-25 (build code 49)
+
+- **First-launch setup.** A new install asks two questions before Home: fishing from land or a boat, and the phone's
+  location or a town (or a spot or tide location). **Skip for now** goes straight to Home. Location is asked for here
+  instead of in a cold prompt as the app opens. People updating from an earlier version don't see it.
+- **New Home.** The place shows as a chip at the top. A **Today** card draws the day's tide as a curve with a dot at
+  now and says whether it is coming in or going out, lists the highs and lows, and shows wind with its direction,
+  temperature, the moon (spring, neap or medium tides) and sunset. **Best fishing window** now searches by itself as
+  soon as the plan has a place, with one-tap Land/Boat and Today/Tomorrow/This weekend/Next 3 days chips, **Edit plan**
+  for everything else and **See all windows**. Four shortcuts follow (Rules, Identify, Log catch, Trips), then the
+  three nearest spots for land or boat (tap for the map, **See all** for the Spots tab), then fish identification,
+  which the Identify shortcut scrolls to. Home's weather request also asks Open-Meteo for the wind direction and
+  sunset. Android and iPhone.
+
 ## 1.0.47 — 2026-10-25 (build code 48)
 
 - **Spots tab.** The Map tab is now **Spots** and opens on a list of every fishing spot: nearest first with its distance
