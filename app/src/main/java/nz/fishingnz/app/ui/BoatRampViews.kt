@@ -1,7 +1,5 @@
 package nz.fishingnz.app.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,7 +30,6 @@ import nz.fishingnz.app.model.GeoPoint
 import nz.fishingnz.app.model.nearestTideStation
 import java.time.Instant
 import java.time.ZoneId
-import java.util.Locale
 
 /** The bundled ramps, read off the main thread; null until loaded. */
 @Composable
@@ -76,11 +73,7 @@ internal fun NearbyRampsCard(point: GeoPoint, start: Instant?, end: Instant?) {
                         Text(BoatRamps.distanceLabel(km) + " " + BoatRamps.direction(point, ramp.point) + when (ramp.fee) { true -> " · fee"; false -> " · free"; null -> "" },
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = {
-                        val destination = String.format(Locale.US, "%.5f,%.5f", ramp.point.latitude, ramp.point.longitude)
-                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$destination")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        catch (_: android.content.ActivityNotFoundException) { }
-                    }) { Text("Directions") }
+                    TextButton(onClick = { openPositionInMaps(context, ramp.point, ramp.label) }) { Text("Open in Maps") }
                 }
             }
             lowTide?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }

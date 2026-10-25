@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.47 — 2026-10-25 (build code 48)
+
+- **Spots tab.** The Map tab is now **Spots** and opens on a list of every fishing spot: nearest first with its distance
+  when location is on (otherwise by area), a search box for spot or area names, the All/Land/Boat filters, the nearest
+  boat ramp (within 15 km) or wharf, breakwater or groyne (within 3 km), and a red note when the spot is in or near a
+  no-fishing area or beside a Seafloor Protection Area. Tapping a spot switches to **Map** with its card open; **List**
+  and **Map** switch back and forth without losing the map's place. Replaces the old **List** sheet. Android and iPhone.
+- **Open in Maps instead of navigation.** The spot card's button and the boat ramp and wharf rows in window details
+  now show the place as a pin in Google Maps or Apple Maps instead of starting turn-by-turn directions straight away;
+  directions are one more tap there.
+
 ## 1.0.46 — 2026-10-25 (build code 47)
 
 - **Wharves and breakwaters in land mode.** With **Land fishing** chosen, the map shows coastal wharves, breakwaters and

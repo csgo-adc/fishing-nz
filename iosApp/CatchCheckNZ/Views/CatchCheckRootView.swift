@@ -55,7 +55,7 @@ struct CatchCheckRootView: View {
     var body: some View {
         TabView(selection: $vm.selectedTab) {
             HomeView(openAccount: { moreDestination = .account }).tabItem { Label("Home", systemImage: "house.fill") }.tag(0)
-            FishingMapView().tabItem { Label("Map", systemImage: "map.fill") }.tag(1)
+            FishingMapView().tabItem { Label("Spots", systemImage: "mappin.and.ellipse") }.tag(1)
             TideForecastView().tabItem { Label("Tide", systemImage: "water.waves") }.tag(2)
             WeatherView().tabItem { Label("Weather", systemImage: "cloud.sun.fill") }.tag(3)
             MoreView(open: { moreDestination = $0 }).tabItem { Label("More", systemImage: "square.grid.2x2.fill") }.tag(4)

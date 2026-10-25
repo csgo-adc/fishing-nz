@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.DirectionsBoat
+import androidx.compose.material.icons.filled.Phishing
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Remove
@@ -82,6 +84,8 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 import nz.fishingnz.app.data.MarineProtection
+import nz.fishingnz.app.data.SpotListings
+import java.util.Locale
 import kotlin.math.floor
 
 // LINZ permits this developer key to be embedded in a public client application.
@@ -137,7 +141,9 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var showConditions by remember { mutableStateOf(false) }
     var navigationError by remember { mutableStateOf(false) }
     var selectedCardHeightPx by remember { mutableIntStateOf(0) }
-    var showList by remember { mutableStateOf(false) }
+    // The Spots tab opens on the list, nearest first; the map is one tap away.
+    var showMap by rememberSaveable { mutableStateOf(false) }
+    var spotQuery by rememberSaveable { mutableStateOf("") }
     var showMapStyles by remember { mutableStateOf(false) }
     var baseMap by remember { mutableStateOf(BaseMap.STANDARD) }
     var mapLoaded by remember { mutableStateOf(false) }
@@ -154,10 +160,9 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     val structures = rememberShoreStructures()
     // Bumped when the camera stops, so ramp and wharf pins follow panning as well as zooming.
     var cameraTick by remember { mutableIntStateOf(0) }
-    BackHandler(enabled = showMapStyles || showList || selectedPlace != null) {
+    BackHandler(enabled = showMapStyles || selectedPlace != null) {
         when {
             showMapStyles -> showMapStyles = false
-            showList -> showList = false
             else -> selectedPlace = null
         }
     }
@@ -324,7 +329,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
 
     LaunchedEffect(s.mapFocus) {
         val place = s.mapFocus ?: return@LaunchedEffect
-        selectedPlace = place; showConditions = false; showList = false; showSearch = false; navigationError = false
+        selectedPlace = place; showConditions = false; showMap = true; showSearch = false; navigationError = false
         val map = snapshotFlow { nativeMap.value }.filterNotNull().first()
         map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.point.latitude, place.point.longitude), 11.0))
         vm.mapFocusShown()
@@ -370,11 +375,20 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Explore conditions", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
-                    Text("Search a place or tap anywhere on the map", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text("Spots", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Navy)
+                    Text(when {
+                        showMap -> "Search a place or tap anywhere on the map"
+                        s.deviceLocation != null -> "Nearest fishing spots first"
+                        else -> "Fishing spots by area"
+                    }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = { showSearch = true }) { Icon(Icons.Default.Search, "Search places") }
-                TextButton(onClick = { showList = true }) { Icon(Icons.Default.List, null); Spacer(Modifier.width(4.dp)); Text("List") }
+                SingleChoiceSegmentedButtonRow {
+                    SegmentedButton(selected = !showMap, onClick = { showMap = false },
+                        shape = SegmentedButtonDefaults.itemShape(0, 2), icon = {}) { Text("List") }
+                    SegmentedButton(selected = showMap, onClick = { showMap = true },
+                        shape = SegmentedButtonDefaults.itemShape(1, 2), icon = {}) { Text("Map") }
+                }
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("All", "Land", "Boat").forEach { option ->
@@ -436,7 +450,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     Text("Check your connection, then try again. The fishing spots are available in the list.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { mapError = false; mapLoaded = false; nativeMap.value = null; mapView.getMapAsync { map -> map.setStyle(baseMap.style()) { nativeMap.value = map; styleRevision++ } } }) { Text("Retry map") }
-                        TextButton(onClick = { showList = true }) { Text("Browse spots") }
+                        TextButton(onClick = { showMap = false }) { Text("Browse spots") }
                     }
                 }
             }
@@ -456,11 +470,11 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                         MarineProtectionNotice(place.point, compact = true)
                         Button(onClick = { showConditions = true }, modifier = Modifier.fillMaxWidth()) { Text("Check conditions") }
                         OutlinedButton(onClick = {
-                            navigationError = !openSpotInMaps(context, spot)
+                            navigationError = !openPositionInMaps(context, place.point, spot.name)
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.NearMe, contentDescription = null)
+                            Icon(Icons.Default.Place, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (spot.boat) "View position in map app" else "Navigate in map app")
+                            Text("Open in Maps")
                         }
                         if (navigationError) Text("No map app could open this position.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = {
@@ -495,36 +509,23 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 if (baseMap.isLinz && filter == "Boat" && zoom >= 10.0) AttributionLink("· Ramps © OpenStreetMap", nz.fishingnz.app.data.BoatRamps.CREDIT_URL)
                 if (baseMap.isLinz && filter == "Land" && zoom >= 10.0) AttributionLink("· Wharves © OpenStreetMap", nz.fishingnz.app.data.ShoreStructures.CREDIT_URL)
             }
+            // The list covers the map rather than replacing it, so the map keeps its place and loads in the background.
+            if (!showMap) SpotList(visibleSpots, s.deviceLocation, ramps, structures, protection?.areas, spotQuery, { spotQuery = it }) { spot ->
+                selectedPlace = spot.asConditionPlace()
+                navigationError = false
+                showMap = true
+                nativeMap.value?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(spot.latitude, spot.longitude), 11.0))
+            }
         }
     }
 
     if (showSearch) MapPlaceSearch(choose = { place ->
-        selectedPlace = place; showSearch = false; navigationError = false
+        selectedPlace = place; showSearch = false; navigationError = false; showMap = true
         nativeMap.value?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.point.latitude, place.point.longitude), 11.0))
     }, dismiss = { showSearch = false })
     if (showConditions && selectedPlace != null) key(selectedPlace!!.id) {
         PlaceConditionsScreen(selectedPlace!!, dismiss = { showConditions = false })
     }
-    if (showList) ModalBottomSheet(onDismissRequest = { showList = false }) {
-        Text("Fishing areas", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold)
-        Text(if (mapError) "Choose an area to plan a fishing window" else "Tap an area to see it on the map",
-            Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(0.8f), contentPadding = PaddingValues(12.dp)) {
-            items(visibleSpots, key = { "${it.name}:${it.latitude}:${it.longitude}" }) { spot ->
-                Column(Modifier.fillMaxWidth().clickable {
-                    selectedPlace = spot.asConditionPlace()
-                    navigationError = false
-                    showList = false
-                    nativeMap.value?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(spot.latitude, spot.longitude), 11.0))
-                }.padding(horizontal = 10.dp, vertical = 12.dp)) {
-                    Text(spot.name, color = Navy, fontWeight = FontWeight.SemiBold)
-                    Text("${spot.area} · ${if (spot.boat) "Boat" else "Land"} fishing", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                }
-                HorizontalDivider()
-            }
-        }
-    }
-
     if (showMapStyles) ModalBottomSheet(onDismissRequest = { showMapStyles = false }) {
         Text("Map layers", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge, color = Navy, fontWeight = FontWeight.Bold)
         Text("Choose how the map looks. Fishing spots stay visible on every style.",
@@ -566,21 +567,13 @@ internal fun Recommendation.mapPlace(): ConditionPlace? {
 
 private fun FishingSpot.asConditionPlace() = ConditionPlace(name, GeoPoint(latitude, longitude), "$area · ${if (boat) "Boat" else "Land"} fishing", boat, recommendationTideStation(this, null))
 
-private fun openSpotInMaps(context: Context, spot: FishingSpot): Boolean {
-    val coordinates = "${spot.latitude},${spot.longitude}"
-    val intents = if (spot.boat) {
-        listOf(
-            Intent(Intent.ACTION_VIEW, Uri.parse("geo:${coordinates}?q=${coordinates}(${Uri.encode(spot.name)})")),
-            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=$coordinates"))
-        )
-    } else {
-        listOf(
-            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$coordinates"))
-                .setPackage("com.google.android.apps.maps"),
-            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$coordinates")),
-            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$coordinates"))
-        )
-    }
+/** Shows [point] as a pin in the phone's map app, where directions are one more tap; false when nothing can open it. */
+internal fun openPositionInMaps(context: Context, point: GeoPoint, label: String): Boolean {
+    val coordinates = String.format(Locale.US, "%.6f,%.6f", point.latitude, point.longitude)
+    val intents = listOf(
+        Intent(Intent.ACTION_VIEW, Uri.parse("geo:$coordinates?q=$coordinates(${Uri.encode(label)})")),
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=$coordinates"))
+    )
     intents.forEach { intent ->
         try {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -677,4 +670,49 @@ private fun clusterPin(context: android.content.Context, count: Int): Bitmap {
     }
     canvas.drawText(label, center, center - (paint.ascent() + paint.descent()) / 2, paint)
     return bitmap
+}
+
+/** The Spots tab's list: every spot for the filter, nearest first when the phone's position is known. */
+@Composable
+private fun SpotList(spots: List<FishingSpot>, from: GeoPoint?, ramps: List<nz.fishingnz.app.data.BoatRamp>?,
+                     structures: List<nz.fishingnz.app.data.ShoreStructure>?, protectedAreas: List<nz.fishingnz.app.data.ProtectedArea>?,
+                     query: String, onQuery: (String) -> Unit, choose: (FishingSpot) -> Unit) {
+    val listings = remember(spots, from, ramps, structures, protectedAreas) { SpotListings.build(spots, from, ramps, structures, protectedAreas) }
+    val matching = listings.filter { SpotListings.matches(it, query) }
+    LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            OutlinedTextField(value = query, onValueChange = onQuery, modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                placeholder = { Text("Search spots or areas") }, singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Default.Close, "Clear search") } })
+        }
+        item {
+            Text(when {
+                matching.isEmpty() -> "No spot matches “${query.trim()}”. Try a town or region, or search a place with the magnifier."
+                from != null -> "${matching.size} spots · nearest first"
+                else -> "${matching.size} spots · turn on location to sort by distance"
+            }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
+        items(matching, key = { "${it.spot.name}:${it.spot.latitude}:${it.spot.longitude}:${it.spot.boat}" }) { listing ->
+            Card(onClick = { choose(listing.spot) }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (listing.spot.boat) Icons.Default.DirectionsBoat else Icons.Default.Phishing,
+                        contentDescription = if (listing.spot.boat) "Boat fishing" else "Land fishing", tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(listing.spot.name, color = Navy, fontWeight = FontWeight.SemiBold)
+                        Text("${listing.spot.area} · ${if (listing.spot.boat) "Boat" else "Land"}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        listing.nearby?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                        listing.warning?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium) }
+                    }
+                    listing.distanceKm?.let {
+                        Spacer(Modifier.width(8.dp))
+                        Text(SpotListings.distanceLabel(it), color = Navy, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
 }

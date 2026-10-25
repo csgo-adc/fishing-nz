@@ -18,10 +18,10 @@ struct NearbyStructuresCard: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Directions") {
+                    Button("Open in Maps") {
                         let destination = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: item.structure.lat, longitude: item.structure.lon)))
                         destination.name = item.structure.label
-                        destination.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                        destination.openInMaps()
                     }.font(.subheadline.weight(.semibold))
                 }
             }

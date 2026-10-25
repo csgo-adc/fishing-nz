@@ -54,7 +54,9 @@ struct FishingMapView: View {
     @State private var selectedPlace: ConditionPlace?
     @State private var conditionsPlace: ConditionPlace?
     @State private var showPlaceSearch = false
-    @State private var showSpotList = false
+    /// The Spots tab opens on the list, nearest first; the map is one tap away.
+    @State private var showMap = false
+    @State private var spotQuery = ""
     /// Set after "Show on map" moves the camera, so returning to the tab does not jump back to the current location.
     @State private var keepCameraOnAppear = false
     @AppStorage("mapShowsProtectedAreas") private var showProtection = true
@@ -63,13 +65,14 @@ struct FishingMapView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Explore conditions").font(.title.bold()).foregroundStyle(CatchCheckColor.navy)
+                    Text("Spots").font(.title.bold()).foregroundStyle(CatchCheckColor.navy)
                     Spacer()
                     Button { showPlaceSearch = true } label: { Image(systemName: "magnifyingglass").font(.title3) }.accessibilityLabel("Search places")
-                    Button { showSpotList = true } label: { Label("List", systemImage: "list.bullet") }
-                        .accessibilityLabel("List fishing areas")
+                    Picker("Show", selection: $showMap) { Text("List").tag(false); Text("Map").tag(true) }
+                        .pickerStyle(.segmented).frame(width: 120)
                 }
-                Text("Search a place or tap anywhere on the map").font(.subheadline).foregroundStyle(.secondary)
+                Text(showMap ? "Search a place or tap anywhere on the map" : vm.hasDeviceLocation ? "Nearest fishing spots first" : "Fishing spots by area")
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Picker("Filter", selection: $filter) { Text("All spots").tag("All"); Text("Land fishing").tag("Land"); Text("Boat fishing").tag("Boat") }.pickerStyle(.segmented)
             }.padding(20)
             FishingMapCanvas(layer: layer, showProtection: showProtection, showRamps: filter == "Boat", showStructures: filter == "Land", spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
@@ -168,7 +171,18 @@ struct FishingMapView: View {
                     .padding(.bottom, 36)
                 }
             }
-            selectedPlaceCard
+            // The list covers the map rather than replacing it, so the map keeps its place and loads in the background.
+            .overlay {
+                if !showMap {
+                    SpotListView(spots: visibleSpots, from: vm.hasDeviceLocation ? vm.location : nil, query: $spotQuery) { spot in
+                        selectedPlace = ConditionPlace(spot)
+                        showMap = true
+                        sendCamera(.region(MKCoordinateRegion(center: .init(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude),
+                                                              span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
+                    }
+                }
+            }
+            if showMap { selectedPlaceCard }
         }.background(CatchCheckColor.cream)
             .onAppear {
                 if vm.mapFocus != nil { showMapFocus() }
@@ -194,17 +208,10 @@ struct FishingMapView: View {
             }
             .onChange(of: filter) { _, _ in selectedPlace = nil }
             .fullScreenCover(item: $conditionsPlace) { PlaceConditionsView(place: $0) }
-            .sheet(isPresented: $showSpotList) {
-                FishingSpotList(spots: visibleSpots) { spot in
-                    selectedPlace = ConditionPlace(spot)
-                    showSpotList = false
-                    sendCamera(.region(MKCoordinateRegion(center: .init(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude),
-                                                          span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
-                }
-            }
             .sheet(isPresented: $showPlaceSearch) {
                 MapPlaceSearchView { place in
                     selectedPlace = place
+                    showMap = true
                     sendCamera(.region(MKCoordinateRegion(center: .init(latitude: place.point.latitude, longitude: place.point.longitude), span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
                 }
             }
@@ -234,7 +241,7 @@ struct FishingMapView: View {
                 Button {
                     openSpotInMaps(spot)
                 } label: {
-                    Label(spot.boat ? "View position in Maps" : "Directions in Maps", systemImage: "map")
+                    Label("Open in Maps", systemImage: "mappin.and.ellipse")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -259,7 +266,7 @@ struct FishingMapView: View {
         guard let place = vm.mapFocus else { return }
         vm.mapFocus = nil
         selectedPlace = place
-        conditionsPlace = nil; showSpotList = false; showPlaceSearch = false
+        conditionsPlace = nil; showMap = true; showPlaceSearch = false
         needsFirstLocationCenter = false; recenterOnLocationUpdate = false; keepCameraOnAppear = true
         sendCamera(.region(MKCoordinateRegion(center: .init(latitude: place.point.latitude, longitude: place.point.longitude),
                                               span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))))
@@ -278,11 +285,8 @@ struct FishingMapView: View {
         let coordinate = CLLocationCoordinate2D(latitude: spot.coordinate.latitude, longitude: spot.coordinate.longitude)
         let destination = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
         destination.name = spot.name
-        if spot.boat {
-            destination.openInMaps()
-        } else {
-            destination.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
-        }
+        // Shows the pin; directions are one more tap in Maps.
+        destination.openInMaps()
     }
 
     private func mapControlIcon(_ symbol: String) -> some View {
@@ -548,40 +552,96 @@ private struct FishingMapCanvas: UIViewRepresentable {
     }
 }
 
-/// Every fishing area for the current filter, for browsing without the map.
-private struct FishingSpotList: View {
-    @Environment(\.dismiss) private var dismiss
-    let spots: [FishingSpot]
-    let choose: (FishingSpot) -> Void
-    @State private var query = ""
+/// A fishing spot as the Spots list shows it: how far it is from the phone and what is close by. Android builds the same
+/// list in `SpotListing.kt`.
+struct SpotListing: Identifiable {
+    let spot: FishingSpot
+    let distanceKm: Double?
+    let nearby: String?
+    let warning: String?
+    var id: String { "\(spot.id):\(spot.coordinate.latitude):\(spot.coordinate.longitude)" }
 
-    private var matching: [FishingSpot] {
-        let sorted = spots.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        guard !query.isEmpty else { return sorted }
-        return sorted.filter { $0.name.localizedStandardContains(query) || $0.area.localizedStandardContains(query) }
+    /// Nearest first when the phone's position is known, otherwise by area and name.
+    static func build(_ spots: [FishingSpot], from: GeoPoint?, ramps: [BoatRamp], structures: [ShoreStructure], protectedAreas: [ProtectedArea]) -> [SpotListing] {
+        let listings = spots.map { spot -> SpotListing in
+            let point = spot.coordinate
+            let nearby: String?
+            if spot.boat {
+                nearby = BoatRamps.nearest(point, in: ramps, limit: 1, withinKm: 15).first.map { "Boat ramp \(BoatRamps.distanceLabel($0.km)) away" }
+            } else {
+                nearby = ShoreStructures.nearest(point, in: structures, limit: 1, withinKm: 3).first.map { "\($0.structure.kindLabel.prefix(1).uppercased() + $0.structure.kindLabel.dropFirst()) \(BoatRamps.distanceLabel($0.km)) away" }
+            }
+            let warning = MarineProtection.notices(at: point, in: protectedAreas, limit: 1).first.map { notice in
+                notice.area.kind.noFishing ? (notice.inside ? "Inside a no-fishing area" : "No-fishing area nearby") : "Seafloor Protection Area nearby"
+            }
+            return SpotListing(spot: spot, distanceKm: from.map { placeDistanceKm($0, point) }, nearby: nearby, warning: warning)
+        }
+        if from != nil { return listings.sorted { ($0.distanceKm ?? 0) < ($1.distanceKm ?? 0) } }
+        return listings.sorted { ($0.spot.area, $0.spot.name) < ($1.spot.area, $1.spot.name) }
     }
 
+    func matches(_ query: String) -> Bool {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        return text.isEmpty || spot.name.localizedCaseInsensitiveContains(text) || spot.area.localizedCaseInsensitiveContains(text)
+    }
+
+    /// "800 m", "4.2 km" or "120 km".
+    static func distanceLabel(_ km: Double) -> String { km < 100 ? BoatRamps.distanceLabel(km) : "\(Int(km)) km" }
+}
+
+/// The Spots tab's list: every spot for the filter, nearest first when the phone's position is known.
+private struct SpotListView: View {
+    let spots: [FishingSpot]
+    let from: GeoPoint?
+    @Binding var query: String
+    let choose: (FishingSpot) -> Void
+
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(matching, id: \.id) { spot in
-                        Button { choose(spot) } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(spot.name).foregroundStyle(CatchCheckColor.navy)
-                                Text("\(spot.area) · \(spot.boat ? "Boat" : "Land") fishing").font(.caption).foregroundStyle(.secondary)
+        let listings = SpotListing.build(spots, from: from, ramps: BoatRamps.bundled, structures: ShoreStructures.bundled,
+                                         protectedAreas: MarineProtection.bundled?.areas ?? [])
+        let matching = listings.filter { $0.matches(query) }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search spots or areas", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear search")
+                    }
+                }
+                .padding(12)
+                .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 12))
+                Text(matching.isEmpty ? "No spot matches “\(query.trimmingCharacters(in: .whitespaces))”. Try a town or region, or search a place with the magnifier."
+                     : from != nil ? "\(matching.count) spots · nearest first" : "\(matching.count) spots · turn on location to sort by distance")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(matching) { listing in
+                    Button { choose(listing.spot) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: listing.spot.boat ? "sailboat.fill" : "figure.fishing")
+                                .font(.title3).foregroundStyle(CatchCheckColor.accent).frame(width: 28)
+                                .accessibilityLabel(listing.spot.boat ? "Boat fishing" : "Land fishing")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(listing.spot.name).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                                Text("\(listing.spot.area) · \(listing.spot.boat ? "Boat" : "Land")").font(.caption).foregroundStyle(.secondary)
+                                if let nearby = listing.nearby { Text(nearby).font(.caption).foregroundStyle(.secondary) }
+                                if let warning = listing.warning { Text(warning).font(.caption.weight(.semibold)).foregroundStyle(.red) }
+                            }
+                            Spacer(minLength: 8)
+                            if let km = listing.distanceKm {
+                                Text(SpotListing.distanceLabel(km)).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
                             }
                         }
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 16))
                     }
-                } footer: {
-                    Text("Tap an area to see it on the map.")
+                    .buttonStyle(.plain)
                 }
             }
-            .searchable(text: $query, prompt: "Search fishing areas")
-            .navigationTitle("Fishing areas")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .padding(.horizontal, 20).padding(.bottom, 20)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .background(CatchCheckColor.cream)
     }
 }
 

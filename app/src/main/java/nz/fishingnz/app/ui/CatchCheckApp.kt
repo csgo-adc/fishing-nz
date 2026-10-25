@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Phishing
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
@@ -123,7 +123,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
             if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {
                 val destinations = listOf(
                     Triple(Icons.Default.Home, "Home", 0),
-                    Triple(Icons.Default.Map, "Map", 1),
+                    Triple(Icons.Default.Place, "Spots", 1),
                     Triple(Icons.Default.Waves, "Tide", 2),
                     Triple(Icons.Default.WbSunny, "Weather", 11),
                     Triple(Icons.Default.MoreHoriz, "More", 6)

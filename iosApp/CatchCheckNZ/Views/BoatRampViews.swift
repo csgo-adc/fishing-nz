@@ -22,10 +22,10 @@ struct NearbyRampsCard: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Directions") {
+                    Button("Open in Maps") {
                         let destination = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: item.ramp.lat, longitude: item.ramp.lon)))
                         destination.name = item.ramp.label
-                        destination.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                        destination.openInMaps()
                     }.font(.subheadline.weight(.semibold))
                 }
             }

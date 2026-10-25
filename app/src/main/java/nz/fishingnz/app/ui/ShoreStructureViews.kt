@@ -1,7 +1,5 @@
 package nz.fishingnz.app.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,7 +27,6 @@ import nz.fishingnz.app.data.BoatRamps
 import nz.fishingnz.app.data.ShoreStructure
 import nz.fishingnz.app.data.ShoreStructures
 import nz.fishingnz.app.model.GeoPoint
-import java.util.Locale
 
 /** The bundled wharves, breakwaters and groynes, read off the main thread; null until loaded. */
 @Composable
@@ -59,11 +56,7 @@ internal fun NearbyStructuresCard(point: GeoPoint) {
                         Text(BoatRamps.distanceLabel(km) + " " + BoatRamps.direction(point, structure.point) + " · " + structure.kindLabel,
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = {
-                        val destination = String.format(Locale.US, "%.5f,%.5f", structure.point.latitude, structure.point.longitude)
-                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$destination")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        catch (_: android.content.ActivityNotFoundException) { }
-                    }) { Text("Directions") }
+                    TextButton(onClick = { openPositionInMaps(context, structure.point, structure.label) }) { Text("Open in Maps") }
                 }
             }
             Text("${ShoreStructures.CAUTION} ${ShoreStructures.CREDIT}.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
