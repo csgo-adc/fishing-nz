@@ -48,8 +48,10 @@
 		AA000029 /* BoatRampViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100031 /* BoatRampViews.swift */; };
 		AA000097 /* boat_ramps.json in Resources */ = {isa = PBXBuildFile; fileRef = AA100097 /* boat_ramps.json */; };
 		AA000030 /* ShoreStructures.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100032 /* ShoreStructures.swift */; };
+		AC000001 /* RulesOffline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC100001 /* RulesOffline.swift */; };
 		AA000031 /* ShoreStructureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100033 /* ShoreStructureViews.swift */; };
 		AA000096 /* shore_structures.json in Resources */ = {isa = PBXBuildFile; fileRef = AA100096 /* shore_structures.json */; };
+		AC000002 /* offline_rules.json in Resources */ = {isa = PBXBuildFile; fileRef = AC100002 /* offline_rules.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -116,8 +118,10 @@
 		AA100031 /* BoatRampViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoatRampViews.swift; sourceTree = "<group>"; };
 		AA100097 /* boat_ramps.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = boat_ramps.json; sourceTree = "<group>"; };
 		AA100032 /* ShoreStructures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoreStructures.swift; sourceTree = "<group>"; };
+		AC100001 /* RulesOffline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesOffline.swift; sourceTree = "<group>"; };
 		AA100033 /* ShoreStructureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoreStructureViews.swift; sourceTree = "<group>"; };
 		AA100096 /* shore_structures.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = shore_structures.json; sourceTree = "<group>"; };
+		AC100002 /* offline_rules.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = offline_rules.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -195,6 +199,7 @@
 			children = (
 				AA100030 /* BoatRamps.swift */,
 				AA100032 /* ShoreStructures.swift */,
+				AC100001 /* RulesOffline.swift */,
 				AA100029 /* AccountSync.swift */,
 				AA100027 /* TripReminders.swift */,
 				AA100025 /* TripStore.swift */,
@@ -243,6 +248,7 @@
 				AA100098 /* marine_protection.json */,
 				AA100097 /* boat_ramps.json */,
 				AA100096 /* shore_structures.json */,
+				AC100002 /* offline_rules.json */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -343,6 +349,7 @@
 				AA000098 /* marine_protection.json in Resources */,
 				AA000097 /* boat_ramps.json in Resources */,
 				AA000096 /* shore_structures.json in Resources */,
+				AC000002 /* offline_rules.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -365,6 +372,7 @@
 				AA000028 /* BoatRamps.swift in Sources */,
 				AA000031 /* ShoreStructureViews.swift in Sources */,
 				AA000030 /* ShoreStructures.swift in Sources */,
+				AC000001 /* RulesOffline.swift in Sources */,
 				AA000027 /* AccountSync.swift in Sources */,
 				AA000026 /* TripPlan.swift in Sources */,
 				AA000025 /* TripReminders.swift in Sources */,
@@ -421,8 +429,8 @@
 		AA700001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 50;
-				MARKETING_VERSION = 1.0.49;
+				CURRENT_PROJECT_VERSION = 51;
+				MARKETING_VERSION = 1.0.50;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -435,8 +443,8 @@
 		AA700002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 50;
-				MARKETING_VERSION = 1.0.49;
+				CURRENT_PROJECT_VERSION = 51;
+				MARKETING_VERSION = 1.0.50;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;

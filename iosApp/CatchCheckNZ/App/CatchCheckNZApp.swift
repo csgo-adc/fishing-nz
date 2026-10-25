@@ -28,6 +28,8 @@ struct CatchCheckNZApp: App {
                     // Keeps a booked trip check's text up to date with the latest forecast.
                     if phase == .active {
                         Task { await TripReminders.refresh(force: false) }
+                        // Every area's rules and the species pictures stay on the phone for use with no signal.
+                        Task { await RulesSync.sync() }
                         // The Tides widget reloads with the latest LINZ table whenever the app opens.
                         WidgetCenter.shared.reloadAllTimelines()
                     }

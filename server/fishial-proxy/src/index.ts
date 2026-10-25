@@ -7,6 +7,7 @@ import { changePassword, handlePasswordRoute } from "./password-reset";
 import { HOUR, MINUTE, allowAttempt, clientAddress, isRateLimited, rateKey, recordAttempt, tooManyRequests } from "./rate-limit";
 import { constantTimeEqual, hashPassword, passwordMatches, randomHex, sha256 } from "./security";
 import packageInfo from "../package.json";
+import speciesCatalog from "../public/species/catalog.json";
 import { corsHeaders, json, readJson, readLimit, readOffset } from "./http";
 import { deleteDeviceAnalytics, ingestAnalytics } from "./analytics";
 import { handleAdminAnalytics } from "./admin-analytics";
@@ -547,6 +548,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       return await handleSocialAuth(request, env, { authenticate, createSessionResponse });
     }
     if (pathname === "/v1/rules/status" && request.method === "GET") return await getCrawlStatus(env);
+    if (pathname === "/v1/rules/manifest" && request.method === "GET") return await getRulesManifest(env);
     if (pathname === "/v1/rules" && request.method === "GET") return await getRules(request, env);
     if (pathname === "/v1/fish/rules" && request.method === "GET") return await getFishRules(request, env);
     if (pathname === "/v1/rules/import" && request.method === "POST") return await importRules(request, env);
@@ -924,6 +926,28 @@ async function getRules(request: Request, env: Env): Promise<Response> {
     };
   });
   return json({ source: "Fisheries New Zealand (MPI)", count: results.length, rules: results });
+}
+
+/**
+ * What the apps keep for use with no signal: a version for each area's rules (the saved page's hash, changed again when
+ * MPI updates the page and it waits for review) and the species pictures, served as static files under /species/.
+ * The apps download only the areas and pictures whose version or hash changed since their last sync.
+ */
+async function getRulesManifest(env: Env): Promise<Response> {
+  const query = await env.RULES_DB.prepare(
+    `SELECT r.area_id, r.source_url, r.reviewed_at, r.content_sha256, s.status AS crawl_status FROM mpi_fishing_rules r
+     LEFT JOIN mpi_rules_crawl_status s ON s.area_id = r.area_id ORDER BY r.area_id`
+  ).all<{ area_id: string; source_url: string; reviewed_at: string | null; content_sha256: string; crawl_status: string | null }>();
+  const rules = query.results.filter((row) => rulesAreas.has(row.area_id)).map((row) => {
+    const needsReview = row.crawl_status === "source_changed" || !cachedRuleMatchesArea(row, row.area_id);
+    return {
+      area_id: row.area_id,
+      version: `${needsReview ? "review-" : ""}${row.content_sha256.slice(0, 32)}`,
+      reviewed_at: needsReview ? null : row.reviewed_at,
+      needs_review: needsReview,
+    };
+  });
+  return json({ schema_version: 1, rules, pictures_path: "/species/", species: speciesCatalog });
 }
 
 async function getCrawlStatus(env: Env): Promise<Response> {

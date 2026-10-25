@@ -20,14 +20,24 @@ object OfflineCache {
     /** Overrides the folder in unit tests. */
     internal fun useFolder(dir: File?) { folder = dir?.apply { mkdirs() } }
 
-    fun write(key: String, text: String) {
+    fun write(key: String, text: String) = writeBytes(key, text.toByteArray())
+
+    /** Saves [bytes] under [key], which may name a subfolder such as "species/snapper.webp". */
+    fun writeBytes(key: String, bytes: ByteArray) {
         val dir = folder ?: return
         runCatching {
+            val target = dir.resolve(key)
+            target.parentFile?.mkdirs()
             val temporary = dir.resolve("$key.tmp")
-            temporary.writeText(text)
-            temporary.renameTo(dir.resolve(key))
+            temporary.writeBytes(bytes)
+            temporary.renameTo(target)
         }
     }
+
+    /** The saved file for [key], or null. */
+    fun file(key: String): File? = folder?.resolve(key)?.takeIf(File::isFile)
+
+    fun delete(key: String) { folder?.resolve(key)?.delete() }
 
     /** The saved text and when it was saved, or null. */
     fun read(key: String): Pair<String, Instant>? {

@@ -8,6 +8,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 data class FishingRulesSection(val heading: String, val text: String)
+
+/** Where the rules on screen came from: kept on the phone (from the service) or the copy built into the app. */
+enum class RulesSource { SAVED, BUILT_IN }
+
 data class FishingRulesPage(
     val areaName: String,
     val sourceUrl: String,
@@ -15,24 +19,40 @@ data class FishingRulesPage(
     val needsReview: Boolean,
     val sections: List<FishingRulesSection>,
     val tables: List<List<List<String>>>,
-    /** When this copy was saved, if it was read from the phone because the service could not be reached. */
-    val savedAt: java.time.Instant? = null
+    /** When this copy was saved on the phone; for the built-in copy, the day the app's copy was made. */
+    val savedAt: java.time.Instant? = null,
+    val source: RulesSource = RulesSource.SAVED
 )
 
+/**
+ * An MPI area's rules. They are kept on the phone so they show with no signal: [RulesSync] downloads every area when
+ * it changes on the service, and the app carries a copy of all of them for a first launch with no signal.
+ */
 class RulesRepository {
-    private val baseUrl = BuildConfig.FISH_ID_API_BASE_URL.trimEnd('/').ifBlank { "https://fishing.fishnz.space" }
+    private val baseUrl = RulesSync.baseUrl
 
-    /** The area's rules from the service, or the copy saved on the phone when the service cannot be reached. */
+    /** The copy kept on the phone, else the service's (then kept), else the copy built into the app. */
     suspend fun load(areaId: String): FishingRulesPage = withContext(Dispatchers.IO) {
-        val key = "rules_$areaId.json"
+        OfflineCache.read(key(areaId))?.let { (text, at) -> runCatching { parse(areaId, firstRule(text)).copy(savedAt = at) }.getOrNull() }
+            ?.let { return@withContext it }
         try {
-            val text = download(areaId)
-            parse(areaId, text).also { OfflineCache.write(key, text) }
+            downloadAndSave(areaId)
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            OfflineCache.read(key)?.let { (text, at) -> runCatching { parse(areaId, text).copy(savedAt = at) }.getOrNull() } ?: throw error
+            RulesSync.builtInRule(areaId)?.let { (item, made) -> runCatching { parse(areaId, item).copy(savedAt = made, source = RulesSource.BUILT_IN) }.getOrNull() }
+                ?: throw error
         }
     }
+
+    /** Downloads the area's rules from the service and keeps them on the phone. */
+    suspend fun downloadAndSave(areaId: String): FishingRulesPage = withContext(Dispatchers.IO) {
+        val text = download(areaId)
+        parse(areaId, firstRule(text)).also { OfflineCache.write(key(areaId), text) }.copy(savedAt = java.time.Instant.now())
+    }
+
+    private fun key(areaId: String) = "rules_$areaId.json"
+
+    private fun firstRule(text: String): JSONObject = JSONObject(text).getJSONArray("rules").getJSONObject(0)
 
     private fun download(areaId: String): String {
         val connection = (URL("$baseUrl/v1/rules?area=$areaId").openConnection() as HttpURLConnection).apply {
@@ -49,9 +69,8 @@ class RulesRepository {
         } finally { connection.disconnect() }
     }
 
-    private fun parse(areaId: String, text: String): FishingRulesPage {
+    internal fun parse(areaId: String, item: JSONObject): FishingRulesPage {
         val slug = ruleAreaSlugs[areaId] ?: error("Unknown fishing area.")
-        val item = JSONObject(text).getJSONArray("rules").getJSONObject(0)
         val officialUrl = "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/$slug"
         require(item.optString("area_id") == areaId && item.optString("source_url").trimEnd('/') == officialUrl) {
             "Saved rules do not match the selected fishing area. Open the official MPI page instead."

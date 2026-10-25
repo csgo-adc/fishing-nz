@@ -1,0 +1,1079 @@
+{
+ "schema_version": 1,
+ "note": "Illustrations drawn for Fishdays - NZ from written descriptions. They are a guide; check the species and the current MPI rules before keeping a catch.",
+ "species": [
+  {
+   "id": "snapper",
+   "name": "Snapper",
+   "maori": "Tāmure",
+   "scientific": "Pagrus auratus",
+   "group": "finfish",
+   "match": [
+    "snapper"
+   ],
+   "pictures": [
+    {
+     "id": "snapper",
+     "caption": "Adult"
+    },
+    {
+     "id": "snapper-large",
+     "caption": "Large old fish"
+    }
+   ]
+  },
+  {
+   "id": "kingfish",
+   "name": "Kingfish",
+   "maori": "Haku",
+   "scientific": "Seriola lalandi",
+   "group": "finfish",
+   "match": [
+    "kingfish"
+   ],
+   "pictures": [
+    {
+     "id": "kingfish",
+     "caption": "Adult"
+    },
+    {
+     "id": "kingfish-juvenile",
+     "caption": "Juvenile"
+    }
+   ]
+  },
+  {
+   "id": "kahawai",
+   "name": "Kahawai",
+   "scientific": "Arripis trutta",
+   "group": "finfish",
+   "match": [
+    "kahawai"
+   ],
+   "pictures": [
+    {
+     "id": "kahawai",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "blue-cod",
+   "name": "Blue cod",
+   "maori": "Rāwaru",
+   "scientific": "Parapercis colias",
+   "group": "finfish",
+   "match": [
+    "blue cod"
+   ],
+   "pictures": [
+    {
+     "id": "blue-cod-male",
+     "caption": "Large male"
+    },
+    {
+     "id": "blue-cod-small",
+     "caption": "Smaller fish and females"
+    }
+   ]
+  },
+  {
+   "id": "tarakihi",
+   "name": "Tarakihi",
+   "scientific": "Nemadactylus macropterus",
+   "group": "finfish",
+   "match": [
+    "tarakihi"
+   ],
+   "pictures": [
+    {
+     "id": "tarakihi",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "gurnard",
+   "name": "Red gurnard",
+   "maori": "Kumukumu",
+   "scientific": "Chelidonichthys kumu",
+   "group": "finfish",
+   "match": [
+    "red gurnard",
+    "gurnard"
+   ],
+   "pictures": [
+    {
+     "id": "red-gurnard",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "trevally",
+   "name": "Trevally",
+   "maori": "Araara",
+   "scientific": "Pseudocaranx georgianus",
+   "group": "finfish",
+   "match": [
+    "trevally"
+   ],
+   "pictures": [
+    {
+     "id": "trevally",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "grey-mullet",
+   "name": "Grey mullet",
+   "maori": "Kanae",
+   "scientific": "Mugil cephalus",
+   "group": "finfish",
+   "match": [
+    "grey mullet"
+   ],
+   "pictures": [
+    {
+     "id": "grey-mullet",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "yellow-eyed-mullet",
+   "name": "Yellow-eyed mullet",
+   "maori": "Aua",
+   "scientific": "Aldrichetta forsteri",
+   "group": "finfish",
+   "match": [
+    "yellow-eyed mullet"
+   ],
+   "pictures": [
+    {
+     "id": "yellow-eyed-mullet",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "parore",
+   "name": "Parore",
+   "scientific": "Girella tricuspidata",
+   "group": "finfish",
+   "match": [
+    "parore"
+   ],
+   "pictures": [
+    {
+     "id": "parore",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "blue-moki",
+   "name": "Blue moki",
+   "scientific": "Latridopsis ciliaris",
+   "group": "finfish",
+   "match": [
+    "blue moki"
+   ],
+   "pictures": [
+    {
+     "id": "blue-moki",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "red-moki",
+   "name": "Red moki",
+   "scientific": "Cheilodactylus spectabilis",
+   "group": "finfish",
+   "match": [
+    "red moki"
+   ],
+   "pictures": [
+    {
+     "id": "red-moki",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "butterfish",
+   "name": "Butterfish",
+   "maori": "Marari",
+   "scientific": "Odax pullus",
+   "group": "finfish",
+   "match": [
+    "butterfish"
+   ],
+   "pictures": [
+    {
+     "id": "butterfish-female",
+     "caption": "Adult female"
+    },
+    {
+     "id": "butterfish-male",
+     "caption": "Large male"
+    }
+   ]
+  },
+  {
+   "id": "groper",
+   "name": "Hāpuku (groper)",
+   "maori": "Hāpuku",
+   "scientific": "Polyprion oxygeneios",
+   "group": "finfish",
+   "match": [
+    "groper",
+    "hapuku",
+    "hāpuku"
+   ],
+   "pictures": [
+    {
+     "id": "hapuku",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "bluenose",
+   "name": "Bluenose",
+   "scientific": "Hyperoglyphe antarctica",
+   "group": "finfish",
+   "match": [
+    "bluenose"
+   ],
+   "pictures": [
+    {
+     "id": "bluenose",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "ling",
+   "name": "Ling",
+   "scientific": "Genypterus blacodes",
+   "group": "finfish",
+   "match": [
+    "ling"
+   ],
+   "pictures": [
+    {
+     "id": "ling",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "red-cod",
+   "name": "Red cod",
+   "maori": "Hoka",
+   "scientific": "Pseudophycis bachus",
+   "group": "finfish",
+   "match": [
+    "red cod"
+   ],
+   "pictures": [
+    {
+     "id": "red-cod",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "barracouta",
+   "name": "Barracouta",
+   "maori": "Mangā",
+   "scientific": "Thyrsites atun",
+   "group": "finfish",
+   "match": [
+    "barracouta"
+   ],
+   "pictures": [
+    {
+     "id": "barracouta",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "sea-perch",
+   "name": "Sea perch",
+   "scientific": "Helicolenus percoides",
+   "group": "finfish",
+   "match": [
+    "sea perch"
+   ],
+   "pictures": [
+    {
+     "id": "sea-perch",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "spotted-black-groper",
+   "name": "Spotted black groper",
+   "scientific": "Epinephelus daemelii",
+   "group": "finfish",
+   "match": [
+    "spotted black groper"
+   ],
+   "pictures": [
+    {
+     "id": "spotted-black-groper",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "trumpeter",
+   "name": "Trumpeter",
+   "maori": "Kōhikohiko",
+   "scientific": "Latris lineata",
+   "group": "finfish",
+   "match": [
+    "trumpeter"
+   ],
+   "pictures": [
+    {
+     "id": "trumpeter",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "warehou",
+   "name": "Warehou",
+   "scientific": "Seriolella brama",
+   "group": "finfish",
+   "match": [
+    "warehou"
+   ],
+   "pictures": [
+    {
+     "id": "warehou",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "hoki",
+   "name": "Hoki",
+   "scientific": "Macruronus novaezelandiae",
+   "group": "finfish",
+   "match": [
+    "hoki"
+   ],
+   "pictures": [
+    {
+     "id": "hoki",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "stargazer",
+   "name": "Stargazer",
+   "scientific": "Kathetostoma giganteum",
+   "group": "finfish",
+   "match": [
+    "stargazer"
+   ],
+   "pictures": [
+    {
+     "id": "stargazer",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "elephant-fish",
+   "name": "Elephant fish",
+   "maori": "Makorepe",
+   "scientific": "Callorhinchus milii",
+   "group": "finfish",
+   "match": [
+    "elephant fish"
+   ],
+   "pictures": [
+    {
+     "id": "elephant-fish",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "flatfish",
+   "name": "Flatfish",
+   "maori": "Pātiki",
+   "scientific": "Rhombosolea plebeia",
+   "group": "finfish",
+   "match": [
+    "flatfish",
+    "sand flounder",
+    "flounder",
+    "sole"
+   ],
+   "pictures": [
+    {
+     "id": "sand-flounder",
+     "caption": "Sand flounder"
+    },
+    {
+     "id": "yellowbelly-flounder",
+     "caption": "Yellowbelly flounder, underside"
+    },
+    {
+     "id": "sole",
+     "caption": "New Zealand sole"
+    }
+   ]
+  },
+  {
+   "id": "marblefish",
+   "name": "Marblefish",
+   "scientific": "Aplodactylus arctidens",
+   "group": "finfish",
+   "match": [
+    "marblefish"
+   ],
+   "pictures": [
+    {
+     "id": "marblefish",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "wrasse",
+   "name": "Wrasse",
+   "scientific": "Notolabrus fucicola",
+   "group": "finfish",
+   "match": [
+    "wrasse"
+   ],
+   "pictures": [
+    {
+     "id": "banded-wrasse",
+     "caption": "Banded wrasse"
+    },
+    {
+     "id": "spotty",
+     "caption": "Spotty"
+    }
+   ]
+  },
+  {
+   "id": "koheru",
+   "name": "Kōheru",
+   "scientific": "Decapterus koheru",
+   "group": "finfish",
+   "match": [
+    "koheru",
+    "kōheru"
+   ],
+   "pictures": [
+    {
+     "id": "koheru",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "jack-mackerel",
+   "name": "Jack mackerel",
+   "maori": "Hāature",
+   "scientific": "Trachurus novaezelandiae",
+   "group": "finfish",
+   "match": [
+    "jack mackerel",
+    "jack/horse/chilean mackerel"
+   ],
+   "pictures": [
+    {
+     "id": "jack-mackerel",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "piper",
+   "name": "Piper",
+   "maori": "Takeke",
+   "scientific": "Hyporhamphus ihi",
+   "group": "finfish",
+   "match": [
+    "piper"
+   ],
+   "pictures": [
+    {
+     "id": "piper",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "anchovy",
+   "name": "Anchovy",
+   "scientific": "Engraulis australis",
+   "group": "finfish",
+   "match": [
+    "anchovy"
+   ],
+   "pictures": [
+    {
+     "id": "anchovy",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "pilchard",
+   "name": "Pilchard",
+   "maori": "Mohimohi",
+   "scientific": "Sardinops sagax",
+   "group": "finfish",
+   "match": [
+    "pilchard"
+   ],
+   "pictures": [
+    {
+     "id": "pilchard",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "sprat",
+   "name": "Sprat",
+   "scientific": "Sprattus antipodum",
+   "group": "finfish",
+   "match": [
+    "slender/stout sprat",
+    "sprat"
+   ],
+   "pictures": [
+    {
+     "id": "sprat",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "albacore",
+   "name": "Albacore tuna",
+   "scientific": "Thunnus alalunga",
+   "group": "finfish",
+   "match": [
+    "albacore"
+   ],
+   "pictures": [
+    {
+     "id": "albacore",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "southern-bluefin",
+   "name": "Southern bluefin tuna",
+   "scientific": "Thunnus maccoyii",
+   "group": "finfish",
+   "match": [
+    "southern bluefin"
+   ],
+   "pictures": [
+    {
+     "id": "southern-bluefin",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "marlin",
+   "name": "Marlin",
+   "scientific": "Kajikia audax",
+   "group": "finfish",
+   "match": [
+    "marlin"
+   ],
+   "pictures": [
+    {
+     "id": "striped-marlin",
+     "caption": "Striped marlin"
+    }
+   ]
+  },
+  {
+   "id": "salmon",
+   "name": "Salmon",
+   "scientific": "Oncorhynchus tshawytscha",
+   "group": "finfish",
+   "match": [
+    "salmon",
+    "quinnat salmon"
+   ],
+   "pictures": [
+    {
+     "id": "salmon-sea",
+     "caption": "Fresh from the sea"
+    },
+    {
+     "id": "salmon-spawning",
+     "caption": "Spawning, in the river"
+    }
+   ]
+  },
+  {
+   "id": "eel",
+   "name": "Eel",
+   "maori": "Tuna",
+   "scientific": "Anguilla australis",
+   "group": "finfish",
+   "match": [
+    "eel",
+    "freshwater shortfin and longfin eels"
+   ],
+   "pictures": [
+    {
+     "id": "shortfin-eel",
+     "caption": "Shortfin eel"
+    },
+    {
+     "id": "longfin-eel",
+     "caption": "Longfin eel"
+    }
+   ]
+  },
+  {
+   "id": "lamprey",
+   "name": "Lamprey",
+   "maori": "Kanakana",
+   "scientific": "Geotria australis",
+   "group": "finfish",
+   "match": [
+    "lamprey"
+   ],
+   "pictures": [
+    {
+     "id": "lamprey",
+     "caption": "Adult, fresh from the sea"
+    }
+   ]
+  },
+  {
+   "id": "rig",
+   "name": "Rig",
+   "scientific": "Mustelus lenticulatus",
+   "group": "shark",
+   "match": [
+    "rig"
+   ],
+   "pictures": [
+    {
+     "id": "rig",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "school-shark",
+   "name": "School shark",
+   "scientific": "Galeorhinus galeus",
+   "group": "shark",
+   "match": [
+    "school shark"
+   ],
+   "pictures": [
+    {
+     "id": "school-shark",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "spiny-dogfish",
+   "name": "Spiny dogfish",
+   "scientific": "Squalus acanthias",
+   "group": "shark",
+   "match": [
+    "spiny dogfish"
+   ],
+   "pictures": [
+    {
+     "id": "spiny-dogfish",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "sevengill",
+   "name": "Seven-gilled shark",
+   "scientific": "Notorynchus cepedianus",
+   "group": "shark",
+   "match": [
+    "seven gilled shark",
+    "seven-gilled shark"
+   ],
+   "pictures": [
+    {
+     "id": "sevengill",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "blue-shark",
+   "name": "Blue shark",
+   "scientific": "Prionace glauca",
+   "group": "shark",
+   "match": [
+    "blue shark"
+   ],
+   "pictures": [
+    {
+     "id": "blue-shark",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "mako",
+   "name": "Mako shark",
+   "scientific": "Isurus oxyrinchus",
+   "group": "shark",
+   "match": [
+    "mako"
+   ],
+   "pictures": [
+    {
+     "id": "mako",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "porbeagle",
+   "name": "Porbeagle shark",
+   "scientific": "Lamna nasus",
+   "group": "shark",
+   "match": [
+    "porbeagle"
+   ],
+   "pictures": [
+    {
+     "id": "porbeagle",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "thresher",
+   "name": "Thresher shark",
+   "scientific": "Alopias vulpinus",
+   "group": "shark",
+   "match": [
+    "thresher"
+   ],
+   "pictures": [
+    {
+     "id": "thresher",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "hammerhead",
+   "name": "Hammerhead shark",
+   "scientific": "Sphyrna zygaena",
+   "group": "shark",
+   "match": [
+    "hammerhead"
+   ],
+   "pictures": [
+    {
+     "id": "hammerhead",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "bronze-whaler",
+   "name": "Bronze whaler shark",
+   "scientific": "Carcharhinus brachyurus",
+   "group": "shark",
+   "match": [
+    "bronze whaler",
+    "bronze shark"
+   ],
+   "pictures": [
+    {
+     "id": "bronze-whaler",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "white-pointer",
+   "name": "White pointer shark",
+   "scientific": "Carcharodon carcharias",
+   "group": "shark",
+   "match": [
+    "white pointer"
+   ],
+   "pictures": [
+    {
+     "id": "white-pointer",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "skate",
+   "name": "Skate",
+   "scientific": "Zearaja nasuta",
+   "group": "shark",
+   "match": [
+    "skate",
+    "rough skate"
+   ],
+   "pictures": [
+    {
+     "id": "rough-skate",
+     "caption": "Rough skate, seen from above"
+    }
+   ]
+  },
+  {
+   "id": "paua",
+   "name": "Pāua",
+   "scientific": "Haliotis iris",
+   "group": "shellfish",
+   "match": [
+    "pāua",
+    "paua"
+   ],
+   "pictures": [
+    {
+     "id": "paua",
+     "caption": "Black-foot pāua"
+    },
+    {
+     "id": "paua-yellow-foot",
+     "caption": "Yellow-foot pāua"
+    }
+   ]
+  },
+  {
+   "id": "rock-lobster",
+   "name": "Red rock lobster",
+   "maori": "Kōura",
+   "scientific": "Jasus edwardsii",
+   "group": "crayfish",
+   "match": [
+    "red or spiny rock lobster",
+    "rock lobster",
+    "except milford sound internal waters rock lobster"
+   ],
+   "pictures": [
+    {
+     "id": "rock-lobster",
+     "caption": "Red rock lobster"
+    }
+   ]
+  },
+  {
+   "id": "packhorse-lobster",
+   "name": "Packhorse rock lobster",
+   "scientific": "Sagmariasus verreauxi",
+   "group": "crayfish",
+   "match": [
+    "packhorse rock lobster"
+   ],
+   "pictures": [
+    {
+     "id": "packhorse-lobster",
+     "caption": "Packhorse rock lobster"
+    }
+   ]
+  },
+  {
+   "id": "scallop",
+   "name": "Scallop",
+   "maori": "Tupa",
+   "scientific": "Pecten novaezelandiae",
+   "group": "shellfish",
+   "match": [
+    "scallops",
+    "scallop"
+   ],
+   "pictures": [
+    {
+     "id": "scallop",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "oyster",
+   "name": "Oyster",
+   "maori": "Tio",
+   "scientific": "Ostrea chilensis",
+   "group": "shellfish",
+   "match": [
+    "oysters",
+    "oyster"
+   ],
+   "pictures": [
+    {
+     "id": "dredge-oyster",
+     "caption": "Dredge (flat) oyster"
+    },
+    {
+     "id": "rock-oyster",
+     "caption": "Rock oyster"
+    },
+    {
+     "id": "pacific-oyster",
+     "caption": "Pacific oyster"
+    }
+   ]
+  },
+  {
+   "id": "cockle",
+   "name": "Cockle",
+   "maori": "Tuangi",
+   "scientific": "Austrovenus stutchburyi",
+   "group": "shellfish",
+   "match": [
+    "cockles",
+    "cockle"
+   ],
+   "pictures": [
+    {
+     "id": "cockle",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "pipi",
+   "name": "Pipi",
+   "scientific": "Paphies australis",
+   "group": "shellfish",
+   "match": [
+    "pipi"
+   ],
+   "pictures": [
+    {
+     "id": "pipi",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "tuatua",
+   "name": "Tuatua",
+   "scientific": "Paphies subtriangulata",
+   "group": "shellfish",
+   "match": [
+    "tuatua"
+   ],
+   "pictures": [
+    {
+     "id": "tuatua",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "toheroa",
+   "name": "Toheroa",
+   "scientific": "Paphies ventricosa",
+   "group": "shellfish",
+   "match": [
+    "toheroa"
+   ],
+   "pictures": [
+    {
+     "id": "toheroa",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "green-lipped-mussel",
+   "name": "Green-lipped mussel",
+   "maori": "Kuku",
+   "scientific": "Perna canaliculus",
+   "group": "shellfish",
+   "match": [
+    "green-lipped mussel"
+   ],
+   "pictures": [
+    {
+     "id": "green-lipped-mussel",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "mussel",
+   "name": "Mussels",
+   "maori": "Kuku",
+   "scientific": "Mytilus galloprovincialis",
+   "group": "shellfish",
+   "match": [
+    "mussels"
+   ],
+   "pictures": [
+    {
+     "id": "blue-mussel",
+     "caption": "Blue mussel"
+    },
+    {
+     "id": "green-lipped-mussel",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "kina",
+   "name": "Kina",
+   "scientific": "Evechinus chloroticus",
+   "group": "shellfish",
+   "match": [
+    "kina"
+   ],
+   "pictures": [
+    {
+     "id": "kina",
+     "caption": "Adult"
+    }
+   ]
+  },
+  {
+   "id": "pupu",
+   "name": "Pūpū (cat's eye)",
+   "scientific": "Lunella smaragda",
+   "group": "shellfish",
+   "match": [
+    "pupu",
+    "pūpū"
+   ],
+   "pictures": [
+    {
+     "id": "pupu",
+     "caption": "Adult"
+    }
+   ]
+  }
+ ]
+}

@@ -2,6 +2,11 @@ name = "catchcheck-fishial-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 
+# The species pictures for the rules page (tools/build_offline_rules.py). Files under public/ are served as they are,
+# before the worker runs, so /species/<picture>.webp never reaches it.
+[assets]
+directory = "./public"
+
 [vars]
 ACCOUNT_EMAIL_FROM = "Fishdays - NZ <accounts@fishnz.space>"
 AUTH_BASE_URL = "https://fishing.fishnz.space"

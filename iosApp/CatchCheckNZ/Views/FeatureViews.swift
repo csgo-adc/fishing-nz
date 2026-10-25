@@ -1236,34 +1236,60 @@ let fishingRulesAreas = [
     FishingRulesArea(id: "fiordland", name: "Fiordland", slug: "fiordland-marine-area-fishing-rules", scope: "Fiordland coast from Awarua Point to Sand Hill Point, extending 12 nautical miles offshore.")
 ]
 
+/// The fishing rules page: the MPI area's species with pictures, minimum sizes and daily limits as big figures, a catch
+/// size check, and a note on how fresh the copy kept on the phone is. Android has the same page in `RulesScreen.kt`.
 struct RulesView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @ObservedObject private var sync = RulesSyncState.shared
     @State private var selectedArea: FishingRulesArea?
     @State private var showAreas = false
     @State private var query = ""
+    @State private var group: SpeciesGroup = .popular
     @State private var page: SavedRulesPage?
+    @State private var source: RulesSource = .saved
+    @State private var savedAt: Date?
     @State private var loadError: String?
-    /// When the rules shown were saved on the phone, if the service could not be reached.
-    @State private var offlineSavedAt: Date?
     @State private var loading = false
+    @State private var checking = false
+    @State private var reloadToken = 0
+    @State private var detail: SavedRuleQuickRow?
     @State private var loadToken = UUID()
+    private var catalog: SpeciesCatalog? { _ = sync.revision; return RulesSync.catalog() }
     private var nearRaglanWest: Bool {
         selectedArea?.id == "auckland-kermadec" && vm.isNearRaglan && !vm.rulesAreaSelectionIsManual
     }
-    private var quickRows: [SavedRuleQuickRow] {
-        let rows = page?.quickRows(matching: query) ?? []
+    private var allRows: [SavedRuleQuickRow] {
+        let rows = page?.allRows() ?? []
         guard nearRaglanWest, rows.contains(where: { $0.species.localizedCaseInsensitiveContains("Auckland West") }) else { return rows }
         return rows.filter { !$0.species.lowercased().hasPrefix("snapper") || $0.species.localizedCaseInsensitiveContains("Auckland West") }
     }
+    private var shownRows: [SavedRuleQuickRow] {
+        let catalog = catalog
+        let text = query.trimmingCharacters(in: .whitespaces)
+        if !text.isEmpty {
+            return Array(allRows.filter { row in
+                row.species.localizedStandardContains(text) || catalog?.forRule(row.species).map {
+                    $0.name.localizedStandardContains(text) || ($0.maori?.localizedStandardContains(text) ?? false)
+                } == true
+            }.prefix(40))
+        }
+        switch group {
+        case .popular: return popularRuleRows(allRows)
+        case .all: return allRows
+        default: return allRows.filter { catalog?.forRule($0.species)?.group == group.catalogGroup }
+        }
+    }
+    private var officialURL: URL { selectedArea?.officialURL ?? page?.sourceURL ?? URL(string: "https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules")! }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Fishing rules").font(.largeTitle.bold()).foregroundStyle(.primary)
-                    Text("Choose the MPI area where you will fish, then look up a species.").foregroundStyle(.secondary)
+                    Text("Sizes and daily limits for the MPI area where you fish. Kept on your phone for when there's no signal.").foregroundStyle(.secondary)
                     Card {
                         Text("MPI fishing area").font(.caption).foregroundStyle(.secondary)
                         Button { showAreas = true } label: {
@@ -1275,75 +1301,62 @@ struct RulesView: View {
                             Text("Near Raglan: snapper is in the Auckland West subarea. Check the exact catch spot on MPI.")
                                 .font(.subheadline).foregroundStyle(CatchCheckColor.accent)
                         }
-                        Button {
-                            vm.useCurrentRulesArea()
-                        } label: {
-                            Label("Use my current location", systemImage: "location.fill")
-                        }
-                        .buttonStyle(.bordered)
-                        if vm.hasDeviceLocation {
-                            Label("Near \(vm.devicePlaceName ?? "your current location")", systemImage: "location.fill")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Text("Near an area boundary? Check the MPI map.")
-                            .font(.caption).foregroundStyle(.secondary)
+                        Button { vm.useCurrentRulesArea() } label: { Label("Use my current location", systemImage: "location.fill") }
+                            .buttonStyle(.bordered)
+                        Text("Near an area boundary? Check the MPI map.").font(.caption).foregroundStyle(.secondary)
                     }
-                    if selectedArea != nil {
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search a fish or shellfish", text: $query)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        if !query.isEmpty {
-                            Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
-                                .accessibilityLabel("Clear search")
-                        }
-                    }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                     if loading { ProgressView("Loading MPI rules…").frame(maxWidth: .infinity).padding(24) }
                     if let loadError {
                         Card {
                             Text(loadError).foregroundStyle(.secondary)
-                            Button("Try again") { Task { await loadRules() } }.buttonStyle(.bordered)
-                            if let selectedArea { Link("Open official MPI page", destination: selectedArea.officialURL) }
+                            Button("Try again") { reloadToken += 1 }.buttonStyle(.bordered)
+                            Link("Open official MPI page", destination: officialURL)
                         }
                     }
                     if let page {
+                        freshness(page)
                         if page.needsReview == true {
                             Card(background: CatchCheckColor.seafoam) {
                                 Label("Rules changed at MPI", systemImage: "arrow.triangle.2.circlepath").font(.headline)
                                 Text("This area's saved summary is being reviewed. Open the official MPI page for current limits and closures.")
                                     .font(.subheadline)
-                                Link("Open current MPI rules", destination: selectedArea?.officialURL ?? page.sourceURL).buttonStyle(.borderedProminent)
+                                Link("Open current MPI rules", destination: officialURL).buttonStyle(.borderedProminent)
                             }
                         } else {
-                        if let summary = page.combinedFinfishSummary {
-                            Card(background: CatchCheckColor.seafoam) {
-                                Label("General finfish limit", systemImage: "checkmark.shield").font(.headline)
-                                Text(summary).font(.subheadline)
+                            CombinedLimitCard(page: page)
+                            let popular = popularRuleRows(allRows).filter { $0.minimum != nil }
+                            let checkable = popular + allRows.filter { row in row.minimum != nil && !popular.contains { $0.id == row.id } }
+                            if !checkable.isEmpty { CheckMyCatchCard(rows: checkable, catalog: catalog) }
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                                TextField("Search a fish or shellfish", text: $query)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                if !query.isEmpty {
+                                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                                        .accessibilityLabel("Clear search")
+                                }
                             }
-                        }
-                        Text(query.isEmpty ? "Common species" : "Matching species")
-                            .font(.title2.bold())
-                        if quickRows.isEmpty {
-                            Card { Text(query.isEmpty ? "Search for a species to see its saved size and daily limits." : "No reliable simple limit can be shown for “\(query)”. Check MPI for this species and exact subarea.").foregroundStyle(.secondary) }
-                        } else {
-                            ForEach(quickRows) { row in SavedRuleQuickCard(row: row, officialURL: selectedArea?.officialURL ?? page.sourceURL) }
-                        }
-                        Card {
-                            Label("Check local restrictions", systemImage: "exclamationmark.triangle").font(.headline)
-                            Text("Closures, subareas, methods and recent changes can change what applies at a particular spot. Check the official page before keeping a catch.")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                            Link("See full official MPI rules", destination: selectedArea?.officialURL ?? page.sourceURL).buttonStyle(.borderedProminent)
-                            if let reviewedAt = page.reviewedAt { Text("Saved page reviewed by MPI: \(reviewedAt)").font(.caption).foregroundStyle(.secondary) }
-                            if let offlineSavedAt {
-                                Text("No connection · showing the rules saved on this phone \(OfflineCache.savedLabel(offlineSavedAt)). Check MPI when you can.")
-                                    .font(.caption).foregroundStyle(CatchCheckColor.warning)
+                            .padding(14)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                            if query.isEmpty {
+                                FlowLayout {
+                                    ForEach(SpeciesGroup.allCases, id: \.self) { option in
+                                        Button(option.rawValue) { group = option }.buttonStyle(ChoiceButton(selected: group == option))
+                                    }
+                                }
                             }
+                            let rows = shownRows
+                            if rows.isEmpty {
+                                Card { Text(query.isEmpty ? "No species in this group have a simple limit for \(page.areaName). Try All or check MPI." : "No reliable simple limit can be shown for “\(query)”. Check MPI for this species and exact subarea.").foregroundStyle(.secondary) }
+                            }
+                            ForEach(rows) { row in
+                                Button { detail = row } label: { SpeciesRuleCard(row: row, info: catalog?.forRule(row.species)) }.buttonStyle(.plain)
+                            }
+                            Text("Summary only. Closures, gear rules and subareas can change what applies: check MPI for your exact spot. \(catalog?.note ?? "")")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Link("See all rules on MPI", destination: officialURL).buttonStyle(.borderedProminent)
                         }
-                        }
-                    }
                     }
                 }.padding(20)
             }
@@ -1353,6 +1366,10 @@ struct RulesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear { vm.trackScreen("fishing_rules") }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .sheet(item: $detail) { row in
+                SpeciesRuleDetail(row: row, info: catalog?.forRule(row.species), catalog: catalog, officialURL: officialURL)
+                    .presentationDetents([.large])
+            }
             .sheet(isPresented: $showAreas) {
                 NavigationStack {
                     List {
@@ -1394,51 +1411,297 @@ struct RulesView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { vm.requestLocation() }
         }
-        .task(id: selectedArea?.id) { await loadRules() }
+        // Opening the page checks the service for changed rules and pictures; nothing is downloaded when nothing changed.
+        .task { await RulesSync.sync() }
+        .task(id: "\(selectedArea?.id ?? "")|\(sync.revision)|\(reloadToken)") { await loadRules() }
     }
 
+    @ViewBuilder private func freshness(_ page: SavedRulesPage) -> some View {
+        let checked = [savedAt, source == .saved ? RulesSync.lastSynced() : nil].compactMap { $0 }.max()
+        let old = checked.map { Date.now.timeIntervalSince($0) > 30 * 86_400 } ?? true
+        let text: String = if source == .builtIn {
+            "Showing the copy built into the app\(page.reviewedAt.map { " (MPI page reviewed \($0))" } ?? ""). Connect once to get the latest rules and pictures."
+        } else if old {
+            "Saved on this phone \(checked.map(OfflineCache.savedLabel) ?? ""). Connect to check for MPI changes."
+        } else {
+            "Saved on this phone for use with no signal · checked \(OfflineCache.savedLabel(checked!))\(page.reviewedAt.map { " · MPI page reviewed \($0)" } ?? "")"
+        }
+        HStack(alignment: .firstTextBaseline) {
+            Text(text).font(.caption).foregroundStyle(source == .builtIn || old ? CatchCheckColor.warning : .secondary)
+            Spacer()
+            Button(checking ? "Checking…" : "Check now") {
+                Task { checking = true; await RulesSync.sync(force: true); checking = false; reloadToken += 1 }
+            }
+            .font(.caption.weight(.semibold)).disabled(checking)
+        }
+    }
+
+    /// The copy kept on the phone, else the service's (then kept), else the copy built into the app.
     @MainActor private func loadRules() async {
         // Only the newest load may update the screen. An older one that was
         // cancelled or superseded must not overwrite rules already shown.
         let token = UUID()
         loadToken = token
         guard let selectedArea else { page = nil; loadError = nil; loading = false; return }
-        loading = true
+        loading = page == nil
         loadError = nil
-        page = nil
-        offlineSavedAt = nil
         defer { if loadToken == token { loading = false } }
-        let offlineKey = "rules_\(selectedArea.id).json"
         let officialPath = selectedArea.officialURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         func matching(_ data: Data) -> SavedRulesPage? {
             (try? JSONDecoder().decode(SavedRulesEnvelope.self, from: data))?.rules.first(where: {
                 $0.areaID == selectedArea.id && $0.sourceURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == officialPath
             })
         }
-        let baseURL = ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(baseURL)/v1/rules?area=\(selectedArea.id)") else { loadError = "Rules service URL is unavailable."; return }
+        if let saved = OfflineCache.read("rules_\(selectedArea.id).json"), let savedPage = matching(saved.data) {
+            page = savedPage; source = .saved; savedAt = saved.savedAt
+            return
+        }
         do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 15
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue("CatchCheckNZ-iOS/1.0", forHTTPHeaderField: "User-Agent")
-            if let deviceID = AnalyticsPreferences.deviceID() { request.setValue(deviceID, forHTTPHeaderField: "X-Device-Id") }
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-            _ = try JSONDecoder().decode(SavedRulesEnvelope.self, from: data)
+            let data = try await RulesSync.downloadRules(selectedArea.id)
             guard loadToken == token, self.selectedArea?.id == selectedArea.id else { return }
-            page = matching(data)
+            page = matching(data); source = .saved; savedAt = .now
             if page == nil { loadError = "Saved rules do not match this fishing area. Open the official MPI page instead." }
-            else { OfflineCache.write(offlineKey, data) }
         } catch {
             // URLSession reports a cancelled task as URLError.cancelled, not CancellationError.
             guard loadToken == token, !Task.isCancelled else { return }
-            if let saved = OfflineCache.read(offlineKey), let savedPage = matching(saved.data) {
-                page = savedPage; offlineSavedAt = saved.savedAt
+            if let builtIn = RulesSync.builtInRule(selectedArea.id), let builtInPage = matching(builtIn.data) {
+                page = builtInPage; source = .builtIn; savedAt = builtIn.made
             } else {
+                page = nil
                 loadError = "Saved rules are unavailable right now. Try again shortly."
             }
+        }
+    }
+}
+
+/// The rules page's species groups; `catalogGroup` matches the species catalogue's group.
+enum SpeciesGroup: String, CaseIterable {
+    case popular = "Popular", finfish = "Finfish", sharks = "Sharks and rays", shellfish = "Shellfish", crayfish = "Crayfish", all = "All"
+    var catalogGroup: String? {
+        switch self {
+        case .finfish: "finfish"
+        case .sharks: "shark"
+        case .shellfish: "shellfish"
+        case .crayfish: "crayfish"
+        case .popular, .all: nil
+        }
+    }
+}
+
+/// The species most people look up first, in this order. Android: `RuleRows.kt`.
+private let popularSpecies = ["snapper", "blue cod", "kingfish", "kahawai", "red gurnard", "gurnard", "tarakihi", "trevally",
+                              "red or spiny rock lobster", "pāua", "paua", "scallops", "cockle"]
+
+private func popularRuleRows(_ rows: [SavedRuleQuickRow]) -> [SavedRuleQuickRow] {
+    func rank(_ row: SavedRuleQuickRow) -> Int? { popularSpecies.firstIndex { row.species.lowercased().hasPrefix($0) } }
+    return Array(rows.filter { rank($0) != nil }.sorted { rank($0)! < rank($1)! }.prefix(10))
+}
+
+/// The answer to "Check my catch": whether a length meets the row's minimum, in words.
+struct CatchCheckResult: Equatable { let meets: Bool; let text: String }
+
+/// Checks `length`, in the row's own unit, against its single minimum; nil when the row has none.
+private func checkCatch(_ row: SavedRuleQuickRow, length: Double) -> CatchCheckResult? {
+    guard let (minimum, unit) = row.minimum, length > 0 else { return nil }
+    func number(_ value: Double) -> String { value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value) }
+    let shown = "\(number(length)) \(unit)"
+    let limit = row.dailyLimit.flatMap { Int($0) }.map { " It counts toward the daily limit of \($0)." } ?? ""
+    return length >= minimum ? CatchCheckResult(meets: true, text: "\(shown) meets the \(number(minimum)) \(unit) minimum.\(limit)")
+        : CatchCheckResult(meets: false, text: "\(shown) is under the \(number(minimum)) \(unit) minimum. Release it carefully.")
+}
+
+/// The area's combined daily finfish limit as a big number.
+private struct CombinedLimitCard: View {
+    let page: SavedRulesPage
+    var body: some View {
+        Card {
+            if let limit = page.combinedFinfishLimit, !page.areaName.localizedCaseInsensitiveContains("Fiordland") {
+                HStack(spacing: 14) {
+                    Text("\(limit)").font(.system(size: 44, weight: .bold, design: .rounded)).foregroundStyle(CatchCheckColor.accent)
+                    Text("finfish per person per day, all species combined. Each species also has its own limit.").foregroundStyle(CatchCheckColor.navy)
+                }
+            } else {
+                Text(page.combinedFinfishSummary ?? "Daily limits vary by species and place. Check the MPI page for your exact spot.").foregroundStyle(CatchCheckColor.navy)
+            }
+        }
+    }
+}
+
+/// A species' picture, from the phone or downloaded now; a fish outline until it loads or with no signal.
+struct SpeciesPictureView: View {
+    let picture: SpeciesPicture?
+    let description: String
+    @State private var image: UIImage?
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12).fill(.white)
+            if let image {
+                Image(uiImage: image).resizable().scaledToFit().padding(2).accessibilityLabel(description)
+            } else {
+                Image(systemName: "fish").font(.title2).foregroundStyle(.gray)
+            }
+        }
+        .task(id: picture?.file) {
+            guard let picture else { image = nil; return }
+            image = await RulesSync.picture(picture).flatMap { UIImage(contentsOfFile: $0.path) }
+        }
+    }
+}
+
+/// A size or limit as a big figure: "30 cm" over "minimum", or "No take".
+private struct RuleFigure: View {
+    let value: String
+    let unit: String
+    let label: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value).font(value.count <= 4 ? .title2.bold() : .subheadline.bold()).foregroundStyle(CatchCheckColor.navy).lineLimit(1)
+                if !unit.isEmpty { Text(unit).font(.subheadline).foregroundStyle(CatchCheckColor.navy) }
+            }
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A bar from 0 to 100 cm (or 200 mm for shellfish) with the minimum size filled in.
+private struct SizeBar: View {
+    let minimum: (Double, String)
+    var body: some View {
+        let scale = minimum.1 == "mm" ? 200.0 : 100.0
+        VStack(spacing: 2) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(CatchCheckColor.outline)
+                    Capsule().fill(CatchCheckColor.accent).frame(width: geometry.size.width * min(max(minimum.0 / scale, 0.03), 1))
+                }
+            }
+            .frame(height: 8)
+            HStack {
+                Text("0"); Spacer(); Text("\(Int(scale / 2))"); Spacer(); Text("\(Int(scale)) \(minimum.1)")
+            }
+            .font(.caption2).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Minimum \(Int(minimum.0)) \(minimum.1) on a scale to \(Int(scale)) \(minimum.1)")
+    }
+}
+
+private func figure(_ value: Double) -> String { value.rounded() == value ? String(Int(value)) : String(value) }
+
+private struct SpeciesRuleCard: View {
+    let row: SavedRuleQuickRow
+    let info: SpeciesInfo?
+    var body: some View {
+        Card {
+            HStack(spacing: 12) {
+                SpeciesPictureView(picture: info?.pictures.first, description: info?.name ?? row.species).frame(width: 108, height: 72)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.species).font(.headline).foregroundStyle(CatchCheckColor.navy).lineLimit(2).multilineTextAlignment(.leading)
+                    if let maori = info?.maori { Text(maori).font(.caption).foregroundStyle(.secondary) }
+                    HStack(spacing: 16) {
+                        if let minimum = row.minimum {
+                            RuleFigure(value: figure(minimum.0), unit: minimum.1, label: "minimum")
+                        } else if let fact = row.facts.first(where: { $0.label.hasPrefix("Minimum") }) {
+                            RuleFigure(value: fact.value, unit: "", label: fact.label.lowercased())
+                        } else {
+                            RuleFigure(value: "None", unit: "", label: "minimum")
+                        }
+                        if let limit = row.dailyLimit { RuleFigure(value: limit, unit: "", label: "per day") }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            if let minimum = row.minimum { SizeBar(minimum: minimum) }
+            if let note = row.note { Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+        }
+    }
+}
+
+/// A species' pictures, every rule fact, the catch check for it and the MPI link.
+private struct SpeciesRuleDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    let row: SavedRuleQuickRow
+    let info: SpeciesInfo?
+    let catalog: SpeciesCatalog?
+    let officialURL: URL
+    @State private var selected = 0
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let pictures = info?.pictures, !pictures.isEmpty {
+                        let picture = pictures[min(selected, pictures.count - 1)]
+                        SpeciesPictureView(picture: picture, description: "\(info?.name ?? row.species), \(picture.caption)").aspectRatio(1.5, contentMode: .fit)
+                        if pictures.count > 1 {
+                            FlowLayout {
+                                ForEach(Array(pictures.enumerated()), id: \.offset) { index, item in
+                                    Button(item.caption) { selected = index }.buttonStyle(ChoiceButton(selected: index == selected))
+                                }
+                            }
+                        }
+                        Text("Illustration · \(picture.caption)").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Text(row.species).font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    if let info { Text([info.maori, info.scientific.isEmpty ? nil : info.scientific].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary) }
+                    ForEach(Array(row.facts.enumerated()), id: \.offset) { item in
+                        HStack {
+                            Text(item.element.label).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(item.element.value).font(.headline).foregroundStyle(CatchCheckColor.navy)
+                        }
+                    }
+                    if let minimum = row.minimum { SizeBar(minimum: minimum) }
+                    if let note = row.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+                    if row.minimum != nil { CheckMyCatchCard(rows: [row], catalog: catalog) }
+                    Link(row.hasFootnote ? "Read the MPI footnote" : "Check the official MPI rule", destination: officialURL)
+                        .buttonStyle(.bordered).frame(maxWidth: .infinity)
+                    if let note = catalog?.note { Text(note).font(.caption).foregroundStyle(.secondary) }
+                }
+                .padding(20)
+            }
+            .background(CatchCheckColor.cream)
+            .navigationTitle(info?.name ?? "Species")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+/// Pick a species, type a length and see whether it meets the minimum; with one row, the species is fixed.
+private struct CheckMyCatchCard: View {
+    let rows: [SavedRuleQuickRow]
+    let catalog: SpeciesCatalog?
+    @State private var selectedID: String?
+    @State private var lengthText = ""
+    @FocusState private var typing: Bool
+    var body: some View {
+        let row = rows.first { $0.id == selectedID } ?? rows[0]
+        let unit = row.minimum?.1 ?? "cm"
+        let result = Double(lengthText.replacingOccurrences(of: ",", with: ".")).flatMap { checkCatch(row, length: $0) }
+        Card(background: CatchCheckColor.seafoam) {
+            Text("Check my catch").font(.headline).foregroundStyle(CatchCheckColor.navy)
+            if rows.count > 1 {
+                Picker("Species", selection: Binding(get: { row.id }, set: { selectedID = $0; lengthText = "" })) {
+                    ForEach(rows) { option in
+                        Text(option.species + (catalog?.forRule(option.species)?.maori.map { " · \($0)" } ?? "")).tag(option.id)
+                    }
+                }
+                .pickerStyle(.menu).tint(CatchCheckColor.accent)
+            }
+            // The answer sits above the field so the keyboard never hides it.
+            if let result {
+                Label(result.text, systemImage: result.meets ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(result.meets ? .green : .red)
+            }
+            HStack {
+                TextField("Length", text: $lengthText).keyboardType(.decimalPad).focused($typing)
+                    .padding(10).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 10))
+                Text(unit).foregroundStyle(CatchCheckColor.navy)
+            }
+            .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { typing = false } } }
+            Text("Measure the way MPI describes for this species. Works with no signal.").font(.caption).foregroundStyle(.secondary)
         }
     }
 }
@@ -1464,6 +1727,15 @@ private struct SavedRuleQuickRow: Identifiable {
     let facts: [(label: String, value: String)]
     let note: String?
     let hasFootnote: Bool
+
+    /// The single minimum length or size with its unit, such as (30, "cm"); nil when there is none or it varies.
+    var minimum: (Double, String)? {
+        guard let value = facts.first(where: { $0.label == "Minimum length" || $0.label == "Minimum size" })?.value,
+              let match = value.wholeMatch(of: /(\d+(?:\.\d+)?) (cm|mm)/), let number = Double(match.1) else { return nil }
+        return (number, String(match.2))
+    }
+    /// The daily limit as shown, such as "7" or "No take"; nil when the row has none.
+    var dailyLimit: String? { facts.first { $0.label.hasPrefix("Daily limit") }?.value }
 }
 
 private extension SavedRulesPage {
@@ -1481,9 +1753,16 @@ private extension SavedRulesPage {
         return nil
     }
 
-    func quickRows(matching query: String) -> [SavedRuleQuickRow] {
-        let preferred = ["snapper", "blue cod", "kingfish", "kahawai", "rock lobster", "pāua", "pauā", "cockle"]
-        let rows: [SavedRuleQuickRow] = tables.enumerated().flatMap { tableIndex, table in
+    /// The area's combined daily finfish limit, such as 20, when its text states one.
+    var combinedFinfishLimit: Int? {
+        for section in sections {
+            if let match = section.text.firstMatch(of: /(?i)combined daily bag limit of\s+(\d+)\s+finfish/) { return Int(match.1) }
+        }
+        return nil
+    }
+
+    func allRows() -> [SavedRuleQuickRow] {
+        tables.enumerated().flatMap { tableIndex, table in
             guard let headers = table.first, headers.count > 1,
                   headers[0].localizedCaseInsensitiveContains("species") else { return [SavedRuleQuickRow]() }
             let columns = headers.indices.dropFirst().compactMap { index -> (Int, String)? in
@@ -1544,15 +1823,6 @@ private extension SavedRulesPage {
                                          hasFootnote: hasFootnote)
             }
         }
-        if !query.isEmpty {
-            return Array(rows.filter { $0.species.localizedStandardContains(query) }.prefix(24))
-        }
-        return Array(rows.filter { row in preferred.contains { row.species.lowercased().hasPrefix($0) } }
-            .sorted { first, second in
-                let firstIndex = preferred.firstIndex { first.species.lowercased().hasPrefix($0) } ?? preferred.count
-                let secondIndex = preferred.firstIndex { second.species.lowercased().hasPrefix($0) } ?? preferred.count
-                return firstIndex < secondIndex
-            }.prefix(8))
     }
 }
 
@@ -1609,27 +1879,4 @@ private func ruleFactLabel(_ heading: String) -> String? {
     if text.contains("min size") || text.contains("minimum size") { return "Minimum size" }
     if text.contains("tail width") { return "Minimum tail width" }
     return nil
-}
-
-private struct SavedRuleQuickCard: View {
-    let row: SavedRuleQuickRow
-    let officialURL: URL
-    var body: some View {
-        Card {
-            Text(row.species).font(.headline).foregroundStyle(CatchCheckColor.navy)
-            ForEach(Array(row.facts.enumerated()), id: \.offset) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(item.element.label).font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(item.element.value).font(.subheadline.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            if let note = row.note { Text(note).font(.caption).foregroundStyle(.secondary) }
-            if row.hasFootnote || row.facts.contains(where: { $0.value.contains("MPI") }) {
-                Link(row.hasFootnote ? "Read MPI footnote" : "Check official MPI rule", destination: officialURL)
-                    .font(.subheadline.weight(.semibold))
-            }
-        }
-    }
 }

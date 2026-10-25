@@ -162,6 +162,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     val state: StateFlow<FishingUiState> = _state.asStateFlow()
     private val rulesCache = mutableMapOf<Pair<String, String>, FishRulesResult>()
     init {
+        // Every area's rules and the species pictures stay on the phone for use with no signal.
+        viewModelScope.launch { nz.fishingnz.app.data.RulesSync.sync() }
         val (saved, active) = TripStore.load()
         _state.value = _state.value.copy(catches = CatchLogStore.load(), savedRecommendations = saved,
             savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active,

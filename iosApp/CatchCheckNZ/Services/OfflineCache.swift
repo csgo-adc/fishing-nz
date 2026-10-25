@@ -13,9 +13,17 @@ enum OfflineCache {
         return folder
     }
 
+    /// Saves `data` under `key`, which may name a subfolder such as "species/snapper.webp".
     static func write(_ key: String, _ data: Data) {
         guard let url = folder?.appendingPathComponent(key) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)
+    }
+
+    /// The saved file for `key`, or nil.
+    static func fileURL(_ key: String) -> URL? {
+        guard let url = folder?.appendingPathComponent(key), FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
     }
 
     /// The saved data and when it was saved, or nil.

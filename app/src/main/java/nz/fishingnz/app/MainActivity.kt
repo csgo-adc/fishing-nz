@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
         SearchPreferencesStore.initialize(applicationContext)
         CatchLogStore.initialize(applicationContext)
         OfflineCache.initialize(applicationContext)
+        nz.fishingnz.app.data.RulesSync.initialize(applicationContext)
         TripStore.initialize(applicationContext)
         TripReminders.initialize(applicationContext)
         SyncStore.initialize(applicationContext)

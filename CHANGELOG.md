@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.50 — 2026-10-25 (build code 51)
+
+- **Fishing rules, redesigned.** Each species shows an illustration, its minimum size and daily limit as big figures
+  and a size bar (0–100 cm, or 0–200 mm for shellfish), and the area's combined finfish limit is one big number.
+  Chips filter Popular, Finfish, Sharks and rays, Shellfish, Crayfish or All; search also finds Māori names. Tapping a
+  species opens larger pictures (with juvenile, adult, male, female or similar species where they differ), every rule
+  and the MPI link. **Check my catch** compares a length with the species' minimum ("28 cm is under the 30 cm minimum.
+  Release it carefully."). Android and iPhone.
+- **Rules and pictures work with no signal.** The service has a new `/v1/rules/manifest` listing each area's version
+  and each picture's hash, and serves 77 species illustrations from `public/species/` as static files. Both apps check
+  it when they open (at most every 12 hours) and when the rules page opens, download only what changed and keep it on
+  the phone; the page shows the copy kept on the phone first and says when it was last checked, with **Check now**.
+  A copy of all 8 areas' rules is built into the apps for a first launch with no signal
+  (`tools/build_offline_rules.py`). The illustrations were drawn from written descriptions, not copied from photos,
+  and checked species by species (docs/data-sources.md).
+
 ## 1.0.49 — 2026-10-25 (build code 50)
 
 - **Tides widgets with figures.** The widget now draws the tide from 8 hours ago to 16 hours ahead, eased between the
