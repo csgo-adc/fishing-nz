@@ -1739,6 +1739,7 @@ struct SpotDetailView: View {
                         }
                         MarineProtectionNoticeView(point: spot.coordinate)
                         if spot.boat, let point = spot.coordinate { NearbyRampsCard(point: point, start: spot.startsAt, end: spot.endsAt) }
+                        if !spot.boat, let point = spot.coordinate { NearbyStructuresCard(point: point) }
                         if shouldShowWindowReason(spot, among: vm.recommendations) {
                             Card(background: CatchCheckColor.seafoam) {
                                 Text("Why this window").bold().foregroundStyle(CatchCheckColor.navy)

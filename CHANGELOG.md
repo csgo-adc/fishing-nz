@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.46 — 2026-10-25 (build code 47)
+
+- **Wharves and breakwaters in land mode.** With **Land fishing** chosen, the map shows coastal wharves, breakwaters and
+  groynes as brown pins (on Android once zoomed in) and tapping one opens its card ("Breakwater · © OpenStreetMap ·
+  access and fishing rules not checked") with conditions, navigation and **Find a fishing window nearby**. A land
+  window's details have a **Wharves and breakwaters nearby** card: the three nearest within 10 km with distance,
+  direction and type ("780 m SW · wharf") and **Directions**, plus a reminder that ports, ferry wharves and some council
+  wharves ban fishing. 516 structures from OpenStreetMap (`tools/build_shore_structures.py`, ODbL): sea coast only,
+  without floating pontoons, private or no-fishing structures, short unnamed jetties, marina arms, industrial berths,
+  port and marina areas, and no-fishing marine areas. Credited on the map and the card. Android and iPhone.
+- The map's spot count no longer runs under the layer buttons on narrow phones; long text wraps instead.
+
 ## 1.0.45 — 2026-10-24 (build code 46)
 
 - **First Google Play production release sent for review.** Google granted production access; the production release

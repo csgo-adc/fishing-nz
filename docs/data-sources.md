@@ -57,3 +57,27 @@ the copies match. 49 of the 56 boat fishing areas have a ramp within 15 km. The 
 under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/); the apps credit OpenStreetMap on
 the map and the ramp card, and data/boat_ramps.json is the derived database, offered under the same licence. Public
 access, condition and tide limits are not recorded, and the apps say so.
+
+## Wharves and breakwaters
+
+In Land mode the maps show coastal wharves, breakwaters and groynes (brown pins; on Android once zoomed in), and a land
+window's details list the three nearest within 10 km with directions. The structures are OpenStreetMap
+`man_made=pier`, `breakwater` and `groyne` ways within 100 m of the sea coastline:
+`python3 tools/build_shore_structures.py` downloads them from the Overpass API (the coastline filter takes 8 to 10
+minutes) and leaves out floating pontoons; private, no-access and `fishing=no` structures; abandoned or disused ones;
+unnamed jetties under 80 m, which are mostly private bach jetties (this takes the Marlborough Sounds from 641 mapped
+structures to 27); marina arms ("B Pier") and tanker, oil, fuel, berth and similar industrial names; anything inside an
+OpenStreetMap port or marina area or inside a marine reserve or High Protection Area from
+[data/marine_protection.json](../data/marine_protection.json); and twelve features checked by hand that are a fuel
+terminal, fishing company wharves, marina or tour-only landings, a building, a boardwalk or a ramp. Pieces of one
+structure within 40 m are merged and the pin goes at the middle of the structure. It writes
+[data/shore_structures.json](../data/shore_structures.json) with identical copies in the apps (516 structures: 197
+wharves, 260 breakwaters and 59 groynes, 78 named, 44 KB, retrieved 25 October 2026). `--from <file>` builds from a
+saved Overpass reply and `--check` confirms the copies match. 44 of the 83 land fishing areas have a structure within
+2 km and 61 within 10 km; exposed surf beaches such as Muriwai, Hokitika and Kāpiti have none.
+
+The data is © OpenStreetMap contributors under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/);
+the apps credit OpenStreetMap on the map and the card, and data/shore_structures.json is the derived database, offered
+under the same licence. A mapped wharf isn't permission to fish: ports, ferry wharves and some council wharves ban it,
+OpenStreetMap rarely records this, and the filter can't catch every commercial wharf. The apps say so on the pin's card
+("access and fishing rules not checked") and on the nearby card, and tell people to check the signs.

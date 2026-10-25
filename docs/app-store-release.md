@@ -41,7 +41,8 @@ Three real signed-out iPhone 17 Pro Max screenshots (1320×2868) are in [`assets
 - **API deploy:** run Actions → Deploy so migration `0013_user_sync.sql` and `/v1/me/sync` are live before release;
   the privacy policy (updated 20 October 2026) describes sync.
 - **Review notes:** mention the catch log (local unless sync is on), Tell someone (shares text through the share sheet)
-  and that boat ramps and marine protected areas are bundled public data (OpenStreetMap ODbL, DOC).
+  and that boat ramps, wharves and breakwaters, and marine protected areas are bundled public data (OpenStreetMap ODbL,
+  DOC).
 
 ## Account setup and remaining submission steps
 

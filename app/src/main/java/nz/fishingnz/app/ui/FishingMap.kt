@@ -151,7 +151,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
     var showProtection by rememberSaveable { mutableStateOf(true) }
     val protection = rememberMarineProtection()
     val ramps = rememberBoatRamps()
-    // Bumped when the camera stops, so ramp pins follow panning as well as zooming.
+    val structures = rememberShoreStructures()
+    // Bumped when the camera stops, so ramp and wharf pins follow panning as well as zooming.
     var cameraTick by remember { mutableIntStateOf(0) }
     BackHandler(enabled = showMapStyles || showList || selectedPlace != null) {
         when {
@@ -221,8 +222,8 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
     }
 
-    val rampTick = if (filter == "Boat" && zoom >= 10.0) cameraTick else 0
-    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.deviceLocation, selectedPlace?.id, filter, ramps, rampTick) {
+    val rampTick = if (filter != "All" && zoom >= 10.0) cameraTick else 0
+    LaunchedEffect(nativeMap.value, styleRevision, visibleSpots, zoom, s.deviceLocation, selectedPlace?.id, filter, ramps, structures, rampTick) {
         val map = nativeMap.value ?: return@LaunchedEffect
         map.clear()
         val icons = IconFactory.getInstance(context)
@@ -253,6 +254,16 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 rampMarkers[marker.id] = ramp
             }
         }
+        // Wharves, breakwaters and groynes in Land mode once zoomed in, the same way.
+        val structureMarkers = mutableMapOf<Long, nz.fishingnz.app.data.ShoreStructure>()
+        if (filter == "Land" && zoom >= 10.0 && structures != null) {
+            val bounds = map.projection.visibleRegion.latLngBounds
+            val structureIcon = icons.fromBitmap(mapPin(context, 0xFF633806.toInt()))
+            structures.asSequence().filter { bounds.contains(LatLng(it.point.latitude, it.point.longitude)) }.take(150).forEach { structure ->
+                val marker = map.addMarker(MarkerOptions().position(LatLng(structure.point.latitude, structure.point.longitude)).title(structure.label).icon(structureIcon))
+                structureMarkers[marker.id] = structure
+            }
+        }
         s.deviceLocation?.let { point -> map.addMarker(MarkerOptions()
             .position(LatLng(point.latitude, point.longitude))
             .title("Your location")
@@ -264,6 +275,11 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             if (marker.id == placeMarker?.id) { showConditions = true; return@setOnMarkerClickListener true }
             rampMarkers[marker.id]?.let { ramp ->
                 selectedPlace = ConditionPlace(ramp.label, ramp.point, "© OpenStreetMap · access and tide limits not checked", boat = true)
+                navigationError = false
+                return@setOnMarkerClickListener true
+            }
+            structureMarkers[marker.id]?.let { structure ->
+                selectedPlace = ConditionPlace(structure.label, structure.point, structure.mapSubtitle, boat = false)
                 navigationError = false
                 return@setOnMarkerClickListener true
             }
@@ -369,8 +385,13 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         }
         Box(Modifier.fillMaxSize().background(Seafoam)) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-            Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
-                Text("${visibleSpots.size} spots" + if (filter == "Boat") if (zoom >= 10.0) " · teal pins are boat ramps" else " · zoom in for boat ramps" else "",
+            // The end padding makes long text wrap instead of running under the layer buttons on narrow phones.
+            Surface(Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
+                Text("${visibleSpots.size} spots" + when (filter) {
+                    "Boat" -> if (zoom >= 10.0) " · teal pins are boat ramps" else " · zoom in for boat ramps"
+                    "Land" -> if (zoom >= 10.0) " · brown pins are wharves and breakwaters" else " · zoom in for wharves and breakwaters"
+                    else -> ""
+                },
                     Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Navy, style = MaterialTheme.typography.labelMedium)
             }
             Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -472,6 +493,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                 }
                 if (showProtection && protection != null) AttributionLink("· Protected areas © DOC", MarineProtection.DOC_URL)
                 if (baseMap.isLinz && filter == "Boat" && zoom >= 10.0) AttributionLink("· Ramps © OpenStreetMap", nz.fishingnz.app.data.BoatRamps.CREDIT_URL)
+                if (baseMap.isLinz && filter == "Land" && zoom >= 10.0) AttributionLink("· Wharves © OpenStreetMap", nz.fishingnz.app.data.ShoreStructures.CREDIT_URL)
             }
         }
     }
