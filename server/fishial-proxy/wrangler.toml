@@ -12,17 +12,17 @@ ACCOUNT_EMAIL_FROM = "Fishdays - NZ <accounts@fishnz.space>"
 AUTH_BASE_URL = "https://fishing.fishnz.space"
 PUBLIC_DEVELOPER_NAME = "Tristan"
 PUBLIC_SUPPORT_EMAIL = "tc199558@gmail.com"
-# Shared fishing windows (docs/share-fishing-window.md). Store pages stay "#" until the apps are published.
+# Shared fishing windows (docs/share-fishing-window.md). An empty or "#" store page hides that download button.
 IOS_DOWNLOAD_URL = "https://apps.apple.com/app/id6820858116"
-ANDROID_DOWNLOAD_URL = "#"
+ANDROID_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=nz.fishingnz.app"
 # 10-character Apple Developer Team ID of the paid membership. Empty keeps iPhone links opening in the browser.
 APPLE_TEAM_ID = "8T7835869S"
 # The iPhone app's bundle ID, for its native Sign in with Apple sheet (docs/account-sign-in.md). Apple sign-in also needs
 # the APPLE_KEY_ID and APPLE_PRIVATE_KEY secrets; the browser flow used by Android also needs APPLE_CLIENT_ID.
 APPLE_BUNDLE_ID = "nz.fishingnz.catchcheck"
-# Comma-separated SHA-256 signing-certificate fingerprints. The first is the Play upload key; add the Play App Signing
-# key from Play Console > Test and release > App signing so Play-installed copies open shared links directly.
-ANDROID_CERT_SHA256 = "37:B7:79:41:88:76:24:F6:05:43:A0:84:48:40:1E:AF:87:26:74:53:5C:D0:99:C4:81:36:96:52:3F:74:59:F6"
+# Comma-separated SHA-256 signing-certificate fingerprints: the Play upload key (local and GitHub builds), then the
+# Play App Signing key from Play Console > Protected with Play > App signing (copies installed from Google Play).
+ANDROID_CERT_SHA256 = "37:B7:79:41:88:76:24:F6:05:43:A0:84:48:40:1E:AF:87:26:74:53:5C:D0:99:C4:81:36:96:52:3F:74:59:F6,0C:47:2C:01:73:D3:8E:63:7F:D6:72:AA:80:F6:E0:EF:DD:F1:1A:C3:95:2B:3C:D6:12:59:66:9E:A7:80:AB:0A"
 
 [[routes]]
 pattern = "fishing.fishnz.space"

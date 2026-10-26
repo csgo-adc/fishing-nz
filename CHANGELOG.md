@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.58 — 2026-10-27 (build code 59)
+
+- **Live on Google Play, update sent for review.** The first production release, 45 (1.0.44), went live on
+  27 October. The same day **58 (1.0.57)** was sent for Google's review as a full rollout with new release notes:
+  Home, Spots, redesigned rules, the Tides widget curve and the simpler account page. No app code changed in 1.0.58.
+- **New Google Play store listing** (in review with the update). Short description "Plan NZ fishing days: tides,
+  weather, fishing windows, spots and bag limits". The full description covers the features added since October and
+  now says usage statistics are on after a one-time notice instead of "off by default". Six new phone screenshots of
+  1.0.57 (Home, Best fishing window, Spots, Fishing rules, Tide curve, Weather) replace the two from version 0.1,
+  taken on a new 1080×1920 Android emulator with live Auckland data. The icon and the Fishing rules screenshot are
+  labelled as AI-assisted. `assets/google-play/listing.md` and `docs/google-play-release.md` record it all.
+- **Shared-window links on Android.** `ANDROID_DOWNLOAD_URL` now points at the Play page, and Google's Play app signing
+  key is added to `ANDROID_CERT_SHA256`, so the shared-window page shows a working Android button and Play-installed
+  copies can open `/w/` links directly. Takes effect when the API is deployed.
+
 ## 1.0.57 — 2026-10-26 (build code 58)
 
 - **CMS charts show the biggest numbers.** Ranked charts (feature usage, API calls by type, screens, events, app

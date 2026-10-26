@@ -15,10 +15,11 @@ What people share is a **short link**, `https://fishing.fishnz.space/w/k3F9xQ2m`
 
 How a short link is made: tapping **Share this window** sends the window to `POST /v1/share`. The Worker keeps it for **60 days** and answers with an 8-character id. The button shows "Creating link…" for a moment. If the service can't be reached (offline, timeout), the app shares a **long link** instead, `/w/<whole window>`, which is about 800 characters but needs no server storage. Both kinds open the same page and the same app screen, so sharing never fails because of the network.
 
-## Until the apps are published
+## Store links
 
-- The **Download for iPhone / Android** buttons show `href="#"`, are greyed and say "link coming soon". Set the two real links (below) and they become normal buttons.
-- iPhone team `8T7835869S` and App Store ID `6820858116` are configured as of 1.0.20; deploy the API and install the App Store/TestFlight build to verify Universal Links. Android still needs Google's Play app-signing certificate.
+- A **Download for iPhone / Android** button whose link is unset (`href="#"`) is greyed and says "link coming soon"; with a real link it is a normal button.
+- iPhone team `8T7835869S` and App Store ID `6820858116` are configured as of 1.0.20; deploy the API and install the App Store/TestFlight build to verify Universal Links.
+- Android is configured as of 1.0.58: the Play page and Google's Play app-signing certificate are set. They take effect when the API is deployed.
 
 ## One-time setup (nothing here can be done without your accounts)
 
@@ -42,13 +43,11 @@ Values that are not `https://` links, a 10-character Team ID or a 32-byte colon-
 
 ### Android
 
-`ANDROID_CERT_SHA256` already holds the **Play upload key** (`37:B7:79:…:74:59:F6`), which signs bundles built locally and by the *Android Play* workflow. Copies installed from Google Play are re-signed with Google's **app signing key**, a different certificate:
+`ANDROID_CERT_SHA256` holds the **Play upload key** (`37:B7:79:…:74:59:F6`), which signs bundles built locally and by the *Android Play* workflow, then Google's **app signing key** (`0C:47:2C:…:80:AB:0A`), which re-signs copies installed from Google Play. The second was copied on 27 October 2026 from Play Console → Protected with Play → **App signing**, where the page's Digital Asset Links snippet lists the same fingerprint. If Google's key changes (a key upgrade), add the new fingerprint the same way and deploy.
 
-1. In Play Console open your app's **App signing** page (under Test and release) and copy the **SHA-256 certificate fingerprint** under "App signing key certificate".
-2. Append it to `ANDROID_CERT_SHA256` (comma-separated) and deploy.
-3. Check: `curl https://fishing.fishnz.space/.well-known/assetlinks.json`, then on a phone with the app, `adb shell pm get-app-links nz.fishingnz.app` should show `fishing.fishnz.space: verified`.
+Check after deploying: `curl https://fishing.fishnz.space/.well-known/assetlinks.json`, then on a phone with the Play copy of the app, `adb shell pm get-app-links nz.fishingnz.app` should show `fishing.fishnz.space: verified`.
 
-Without step 2, links from Play-installed copies open in the browser (Android 12 and later do not hand unverified links to apps), so the page's **Open in app** button is how people get into the app.
+Without the app signing key, links from Play-installed copies open in the browser (Android 12 and later do not hand unverified links to apps), so the page's **Open in app** button is how people get into the app.
 
 ## The link format
 

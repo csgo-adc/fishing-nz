@@ -4,15 +4,48 @@ Reviewed 6 October 2026 against the Android app, shared API, deployed provider s
 
 ## Current status
 
-**First production release sent for review on 24 October 2026; waiting for Google.** Production access was granted (applied for on 22 October, see [Production access application](#production-access-application-on-22-october-2026)). The production release is version **45 (1.0.44)**, built locally from commit `847615d` with the upload key: unit tests, release lint, the 64-bit/16 KB check and `jarsigner` passed, and Play accepted it (API 26+, target SDK 37, 19.6 MB for new installs). It targets **all 178 countries and regions plus rest of world**, as a **full rollout**, with managed publishing **off**, so it goes live as soon as Google approves it. Play listed only the optional missing deobfuscation-file and native debug symbol warnings. Release name `45 (1.0.44)`; en-AU release notes:
+**Live on Google Play since 27 October 2026; update 58 (1.0.57) and a new store listing sent for review the same day.**
+Google approved the first production release, **45 (1.0.44)**, which became available in all 178 countries and regions
+at 5:18 AM on 27 October.
+
+The update is version **58 (1.0.57)**, built locally from commit `37cc8e2` with the upload key: 185 unit tests, release
+lint, the 64-bit/16 KB check and `jarsigner` passed. Play accepted it (API 26+, target SDK 37, 20.2 MB for new
+installs, 4.97 MB as an update, no devices dropped) and listed only the usual optional missing deobfuscation-file and
+native debug symbol warnings. It replaces 45 as a **full rollout** to all targeted countries, release name
+`58 (1.0.57)`, managed publishing **off**, so it goes live as soon as Google approves it. en-AU release notes:
+
+> What's new:
+> • New Home: today's tide curve, wind, moon and sunset, and the best fishing window found for you
+> • Spots tab with a map and a nearest-first list, boat ramps, wharves and breakwaters
+> • Fishing rules redesigned with species pictures, size bars and Check my catch, saved for use with no signal
+> • Tides widget now draws the tide curve
+> • Simpler account page and first-launch setup
+
+The same submission changes the default (en-AU) store listing: the short and full descriptions in
+[`assets/google-play/listing.md`](../assets/google-play/listing.md) (the full description now covers the features
+added since October and says usage statistics are on after a notice, instead of "off by default"), and six new phone
+screenshots replacing the two from version 0.1. Four screenshots of at least 1080 px are Google's minimum for
+promotion. The AI asset declaration labels the icon and the Fishing rules screenshot (see the listing file). The app
+name, icon, feature graphic, category, countries and Data safety answers are unchanged.
+
+The 34 MB bundle is larger than the Chrome extension's 10 MB upload limit. This time it was split into four pieces
+under 10 MB, passed into the release page and joined there; the joined file's SHA-256 matched the built bundle before it
+went to Play's own upload field. Dragging the file from Finder into the release form also works.
+
+With the app live, `ANDROID_DOWNLOAD_URL` now points at the Play page and Google's app signing key is in
+`ANDROID_CERT_SHA256` (`server/fishial-proxy/wrangler.toml`, see [share-fishing-window.md](share-fishing-window.md)).
+**Deploy the API** for shared-window pages to show the Play button and for Play-installed copies to open shared links.
+The next Play upload needs a version code above 58.
+
+### First production release (24 October 2026)
+
+Production access was granted (applied for on 22 October, see [Production access application](#production-access-application-on-22-october-2026)). The production release is version **45 (1.0.44)**, built locally from commit `847615d` with the upload key: unit tests, release lint, the 64-bit/16 KB check and `jarsigner` passed, and Play accepted it (API 26+, target SDK 37, 19.6 MB for new installs). It targets **all 178 countries and regions plus rest of world**, as a **full rollout**, with managed publishing **off**, so it goes live as soon as Google approves it. Play listed only the optional missing deobfuscation-file and native debug symbol warnings. Release name `45 (1.0.44)`; en-AU release notes:
 
 > First public release of Fishdays - NZ.
 >
 > Plan fishing days around New Zealand with suggested fishing windows for beaches, rocks, wharves and boats, official LINZ tides, weather and swell, MPI size and bag limits, marine reserve warnings, boat ramps, fish identification, a catch log with size checks, offline use and a Tides home-screen widget.
 
 The saved Data safety answers already cover account sync: precise location and other user-generated content are declared as optional and collected for app functionality, with account deletion, so they were left unchanged. Play Console's App content page had no outstanding declarations. Google says reviews are typically completed within 7 days. Adding production countries also updates open testing, which shares country targeting with production; closed testing stays **Active**. The bundle was larger than the browser extension's 10 MB file limit, so the publisher dragged it into the release form.
-
-After the app is live: set `ANDROID_DOWNLOAD_URL` to the Play page and add Play's app signing key SHA-256 to `ANDROID_CERT_SHA256` (see [Verification and remaining release work](#verification-and-remaining-release-work)), then deploy the API.
 
 All initial Play setup tasks are saved, including reviewer sign-in details, target audience and Data safety. The target audience declaration is **18 and over**. The Advertising ID declaration is saved as **No**. A signed version-code-1 bundle was rebuilt from the current source, validated locally and **accepted by Google Play**. The New Zealand-only Alpha closed test release `0.1 - NZ closed test` and 13 other changes were submitted on 6 October 2026. The supporting service, account-deletion migration and five-per-day identification migration were deployed on 6 October 2026.
 
@@ -28,7 +61,7 @@ All initial Play setup tasks are saved, including reviewer sign-in details, targ
 | Credentials and networking | Session and OAuth preferences excluded from backup/device transfer. Cleartext network traffic disabled. |
 | Analytics | Our own anonymous usage statistics are **on by default** after a one-time in-app notice ("Keep sharing" / "Turn off"); nothing is sent before it is answered, and an earlier off choice stays off. They send allowlisted behaviour events and a random install id with device model, Android version, app version, language and time zone to our API, signed in or not. Turning them off in More → Settings → Terms & privacy erases the server copy and resets the id. Google Analytics (Firebase) is a separate switch and stays **off unless turned on**. Analytics events, device records and API request counts are kept 90 days, account service events 90 days, feedback 365 days, with daily cleanup. |
 | Government information | In-app independence disclaimer and official MPI source links; include the same explanation in the listing below. |
-| Store artwork | 512 px RGBA icon, 1024×500 RGB feature graphic, and two actual 1080×1920 RGB screenshots under `assets/google-play`. |
+| Store artwork | 512 px RGBA icon, 1024×500 RGB feature graphic, and six actual 1080×1920 RGB phone screenshots of 1.0.57 under `assets/google-play`. |
 
 Sources: [target API](https://developer.android.com/google/play/requirements/target-sdk), [16 KB compatibility](https://developer.android.com/guide/practices/page-sizes), [user data](https://support.google.com/googleplay/android-developer/answer/10144311), [account deletion](https://support.google.com/googleplay/android-developer/answer/13327111), [government information](https://support.google.com/googleplay/android-developer/answer/9514050), [store assets](https://support.google.com/googleplay/android-developer/answer/9866151).
 
@@ -137,8 +170,8 @@ The saved declaration does not mark data as shared under Google's exemptions: Cl
 
 ## Verification and remaining release work
 
-**Shared-window links.** To make links from **Share this window** open the app on Android, add Play's *app signing key* SHA-256 (Play Console → your app → App signing) to `ANDROID_CERT_SHA256` in `server/fishial-proxy/wrangler.toml` and deploy the API; the upload key is already listed. Set `ANDROID_DOWNLOAD_URL` to the Play page when the app is public. See [share-fishing-window.md](share-fishing-window.md).
+**Shared-window links.** To make links from **Share this window** open the app on Android, add Play's *app signing key* SHA-256 (Play Console → your app → App signing) to `ANDROID_CERT_SHA256` in `server/fishial-proxy/wrangler.toml` and deploy the API; the upload key is already listed. Set `ANDROID_DOWNLOAD_URL` to the Play page when the app is public. Both were set in 1.0.58; deploy the API. See [share-fishing-window.md](share-fishing-window.md).
 
 Local verification: 73 Android unit tests passed on 6 October; Android release lint has 0 errors (existing warnings remain); the iOS simulator build and backend tests passed in earlier work; the shared API TypeScript check passed. The signed release AAB passes `jarsigner`, bundletool validation, packaged 64-bit and 16 KB checks. The Android emulator shows the current app, and the publisher reports successful reviewer-account creation and email confirmation. Account-deletion tests use real local D1 and simulated email delivery. Production deletion mail, provider consent screens, signed-in Android deletion/photo-consent flows and Play review have not been verified live.
 
-The More → Share row sends the app's Play URL (`https://play.google.com/store/apps/details?id=nz.fishingnz.app`), which only opens for the public once the app is published to production; until then it works for opted-in testers only. Production access was granted and the first production release (45, 1.0.44) was sent for Google's app review on 24 October 2026 (see [Current status](#current-status)); the next Play upload needs a version code above 45. Verify live deletion and provider-held data deletion. Back up the private upload key and local signing configuration securely. Existing branding and provider-use findings remain in `docs/legal-risk-review.md`. This preparation does not establish brand clearance or Google approval.
+The More → Share row sends the app's Play URL (`https://play.google.com/store/apps/details?id=nz.fishingnz.app`), which is public since the app went live on 27 October 2026. Production access was granted and the first production release (45, 1.0.44) went live on 27 October 2026, and update 58 (1.0.57) was sent for review the same day (see [Current status](#current-status)); the next Play upload needs a version code above 58. Verify live deletion and provider-held data deletion. Back up the private upload key and local signing configuration securely. Existing branding and provider-use findings remain in `docs/legal-risk-review.md`. This preparation does not establish brand clearance or Google approval.
