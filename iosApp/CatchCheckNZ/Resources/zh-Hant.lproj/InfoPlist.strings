@@ -1,0 +1,4 @@
+/* Permission prompts in the app language (docs/languages.md). */
+"NSCameraUsageDescription" = "Fishdays - NZ 使用相機辨識魚類並核對相關規則。";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Fishdays - NZ 讓您可以選擇將釣魚行程加入行事曆。";
+"NSLocationWhenInUseUsageDescription" = "Fishdays - NZ 使用您的位置尋找附近的釣點、比較預報狀況，並選擇釣魚規則區域。";

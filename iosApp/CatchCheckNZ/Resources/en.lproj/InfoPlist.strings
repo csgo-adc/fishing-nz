@@ -1,0 +1,4 @@
+/* Permission prompts in the app language (docs/languages.md). */
+"NSCameraUsageDescription" = "Fishdays - NZ uses the camera to identify a fish and check its rules.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Fishdays - NZ lets you choose to add a fishing trip to your calendar.";
+"NSLocationWhenInUseUsageDescription" = "Fishdays - NZ uses your location to find nearby fishing spots, compare forecast conditions, and choose a fishing rules area.";

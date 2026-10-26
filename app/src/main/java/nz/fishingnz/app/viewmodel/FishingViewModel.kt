@@ -177,9 +177,9 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     }
     fun selectTab(value: Int) {
         val old = _state.value
-        if (value !in 0..12 || old.tab == value) return
+        if (value !in 0..13 || old.tab == value) return
         _state.value = old.copy(tab = value)
-        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance", "weather", "catch_log")
+        val features = listOf("home", "map", "tide", "trip_planning", "fishing_rules", "account", "more", "settings", "feedback", "terms_privacy", "appearance", "weather", "catch_log", "language")
         Analytics.track("screen_view", "screen" to features[value])
         if (old.account != null) viewModelScope.launch { runCatching { repository.trackEvent("feature_used", features[value], "android") } }
     }
@@ -189,7 +189,7 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         when {
             current.selectedSpot != null -> closeSpot()
             current.showResults -> closeResults()
-            current.tab in 8..10 -> selectTab(7)
+            current.tab in 8..10 || current.tab == 13 -> selectTab(7)
             current.tab == 7 || current.tab in 3..5 || current.tab == 12 -> selectTab(6)
             current.tab != 0 -> selectTab(0)
         }

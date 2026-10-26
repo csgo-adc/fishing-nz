@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.60 — 2026-10-27 (build code 61)
+
+- **Four more languages:** Simplified Chinese, Traditional Chinese, Korean and Hindi, on Android and iPhone. The app
+  follows the phone's language by default; **Settings → Language** can choose another (Android 13+ and iOS also list
+  it in the phone's own per-app language settings). Dates and times read the language's way. Place names, fish
+  names and MPI rule wording stay English. iPhone permission prompts are translated too. `docs/languages.md`.
+- One shared catalogue per language (`i18n/`, 1,474 texts), tools in `tools/i18n/`, translator tests on both
+  platforms. Not yet done: a few joined phrases (for example "near Auckland" inside "Finding the best times…"),
+  an iPhone screen check, translated store listings and the Play release.
+
 ## 1.0.59 — 2026-10-27 (build code 60)
 
 - **Update without leaving the app.** When a newer version is out, Home shows an **Update available** sheet with what's

@@ -248,7 +248,7 @@ private struct TideReferencePickerView: View {
                         Text("\(station.region) · \(Int(placeDistanceKm(point, GeoPoint(latitude: station.latitude, longitude: station.longitude)))) km away").font(.caption).foregroundStyle(.secondary)
                     }
                 } }
-            }.navigationTitle("Reference tide station").navigationBarTitleDisplayMode(.inline).searchable(text: $query, prompt: "Search stations")
+            }.navigationTitle("Reference tide station").navigationBarTitleDisplayMode(.inline).searchable(text: $query, prompt: tr("Search stations"))
         }
     }
 }
@@ -274,7 +274,7 @@ struct MapPlaceSearchView: View {
                 ForEach(results) { place in Button { choose(place); dismiss() } label: { VStack(alignment: .leading, spacing: 4) { Text(place.name); Text(place.region).font(.caption).foregroundStyle(.secondary) } } }
                 if !searching && results.isEmpty { Text(query.count < 2 ? "Search a town or beach, or drop a pin on the map." : "No places found. Try another name or tap the map.").foregroundStyle(.secondary) }
             }.navigationTitle("Find a place").navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $query, prompt: "Town, beach or place")
+                .searchable(text: $query, prompt: tr("Town, beach or place"))
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
         .task(id: query) {

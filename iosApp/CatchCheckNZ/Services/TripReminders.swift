@@ -74,8 +74,8 @@ enum TripReminders {
 
     private static func book(title: String, body: String, at: Date, id: String = requestID) async throws {
         let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
+        content.title = tr(title)
+        content.body = tr(body)
         content.sound = .default
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!

@@ -182,7 +182,7 @@ private struct WeatherLocationPicker: View {
                     }
                 }
             }
-            .searchable(text: $query, prompt: "Search weather locations")
+            .searchable(text: $query, prompt: tr("Search weather locations"))
             .navigationTitle("Weather locations")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }

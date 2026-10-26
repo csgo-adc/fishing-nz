@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
@@ -298,9 +300,9 @@ private fun decodeThumbnail(path: String) = runCatching {
 private fun shareCatchLog(context: Context, csv: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/csv"
-        putExtra(Intent.EXTRA_SUBJECT, "Fishdays - NZ catch log")
+        putExtra(Intent.EXTRA_SUBJECT, tr("Fishdays - NZ catch log"))
         putExtra(Intent.EXTRA_TEXT, csv)
     }
-    try { context.startActivity(Intent.createChooser(send, "Export catch log")) }
-    catch (_: ActivityNotFoundException) { android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show() }
+    try { context.startActivity(Intent.createChooser(send, tr("Export catch log"))) }
+    catch (_: ActivityNotFoundException) { android.widget.Toast.makeText(context, tr("No app is available to share with."), android.widget.Toast.LENGTH_LONG).show() }
 }

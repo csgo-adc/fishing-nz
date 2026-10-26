@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.launch
 import nz.fishingnz.app.data.AppUpdates
+import nz.fishingnz.app.data.I18n
 import com.google.firebase.analytics.FirebaseAnalytics
 import nz.fishingnz.app.ui.CatchCheckApp
 import nz.fishingnz.app.data.AccountSessionStore
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
     private val installWhenAway = Runnable { AppUpdates.installIfDownloaded() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        I18n.initialize(applicationContext)
         AccountSessionStore.initialize(applicationContext)
         SearchPreferencesStore.initialize(applicationContext)
         CatchLogStore.initialize(applicationContext)
@@ -65,7 +67,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         lifecycleScope.launch {
             AppUpdates.resume(this@MainActivity, updateLauncher)
-            AppUpdates.check(java.util.Locale.getDefault().toLanguageTag())
+            AppUpdates.check(I18n.language)
         }
     }
 

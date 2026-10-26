@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -128,7 +130,7 @@ private fun moonRangeShort(range: TideRange) = when (range) {
     val line = MaterialTheme.colorScheme.primary
     val marker = MaterialTheme.colorScheme.tertiary
     val guide = MaterialTheme.colorScheme.outline
-    Canvas(Modifier.fillMaxWidth().height(64.dp).semantics { contentDescription = "Today's tide curve with the time now marked" }) {
+    Canvas(Modifier.fillMaxWidth().height(64.dp).semantics { contentDescription = tr("Today's tide curve with the time now marked") }) {
         val sorted = points.sortedBy { it.minuteOfDay }
         val low = sorted.minOf { it.level }
         val span = (sorted.maxOf { it.level } - low).takeIf { it > 0.01 } ?: 1.0
@@ -276,7 +278,7 @@ private fun moonRangeShort(range: TideRange) = when (range) {
         ListItem(headlineContent = { Text(title, fontWeight = FontWeight.SemiBold, color = Navy) },
             supportingContent = { Text(detail) },
             leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            trailingContent = { if (chosen) Icon(Icons.Default.CheckCircle, contentDescription = "Chosen", tint = MaterialTheme.colorScheme.primary) },
+            trailingContent = { if (chosen) Icon(Icons.Default.CheckCircle, contentDescription = tr("Chosen"), tint = MaterialTheme.colorScheme.primary) },
             colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface))
     }
 }

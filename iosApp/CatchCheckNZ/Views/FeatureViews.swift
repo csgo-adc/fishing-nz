@@ -804,7 +804,7 @@ private struct TideStationPicker: View {
                     }
                 }
             }
-            .searchable(text: $query, prompt: "Search tide stations")
+            .searchable(text: $query, prompt: tr("Search tide stations"))
             .navigationTitle("Tide locations")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }

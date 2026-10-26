@@ -50,6 +50,9 @@ android {
 
     buildFeatures { buildConfig = true }
 
+    // One catalogue per language, keyed by the English text, shared with the iPhone app (docs/languages.md).
+    sourceSets.getByName("main").assets.srcDir(rootProject.file("i18n"))
+
     signingConfigs {
         if (signingConfigured) create("playUpload") {
             storeFile = rootProject.file(uploadStore!!)

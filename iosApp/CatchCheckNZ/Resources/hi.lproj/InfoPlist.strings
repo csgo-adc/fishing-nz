@@ -1,0 +1,4 @@
+/* Permission prompts in the app language (docs/languages.md). */
+"NSCameraUsageDescription" = "Fishdays - NZ मछली पहचानने और उसके नियम जाँचने के लिए कैमरे का उपयोग करता है।";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Fishdays - NZ आपको फ़िशिंग यात्रा अपने कैलेंडर में जोड़ने देता है।";
+"NSLocationWhenInUseUsageDescription" = "Fishdays - NZ आसपास के फ़िशिंग स्पॉट खोजने, पूर्वानुमान की स्थितियों की तुलना करने और फ़िशिंग नियम क्षेत्र चुनने के लिए आपके स्थान का उपयोग करता है।";

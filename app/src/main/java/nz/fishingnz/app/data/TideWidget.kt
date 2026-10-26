@@ -173,12 +173,12 @@ class TideWidget : AppWidgetProvider() {
         internal fun views(context: Context, station: TideStation, next: Pair<String, String>?, trend: String?, curve: Bitmap?,
                            extra: String, updated: String): RemoteViews =
             RemoteViews(context.packageName, R.layout.widget_tide).apply {
-                setTextViewText(R.id.widget_station, "${station.name} tides")
-                setTextViewText(R.id.widget_trend, trend ?: "")
+                setTextViewText(R.id.widget_station, tr("${station.name} tides"))
+                setTextViewText(R.id.widget_trend, tr(trend ?: ""))
                 if (curve != null) setImageViewBitmap(R.id.widget_curve, curve)
-                setTextViewText(R.id.widget_next, next?.first ?: "Tides unavailable · open the app to try again")
-                setTextViewText(R.id.widget_extra, extra)
-                setTextViewText(R.id.widget_updated, updated)
+                setTextViewText(R.id.widget_next, tr(next?.first ?: "Tides unavailable · open the app to try again"))
+                setTextViewText(R.id.widget_extra, tr(extra))
+                setTextViewText(R.id.widget_updated, tr(updated))
                 setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(context, 1,
                     Intent(context, MainActivity::class.java).setAction(OPEN_TIDE).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
@@ -189,6 +189,7 @@ class TideWidget : AppWidgetProvider() {
 /** Loads the widget's tides (from the saved LINZ table when offline) and the current wind, then redraws every widget. */
 class TideWidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        I18n.initialize(applicationContext)
         OfflineCache.initialize(applicationContext)
         val zone = ZoneId.of("Pacific/Auckland")
         val station = TideWidgetStation.current(applicationContext)

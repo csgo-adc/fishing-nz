@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.location.Geocoder
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -93,7 +95,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                     if (day != null && snapshot != null) IconButton(onClick = {
                         val text = PlaceConditionsShare.text(place, day, today, snapshot.rows(day), tide, station.takeIf { tide != null })
                         if (!shareConditions(context, PlaceConditionsShare.subject(place), text))
-                            android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(context, tr("No app is available to share with."), android.widget.Toast.LENGTH_LONG).show()
                     }) { Icon(Icons.Default.Share, "Share these conditions") }
                     IconButton(onClick = { refresh++ }) { Icon(Icons.Default.Refresh, "Refresh conditions") }
                 })
@@ -240,11 +242,11 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
 private fun shareConditions(context: android.content.Context, subject: String, text: String): Boolean {
     val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
-        putExtra(android.content.Intent.EXTRA_TEXT, text)
+        putExtra(android.content.Intent.EXTRA_SUBJECT, tr(subject))
+        putExtra(android.content.Intent.EXTRA_TEXT, tr(text))
     }
     return try {
-        context.startActivity(android.content.Intent.createChooser(send, "Share these conditions"))
+        context.startActivity(android.content.Intent.createChooser(send, tr("Share these conditions")))
         true
     } catch (_: android.content.ActivityNotFoundException) {
         false

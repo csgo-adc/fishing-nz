@@ -88,7 +88,7 @@ struct CatchCheckRootView: View {
         // "Show on map" from a saved window under More closes that sheet too.
         .onChange(of: vm.mapFocus?.id) { _, id in if id != nil { moreDestination = nil } }
         .sheet(item: $vm.selectedSpot) { SpotDetailView(spot: $0) }
-        .alert("Shared window", isPresented: Binding(get: { vm.sharedWindowNotice != nil }, set: { if !$0 { vm.sharedWindowNotice = nil } })) {
+        .alert(tr("Shared window"), isPresented: Binding(get: { vm.sharedWindowNotice != nil }, set: { if !$0 { vm.sharedWindowNotice = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(vm.sharedWindowNotice ?? "") }
         .sheet(item: $moreDestination) { destination in
@@ -188,7 +188,7 @@ private struct ShareAppRow: View {
             if let url = AppShare.appStoreURL {
                 ShareLink(item: url, subject: Text(AppShare.subject), message: Text(AppShare.message)) { label }
             } else {
-                ShareLink(item: AppShare.textOnly, subject: Text(AppShare.subject)) { label }
+                ShareLink(item: tr(AppShare.textOnly), subject: Text(AppShare.subject)) { label }
             }
         }
         .buttonStyle(.plain)
@@ -241,6 +241,9 @@ private struct SettingsView: View {
                     NavigationLink { AppearanceView() } label: {
                         MoreNavigationLabel(title: "Appearance", subtitle: "Light, dark or device setting", icon: "circle.lefthalf.filled")
                     }
+                    NavigationLink { LanguageView() } label: {
+                        MoreNavigationLabel(title: "Language", subtitle: languageSummary, icon: "globe")
+                    }
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
@@ -249,6 +252,54 @@ private struct SettingsView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .onAppear { vm.trackScreen("settings") }
         }
+    }
+}
+
+/// "Use phone language" or the chosen language's own name, for the Settings row.
+private var languageSummary: String {
+    I18n.choice.isEmpty ? "Use phone language" : (I18n.languages.first { $0.code == I18n.choice }?.name ?? I18n.choice)
+}
+
+/// Settings → Language: the phone's language (the default) or one of the app's languages, each named in itself.
+/// Matches Android's `LanguageScreen`.
+private struct LanguageView: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @ObservedObject private var settings = LanguageSettings.shared
+    @State private var chosen = I18n.choice
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Language").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                Card {
+                    VStack(spacing: 0) {
+                        ForEach([(code: I18n.phone, name: "Use phone language")] + I18n.languages, id: \.code) { option in
+                            Button {
+                                chosen = option.code
+                                settings.choose(option.code)
+                            } label: {
+                                HStack {
+                                    // Language names stay in their own language.
+                                    if option.code == I18n.phone { Text(option.name) } else { Text(verbatim: option.name) }
+                                    Spacer()
+                                    Image(systemName: chosen == option.code ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(chosen == option.code ? CatchCheckColor.accent : .secondary)
+                                }
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            if option.code != I18n.languages.last?.code { Divider() }
+                        }
+                    }
+                }
+                Text("Fishing rules quoted from MPI stay in English, as published.").font(.subheadline).foregroundStyle(.secondary)
+            }.padding(20)
+        }
+        .background(CatchCheckColor.cream)
+        .navigationTitle("Language")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { vm.trackScreen("language") }
     }
 }
 
@@ -1497,7 +1548,7 @@ struct AccountView: View {
                                 Button("Sync now") { Task { await vm.syncNow() } }.font(.subheadline.weight(.semibold)).disabled(vm.syncing)
                             }
                         }
-                        .confirmationDialog("Turn off sync?", isPresented: $showSyncOff, titleVisibility: .visible) {
+                        .confirmationDialog(tr("Turn off sync?"), isPresented: $showSyncOff, titleVisibility: .visible) {
                             Button("Turn off and delete copy", role: .destructive) { vm.setSyncEnabled(false, deleteSyncedCopy: true) }
                             Button("Turn off, keep copy") { vm.setSyncEnabled(false) }
                         } message: {
@@ -1535,7 +1586,7 @@ struct AccountView: View {
                             Divider()
                             Button("Sign out of all devices") { showSignOutEverywhere = true }
                                 .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy).frame(maxWidth: .infinity)
-                                .alert("Sign out of all devices?", isPresented: $showSignOutEverywhere) {
+                                .alert(tr("Sign out of all devices?"), isPresented: $showSignOutEverywhere) {
                                     Button("Sign out everywhere", role: .destructive) { vm.signOutEverywhere() }
                                     Button("Cancel", role: .cancel) {}
                                 } message: {
@@ -2161,7 +2212,7 @@ private struct SearchStationPicker: View {
                     }
                 } }
             }
-            .searchable(text: $query, prompt: "Search towns, spots or tide locations")
+            .searchable(text: $query, prompt: tr("Search towns, spots or tide locations"))
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Where are you fishing?")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }

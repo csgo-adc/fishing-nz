@@ -55,6 +55,21 @@
 		AE000001 /* UpdatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100001 /* UpdatePolicy.swift */; };
 		AE000002 /* AppUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100002 /* AppUpdates.swift */; };
 		AE000003 /* AppUpdateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100003 /* AppUpdateViews.swift */; };
+		AE000004 /* Translator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100004 /* Translator.swift */; };
+		AE000005 /* I18n.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100005 /* I18n.swift */; };
+		AE000006 /* LocalizedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100006 /* LocalizedText.swift */; };
+		AF000001 /* strings.zh-Hans.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100001 /* strings.zh-Hans.json */; };
+		AF000002 /* strings.zh-Hans.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100001 /* strings.zh-Hans.json */; };
+		AF000003 /* strings.zh-Hant.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100002 /* strings.zh-Hant.json */; };
+		AF000004 /* strings.zh-Hant.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100002 /* strings.zh-Hant.json */; };
+		AF000005 /* strings.ko.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100003 /* strings.ko.json */; };
+		AF000006 /* strings.ko.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100003 /* strings.ko.json */; };
+		AF000007 /* strings.hi.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100004 /* strings.hi.json */; };
+		AF000008 /* strings.hi.json in Resources */ = {isa = PBXBuildFile; fileRef = AF100004 /* strings.hi.json */; };
+		AF000009 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = AF200001 /* InfoPlist.strings */; };
+		AF00000A /* Translator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100004 /* Translator.swift */; };
+		AF00000B /* LocalizedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100006 /* LocalizedText.swift */; };
+		AF00000C /* WidgetI18n.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF10000A /* WidgetI18n.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -128,6 +143,19 @@
 		AE100001 /* UpdatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePolicy.swift; sourceTree = "<group>"; };
 		AE100002 /* AppUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdates.swift; sourceTree = "<group>"; };
 		AE100003 /* AppUpdateViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateViews.swift; sourceTree = "<group>"; };
+		AE100004 /* Translator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Translator.swift; sourceTree = "<group>"; };
+		AE100005 /* I18n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = I18n.swift; sourceTree = "<group>"; };
+		AE100006 /* LocalizedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedText.swift; sourceTree = "<group>"; };
+		AF100001 /* strings.zh-Hans.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "strings.zh-Hans.json"; path = "../i18n/strings.zh-Hans.json"; sourceTree = SOURCE_ROOT; };
+		AF100002 /* strings.zh-Hant.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "strings.zh-Hant.json"; path = "../i18n/strings.zh-Hant.json"; sourceTree = SOURCE_ROOT; };
+		AF100003 /* strings.ko.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "strings.ko.json"; path = "../i18n/strings.ko.json"; sourceTree = SOURCE_ROOT; };
+		AF100004 /* strings.hi.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "strings.hi.json"; path = "../i18n/strings.hi.json"; sourceTree = SOURCE_ROOT; };
+		AF100005 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "en"; path = "en.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		AF100006 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		AF100007 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		AF100008 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ko"; path = "ko.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		AF100009 /* hi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "hi"; path = "hi.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		AF10000A /* WidgetI18n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetI18n.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,6 +218,7 @@
 		AA300005 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				AE100004 /* Translator.swift */,
 				AE100001 /* UpdatePolicy.swift */,
 				AA100028 /* TripPlan.swift */,
 				AA100026 /* TripCheck.swift */,
@@ -204,6 +233,7 @@
 		AA300006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AE100005 /* I18n.swift */,
 				AE100002 /* AppUpdates.swift */,
 				AA100030 /* BoatRamps.swift */,
 				AA100032 /* ShoreStructures.swift */,
@@ -235,6 +265,7 @@
 		AA300008 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AE100006 /* LocalizedText.swift */,
 				AE100003 /* AppUpdateViews.swift */,
 				AA100031 /* BoatRampViews.swift */,
 				AA100033 /* ShoreStructureViews.swift */,
@@ -251,6 +282,11 @@
 		AA300009 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				AF200001 /* InfoPlist.strings */,
+				AF100004 /* strings.hi.json */,
+				AF100003 /* strings.ko.json */,
+				AF100002 /* strings.zh-Hant.json */,
+				AF100001 /* strings.zh-Hans.json */,
 				AA100007 /* Info.plist */,
 				AA100015 /* Assets.xcassets */,
 				AA100099 /* PrivacyInfo.xcprivacy */,
@@ -265,6 +301,7 @@
 		AB300001 /* TideWidget */ = {
 			isa = PBXGroup;
 			children = (
+				AF10000A /* WidgetI18n.swift */,
 				AB100001 /* TideWidget.swift */,
 				AB100003 /* Info.plist */,
 				AB100004 /* PrivacyInfo.xcprivacy */,
@@ -336,6 +373,10 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
+				"zh-Hant",
+				ko,
+				hi,
 			);
 			mainGroup = AA300001;
 			productRefGroup = AA300003 /* Products */;
@@ -353,6 +394,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF000009 /* InfoPlist.strings in Resources */,
+				AF000007 /* strings.hi.json in Resources */,
+				AF000005 /* strings.ko.json in Resources */,
+				AF000003 /* strings.zh-Hant.json in Resources */,
+				AF000001 /* strings.zh-Hans.json in Resources */,
 				AA000013 /* Assets.xcassets in Resources */,
 				AA000099 /* PrivacyInfo.xcprivacy in Resources */,
 				AA000098 /* marine_protection.json in Resources */,
@@ -366,6 +412,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF000008 /* strings.hi.json in Resources */,
+				AF000006 /* strings.ko.json in Resources */,
+				AF000004 /* strings.zh-Hant.json in Resources */,
+				AF000002 /* strings.zh-Hans.json in Resources */,
 				AB000011 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -377,6 +427,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AE000006 /* LocalizedText.swift in Sources */,
+				AE000005 /* I18n.swift in Sources */,
+				AE000004 /* Translator.swift in Sources */,
 				AE000003 /* AppUpdateViews.swift in Sources */,
 				AE000002 /* AppUpdates.swift in Sources */,
 				AE000001 /* UpdatePolicy.swift in Sources */,
@@ -418,6 +471,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF00000C /* WidgetI18n.swift in Sources */,
+				AF00000B /* LocalizedText.swift in Sources */,
+				AF00000A /* Translator.swift in Sources */,
 				AB000001 /* TideWidget.swift in Sources */,
 				AB000002 /* FishingModels.swift in Sources */,
 				AB000003 /* FishingScoringService.swift in Sources */,
@@ -437,12 +493,27 @@
 		};
 /* End PBXTargetDependency section */
 
+/* Begin PBXVariantGroup section */
+		AF200001 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				AF100005 /* en */,
+				AF100006 /* zh-Hans */,
+				AF100007 /* zh-Hant */,
+				AF100008 /* ko */,
+				AF100009 /* hi */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
 /* Begin XCBuildConfiguration section */
 		AA700001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 60;
-				MARKETING_VERSION = 1.0.59;
+				CURRENT_PROJECT_VERSION = 61;
+				MARKETING_VERSION = 1.0.60;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -455,8 +526,8 @@
 		AA700002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 60;
-				MARKETING_VERSION = 1.0.59;
+				CURRENT_PROJECT_VERSION = 61;
+				MARKETING_VERSION = 1.0.60;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;

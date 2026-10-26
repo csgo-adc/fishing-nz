@@ -5,6 +5,7 @@ import WidgetKit
 @main
 struct CatchCheckNZApp: App {
     @StateObject private var viewModel = FishingViewModel()
+    @StateObject private var language = LanguageSettings.shared
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -16,6 +17,9 @@ struct CatchCheckNZApp: App {
         WindowGroup {
             CatchCheckRootView()
                 .environmentObject(viewModel)
+                // Everything is drawn again in a newly chosen language (docs/languages.md).
+                .id(language.language)
+                .environment(\.locale, Locale(identifier: language.language))
                 // A shared fishing window: a Universal Link from Messages, WhatsApp and the like, or the app's own scheme.
                 .onOpenURL { url in
                     // The Tides widget opens the Tide tab on its station; other links are shared windows.
@@ -27,13 +31,14 @@ struct CatchCheckNZApp: App {
                     if phase == .background { Analytics.flush() }
                     // Keeps a booked trip check's text up to date with the latest forecast.
                     if phase == .active {
+                        language.refresh()
                         Task { await TripReminders.refresh(force: false) }
                         // Every area's rules and the species pictures stay on the phone for use with no signal.
                         Task { await RulesSync.sync() }
                         // The Tides widget reloads with the latest LINZ table whenever the app opens.
                         WidgetCenter.shared.reloadAllTimelines()
                         // A newer version in the App Store, at most every 12 hours (docs/in-app-updates.md).
-                        Task { await AppUpdates.shared.check(language: Locale.preferredLanguages.first ?? "en") }
+                        Task { await AppUpdates.shared.check(language: I18n.language) }
                     }
                 }
         }

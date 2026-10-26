@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -411,10 +413,10 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
             Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FloatingActionButton(onClick = { showMapStyles = true }, modifier = Modifier.size(48.dp),
                     shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
-                    Icon(Icons.Default.Layers, contentDescription = "Choose map layers")
+                    Icon(Icons.Default.Layers, contentDescription = tr("Choose map layers"))
                 }
                 FloatingActionButton(onClick = { nativeMap.value?.animateCamera(CameraUpdateFactory.bearingTo(0.0)) },
-                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Reset map to north" }, shape = CircleShape,
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = tr("Reset map to north") }, shape = CircleShape,
                     containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
                     MapCompass(bearing)
                 }
@@ -434,7 +436,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
                     onZoomIn = { zoomBy(1.0) }, onZoomOut = { zoomBy(-1.0) })
                 FloatingActionButton(onClick = ::requestLocation, modifier = Modifier.size(48.dp),
                     shape = CircleShape, containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy) {
-                    Icon(Icons.Default.NearMe, contentDescription = "Center map on my location")
+                    Icon(Icons.Default.NearMe, contentDescription = tr("Center map on my location"))
                 }
             }
             if (!mapLoaded && !mapError) Card(Modifier.align(Alignment.Center).padding(24.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
@@ -698,7 +700,7 @@ private fun SpotList(spots: List<FishingSpot>, from: GeoPoint?, ramps: List<nz.f
             Card(onClick = { choose(listing.spot) }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (listing.spot.boat) Icons.Default.DirectionsBoat else Icons.Default.Phishing,
-                        contentDescription = if (listing.spot.boat) "Boat fishing" else "Land fishing", tint = MaterialTheme.colorScheme.primary)
+                        contentDescription = tr(if (listing.spot.boat) "Boat fishing" else "Land fishing"), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(listing.spot.name, color = Navy, fontWeight = FontWeight.SemiBold)

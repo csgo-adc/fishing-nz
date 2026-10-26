@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -157,7 +159,7 @@ import java.time.Instant
                         Text(option.name, color = MaterialTheme.colorScheme.onSurface)
                         Text(option.description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
-                    if (option.id == selectedAreaId) Icon(Icons.Default.CheckCircle, contentDescription = "Selected")
+                    if (option.id == selectedAreaId) Icon(Icons.Default.CheckCircle, contentDescription = tr("Selected"))
                 }
             }
             TextButton(onClick = { uriHandler.openUri("https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules") }) { Text("View MPI fishing-area maps") }
@@ -377,7 +379,7 @@ private fun otherShellfishNote(limit: Int?) = limit?.let { "in the $it other she
         value = picture?.let { item -> withContext(Dispatchers.IO) { RulesSync.picture(item)?.let { BitmapFactory.decodeFile(it.path)?.asImageBitmap() } } }
     }
     Box(modifier.background(Color.White, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-        image?.let { Image(it, contentDescription = description, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(2.dp)) }
+        image?.let { Image(it, contentDescription = description?.let(::tr), contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(2.dp)) }
             ?: Icon(Icons.Default.Phishing, contentDescription = null, tint = Color(0xFF8490A4))
     }
 }

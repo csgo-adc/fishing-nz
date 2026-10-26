@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.WbSunny
@@ -62,6 +65,7 @@ import nz.fishingnz.app.data.AppShare
 import nz.fishingnz.app.data.PrivacyLinks
 import nz.fishingnz.app.data.PrivacyPreferences
 import nz.fishingnz.app.data.AppUpdates
+import nz.fishingnz.app.data.I18n
 import kotlinx.coroutines.delay
 
 private enum class Appearance(val label: String) { SYSTEM("Use device setting"), LIGHT("Light"), DARK("Dark") }
@@ -134,7 +138,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
             updatePrompt = AppUpdates.claimPrompt()
         }
         LaunchedEffect(update.downloaded) {
-            if (update.downloaded && snackbars.showSnackbar("Update downloaded", actionLabel = "Restart", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+            if (update.downloaded && snackbars.showSnackbar(tr("Update downloaded"), actionLabel = tr("Restart"), duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
                 AppUpdates.restartNow()
             }
         }
@@ -165,10 +169,10 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
                 )
                 destinations.forEach { (icon, label, tab) ->
                     NavigationBarItem(
-                        selected = if (tab == 6) state.tab in 3..10 || state.tab == 12 else state.tab == tab,
+                        selected = if (tab == 6) state.tab in 3..10 || state.tab in 12..13 else state.tab == tab,
                         onClick = { vm.selectTab(tab) },
                         icon = {
-                            if (tab == 6 && (update.remindersDone || update.downloaded)) BadgedBox(badge = { Badge() }) { Icon(icon, contentDescription = "More, update available") }
+                            if (tab == 6 && (update.remindersDone || update.downloaded)) BadgedBox(badge = { Badge() }) { Icon(icon, contentDescription = tr("More, update available")) }
                             else Icon(icon, contentDescription = null)
                         },
                         label = { Text(label) }
@@ -193,6 +197,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
                         preferences.edit().putString("mode", choice.name).apply()
                     }
                 }
+                13 -> MoreDetail("Language", { vm.selectTab(7) }, modifier) { LanguageScreen(Modifier) }
                 11 -> WeatherScreen(modifier)
                 12 -> MoreDetail("Catch log", { vm.selectTab(6) }, modifier) { CatchLogScreen(Modifier, state, vm) }
                 else -> MoreScreen(modifier, state.account?.user?.displayName, update, { if (update.downloaded) AppUpdates.restartNow() else onUpdate() }, vm::selectTab)
@@ -208,7 +213,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
 private fun MoreDetail(title: String, back: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = back) { Icon(Icons.Default.ArrowBack, contentDescription = "Back to More") }
+            IconButton(onClick = back) { Icon(Icons.Default.ArrowBack, contentDescription = tr("Back to More")) }
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
         content()
@@ -249,10 +254,10 @@ private fun MoreScreen(modifier: Modifier, name: String?, update: AppUpdates.Sta
 private fun shareApp(context: Context) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, AppShare.SUBJECT)
-        putExtra(Intent.EXTRA_TEXT, AppShare.text())
+        putExtra(Intent.EXTRA_SUBJECT, tr(AppShare.SUBJECT))
+        putExtra(Intent.EXTRA_TEXT, tr(AppShare.text()))
     }
-    try { context.startActivity(Intent.createChooser(send, AppShare.SUBJECT)) }
+    try { context.startActivity(Intent.createChooser(send, tr(AppShare.SUBJECT))) }
     catch (_: ActivityNotFoundException) { /* No app can share text on this device. */ }
 }
 
@@ -266,6 +271,8 @@ private fun SettingsScreen(modifier: Modifier, onNavigate: (Int) -> Unit) {
             MoreItem(Icons.Default.Email, "Feedback", "Report a problem or share an idea") { onNavigate(8) }
             HorizontalDivider(Modifier.padding(start = 64.dp))
             MoreItem(Icons.Default.SettingsBrightness, "Appearance", "Light, dark or device setting") { onNavigate(10) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.Language, "Language", languageSummary(LocalContext.current)) { onNavigate(13) }
         }
     }
 }
@@ -287,6 +294,37 @@ private fun AppearanceScreen(modifier: Modifier, selectedAppearance: Appearance,
             }
         }
         Text("Use device setting follows your phone’s appearance.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** "Use phone language" or the chosen language's own name, for the Settings row. */
+private fun languageSummary(context: Context): String = I18n.choice(context).let { code ->
+    if (code == I18n.PHONE) "Use phone language" else I18n.languages.firstOrNull { it.code == code }?.name ?: code
+}
+
+/** Settings → Language: the phone's language (the default) or one of the app's languages, each named in itself. */
+@Composable
+private fun LanguageScreen(modifier: Modifier) {
+    val context = LocalContext.current
+    var chosen by remember { mutableStateOf(I18n.choice(context)) }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Language", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            val options = listOf(I18n.PHONE to "Use phone language") + I18n.languages.map { it.code to it.name }
+            options.forEachIndexed { index, (code, name) ->
+                if (index > 0) HorizontalDivider(Modifier.padding(start = 16.dp))
+                ListItem(
+                    // Language names are always shown in their own language, so androidx's Text keeps them as written.
+                    headlineContent = { if (code == I18n.PHONE) Text(name) else androidx.compose.material3.Text(name) },
+                    trailingContent = { RadioButton(selected = chosen == code, onClick = null) },
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        chosen = code
+                        I18n.choose(context, code)
+                    }
+                )
+            }
+        }
+        Text("Fishing rules quoted from MPI stay in English, as published.", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -525,7 +527,7 @@ private fun whereTitle(s: FishingUiState, loading: Boolean): String = when {
     }
     Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to your plan") }
+            if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Back to your plan")) }
             Text("Where are you fishing?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         ListItem(headlineContent = { Text("Use current location") },
@@ -583,7 +585,7 @@ private fun showCustomTimeRange(context: android.content.Context, selected: Pref
         android.app.TimePickerDialog(context, pickerTheme, { _, endHour, endMinute ->
             val start = LocalTime.of(startHour, startMinute)
             val end = LocalTime.of(endHour, endMinute)
-            if (start == end) android.widget.Toast.makeText(context, "Choose different start and end times", android.widget.Toast.LENGTH_SHORT).show()
+            if (start == end) android.widget.Toast.makeText(context, tr("Choose different start and end times"), android.widget.Toast.LENGTH_SHORT).show()
             else done(start, end)
         }, initialEnd.hour, initialEnd.minute, false).apply { setTitle("Preferred end time") }.show()
     }, initialStart.hour, initialStart.minute, false).apply { setTitle("Preferred start time") }.show()
@@ -844,7 +846,7 @@ private val feedbackTopics = listOf(
                 val filled = (rating ?: 0) >= value
                 IconButton(onClick = { rating = if (rating == value) null else value; sent = false }, modifier = Modifier.size(48.dp)) {
                     Icon(if (filled) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = if (rating == value) "$value out of 5, selected. Tap to clear" else "$value out of 5",
+                        contentDescription = tr(if (rating == value) "$value out of 5, selected. Tap to clear" else "$value out of 5"),
                         tint = if (filled) Color(0xFFE0A100) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(34.dp))
                 }
             }
@@ -1302,7 +1304,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     val link = ShareService.live.linkFor(spot)
                     sharing = false
                     if (link == null || !shareWindow(context, spot, link))
-                        android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(context, tr("No app is available to share with."), android.widget.Toast.LENGTH_LONG).show()
                 }
             }, enabled = !sharing, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1323,7 +1325,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && !TripReminders.notificationsAllowed(context))
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 if (addToCalendar && !openTripInCalendar(context, spot))
-                    android.widget.Toast.makeText(context, "No calendar app is available on this device.", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, tr("No calendar app is available on this device."), android.widget.Toast.LENGTH_LONG).show()
             }, modifier = Modifier.fillMaxWidth()) { Text("Start fishing trip") }
             Text("Starting a trip saves its forecast and tides for offline use and checks the forecast again before you go.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1361,7 +1363,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                     }
                     OutlinedButton(onClick = {
                         if (!openTripInCalendar(context, trip))
-                            android.widget.Toast.makeText(context, "No calendar app is available on this device.", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(context, tr("No calendar app is available on this device."), android.widget.Toast.LENGTH_LONG).show()
                     }, modifier = Modifier.fillMaxWidth()) { Text("Add to calendar") }
                     // Opens straight from here, so the forecast saved for the trip shows even without a map signal.
                     trip.mapPlace()?.let { place -> Button(onClick = { conditionsPlace = place }, modifier = Modifier.fillMaxWidth()) { Text("Check conditions") } }
@@ -1421,15 +1423,15 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 val text = TripPlan.text(trip, backBy, who, details, link)
                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Fishing trip plan · ${trip.name}")
-                    putExtra(android.content.Intent.EXTRA_TEXT, text)
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, tr("Fishing trip plan · ${trip.name}"))
+                    putExtra(android.content.Intent.EXTRA_TEXT, tr(text))
                 }
                 try {
-                    context.startActivity(android.content.Intent.createChooser(send, "Send your trip plan"))
+                    context.startActivity(android.content.Intent.createChooser(send, tr("Send your trip plan")))
                     vm.tripPlanShared(backBy)
                     close()
                 } catch (_: android.content.ActivityNotFoundException) {
-                    android.widget.Toast.makeText(context, "No app is available to share with.", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, tr("No app is available to share with."), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }) { Text(if (sharing) "Preparing…" else "Send plan") }

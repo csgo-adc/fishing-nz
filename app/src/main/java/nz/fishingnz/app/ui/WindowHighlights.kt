@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,7 +10,6 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +60,7 @@ private data class Tone(val background: Color, val content: Color)
         Text("${mood.emoji} ${mood.label}", color = badge.content, style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold, maxLines = 1,
             modifier = Modifier.background(badge.background, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 5.dp)
-                .clearAndSetSemantics { contentDescription = "Window outlook: ${mood.label}" })
+                .clearAndSetSemantics { contentDescription = tr("Window outlook: ${mood.label}") })
     }
 }
 
@@ -72,7 +73,7 @@ private data class Tone(val background: Color, val content: Color)
             val strong = if (tile.concern) caution.content else Navy
             val soft = if (tile.concern) caution.content else MaterialTheme.colorScheme.onSurfaceVariant
             Column(Modifier.weight(1f).fillMaxHeight().background(background, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 8.dp)
-                .clearAndSetSemantics { contentDescription = "${tile.label} ${tile.value} ${tile.detail}" + if (tile.concern) ", needs attention" else "" }) {
+                .clearAndSetSemantics { contentDescription = "${tr(tile.label)} ${tr(tile.value)} ${tr(tile.detail)}" + if (tile.concern) tr(", needs attention") else "" }) {
                 Text(tile.label, color = soft, style = MaterialTheme.typography.labelMedium)
                 Text(tile.value, color = strong, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (tile.detail.isNotEmpty()) Text(tile.detail, color = soft, style = MaterialTheme.typography.labelSmall, maxLines = 3)

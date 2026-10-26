@@ -71,7 +71,7 @@ struct CatchLogView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .onAppear { vm.trackScreen("catch_log"); usePrefill() }
             .onChange(of: vm.catchPrefill?.id) { _, _ in usePrefill() }
-            .confirmationDialog("Delete your catch log?", isPresented: $confirmDeleteAll, titleVisibility: .visible) {
+            .confirmationDialog(tr("Delete your catch log?"), isPresented: $confirmDeleteAll, titleVisibility: .visible) {
                 Button("Delete all", role: .destructive) { vm.deleteAllCatches() }
             } message: { Text("Every catch and photo in the log is removed from this phone.") }
         }
@@ -216,7 +216,7 @@ private struct CatchFormView: View {
                     Button("Save") { save() }.disabled(species.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .confirmationDialog("Delete this catch?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .confirmationDialog(tr("Delete this catch?"), isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { vm.deleteCatch(original.id); dismiss() }
             } message: { Text("The entry and its photo are removed from your log.") }
             .onAppear(perform: load)

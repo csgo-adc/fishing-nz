@@ -16,8 +16,8 @@ struct TideWidget: Widget {
                 .containerBackground(for: .widget) { Color(red: 0x18 / 255, green: 0x38 / 255, blue: 0x62 / 255) }
                 .widgetURL(URL(string: "nz.fishingnz.catchcheck://tide?station=\(entry.stationID)"))
         }
-        .configurationDisplayName("Tides")
-        .description("The tide curve with the next high and low for a tide station, the moon and the wind.")
+        .configurationDisplayName(tr("Tides"))
+        .description(tr("The tide curve with the next high and low for a tide station, the moon and the wind."))
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }

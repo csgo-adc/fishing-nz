@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -39,7 +41,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -141,7 +142,7 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
                 Text(selected.name, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = { pickerOpen = true }) {
-                Icon(Icons.Default.Search, contentDescription = "Choose weather location")
+                Icon(Icons.Default.Search, contentDescription = tr("Choose weather location"))
             }
             if (selected.id != "current") {
                 val isSaved = selected.id in savedIds
@@ -155,11 +156,11 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
                     store.saveSaved(savedIds)
                 }) {
                     Icon(if (isSaved) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = if (isSaved) "Remove ${selected.name} from saved weather locations" else "Save ${selected.name} as a weather location")
+                        contentDescription = if (isSaved) tr("Remove ${selected.name} from saved weather locations") else tr("Save ${selected.name} as a weather location"))
                 }
             }
             IconButton(onClick = { refreshIndex++ }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh ${selected.name} weather")
+                Icon(Icons.Default.Refresh, contentDescription = tr("Refresh ${selected.name} weather"))
             }
         }
         if (places.size > 1) {
@@ -414,7 +415,7 @@ private fun WeatherHourlyCard(hours: List<HourlyWeather>) {
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         Text(hour.at.format(hourFormatter), style = MaterialTheme.typography.labelMedium)
-                        Icon(weatherIcon(hour.code, hour.isDay ?: true), contentDescription = weatherDescription(hour.code), tint = MaterialTheme.colorScheme.primary)
+                        Icon(weatherIcon(hour.code, hour.isDay ?: true), contentDescription = tr(weatherDescription(hour.code)), tint = MaterialTheme.colorScheme.primary)
                         Text(weatherDescription(hour.code), style = MaterialTheme.typography.labelSmall)
                         Text("${weatherNumber(hour.temperatureC)}°", fontWeight = FontWeight.Bold)
                         Text("Rain ${hour.rainChancePercent ?: "—"}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -436,7 +437,7 @@ private fun WeatherWeekCard(days: List<DailyWeather>) {
                 if (index > 0) HorizontalDivider()
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (index == 0) "Today" else day.date.format(DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH)), modifier = Modifier.width(62.dp), fontWeight = FontWeight.SemiBold)
-                    Icon(weatherIcon(day.code, true), contentDescription = weatherDescription(day.code), tint = MaterialTheme.colorScheme.primary)
+                    Icon(weatherIcon(day.code, true), contentDescription = tr(weatherDescription(day.code)), tint = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
                         Text(weatherDescription(day.code), style = MaterialTheme.typography.bodySmall)
                         Text("Rain ${day.rainChancePercent ?: "—"}% · wind to ${weatherNumber(day.windMaxKmh)} km/h",

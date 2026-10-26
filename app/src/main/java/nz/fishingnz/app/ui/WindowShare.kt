@@ -1,5 +1,7 @@
 package nz.fishingnz.app.ui
 
+import nz.fishingnz.app.data.tr
+
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -16,11 +18,11 @@ internal fun canShareWindow(window: Recommendation) = window.startsAtEpochSecond
 internal fun shareWindow(context: Context, window: Recommendation, url: String): Boolean {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "Fishing window · ${window.name}")
-        putExtra(Intent.EXTRA_TEXT, SharedWindowLink.text(window, url))
+        putExtra(Intent.EXTRA_SUBJECT, tr("Fishing window · ${window.name}"))
+        putExtra(Intent.EXTRA_TEXT, tr(SharedWindowLink.text(window, url)))
     }
     return try {
-        context.startActivity(Intent.createChooser(send, "Share this fishing window"))
+        context.startActivity(Intent.createChooser(send, tr("Share this fishing window")))
         true
     } catch (_: ActivityNotFoundException) {
         false

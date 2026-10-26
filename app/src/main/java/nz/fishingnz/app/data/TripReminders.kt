@@ -41,7 +41,7 @@ object TripReminders {
         appContext = context.applicationContext
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Trip forecast checks", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                NotificationChannel(CHANNEL, tr("Trip forecast checks"), NotificationManager.IMPORTANCE_DEFAULT).apply {
                     description = "The forecast for your active trip, checked the evening before or 2 hours before it starts."
                 })
         }
@@ -82,8 +82,8 @@ object TripReminders {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title).setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentTitle(tr(title)).setContentText(tr(body))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(tr(body)))
             .setContentIntent(open).setAutoCancel(true)
             .build()
         try { NotificationManagerCompat.from(context).notify(id, notification) } catch (_: SecurityException) { /* Permission withdrawn. */ }
@@ -93,6 +93,7 @@ object TripReminders {
 /** Re-evaluates the active trip's hours with the latest forecast and the current plan preferences. */
 class TripCheckWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        I18n.initialize(applicationContext)
         TripStore.initialize(applicationContext)
         SearchPreferencesStore.initialize(applicationContext)
         OfflineCache.initialize(applicationContext)
@@ -113,6 +114,7 @@ class TripCheckWorker(context: Context, params: WorkerParameters) : CoroutineWor
 /** The back-by reminder for a shared trip plan, while that trip is still active. */
 class CheckInWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        I18n.initialize(applicationContext)
         TripStore.initialize(applicationContext)
         val trip = TripStore.load().second ?: return Result.success()
         val (title, body) = nz.fishingnz.app.model.TripPlan.checkInMessage(trip)
