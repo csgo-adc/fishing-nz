@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.63 — 2026-10-27 (build code 64)
+
+- **Translated Play listing sent for review.** The zh-CN, zh-TW, ko-KR and hi-IN listings and the English Languages
+  section were submitted as 5 listing changes. This restarted the review of 62 (1.0.61), so the update and the new
+  listing are reviewed together and publish together on approval.
+
 ## 1.0.62 — 2026-10-27 (build code 63)
 
 - **Play listing in four more languages.** Short and full descriptions in Simplified Chinese (zh-CN), Traditional
