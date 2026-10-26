@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.55 — 2026-10-26 (build code 56)
+
+- **Account page shows your fishing.** Signed in, the header now shows fish caught, species and saved spots from this
+  phone, when you joined and how many fish IDs are left today. iPhone shows your initials like Android.
+- **Country is a searchable list** with names and flags, New Zealand first, instead of a two-letter code box.
+- **Save changes** only turns on after you edit your name or country, then shows **Saved**.
+- **Sign-in & security** joins the old Sign-in options and Password cards: one row each for email and password, Google
+  and Apple, showing what is connected, then **Sign out of all devices**.
+- **Delete account** lists what is deleted as short points. iPhone now also says recovery copies can remain for up to
+  30 days, as Android and the privacy policy do; it opens as a sheet instead of an alert.
+- Same words and colours on both apps: "Name", "Retry account check", a red sync error, and a **Privacy policy** link at
+  the bottom of the iPhone page.
+- New Android unit tests and an iPhone check (`tools/test_account_profile_swift.sh`) cover the header numbers, sign-up
+  month, country list and flags.
+
 ## 1.0.54 — 2026-10-26 (build code 55)
 
 - **Spots opens on the map.** The Spots tab now starts on **Map** instead of **List**; the nearest-first list is one tap

@@ -311,7 +311,7 @@ class FishingRepository {
 
     private fun parseAccountSnapshot(profile: JSONObject, permissions: JSONObject): AccountSnapshot {
         return AccountSnapshot(
-            AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free"), profile.optBoolean("has_password", true)),
+            AccountProfile(profile.getString("id"), profile.getString("email"), profile.optString("display_name"), profile.optString("country_code", "NZ"), profile.optString("plan", "free"), profile.optBoolean("has_password", true), profile.optString("created_at")),
             permissions.optJSONObject("features")?.optBoolean("fish_identity") == true,
             parseFishIdentityQuota(permissions.optJSONObject("fish_identity_quota")),
         )

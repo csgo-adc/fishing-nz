@@ -2,7 +2,10 @@ package nz.fishingnz.app.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +27,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import nz.fishingnz.app.model.CatchLog
+import nz.fishingnz.app.model.Countries
 import nz.fishingnz.app.viewmodel.FishingUiState
 import nz.fishingnz.app.viewmodel.FishingViewModel
 
@@ -34,6 +40,8 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
     var showChangePassword by remember { mutableStateOf(false) }
     var showSignOutEverywhere by remember { mutableStateOf(false) }
     var showSyncOff by remember { mutableStateOf(false) }
+    var showCountries by remember { mutableStateOf(false) }
+    var profileSaved by remember { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -88,6 +96,18 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
             }
             if (s.account == null) Text("Sign in to identify fish and manage your profile.",
                 color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium)
+            else {
+                val totals = remember(s.catches) { CatchLog.totals(s.catches) }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HeaderStat(totals.fish, "Fish caught", Modifier.weight(1f))
+                    HeaderStat(totals.species, "Species", Modifier.weight(1f))
+                    HeaderStat(s.savedSpots.size, if (s.savedSpots.size == 1) "Saved spot" else "Saved spots", Modifier.weight(1f))
+                }
+                val quota = s.account.fishIdentityQuota?.takeIf { s.account.fishIdentity }
+                listOfNotNull(s.account.user.memberSince, quota?.let { "${it.remainingToday} of ${it.limit} fish IDs left today" }).takeIf { it.isNotEmpty() }?.let {
+                    Text(it.joinToString(" · "), color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         s.accountNotice?.let { Card(colors = CardDefaults.cardColors(Seafoam), shape = RoundedCornerShape(12.dp)) { Text(it, Modifier.fillMaxWidth().padding(14.dp), color = Navy) } }
         s.accountError?.let { Card(colors = CardDefaults.cardColors(Color(0xFFFFEBE7)), shape = RoundedCornerShape(12.dp)) {
@@ -148,11 +168,22 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 if (!createAccount && !s.verificationPending) TextButton(enabled = !s.accountBusy && validEmail, onClick = { vm.resendVerification(email.trim()) }) { Text("Resend confirmation email") }
             }
         } else {
+            val user = s.account.user
             AccountPanel {
-                AccountSectionHeading("Profile", s.account.user.email, Icons.Default.PersonOutline)
-                OutlinedTextField(displayName, { displayName = it.take(80) }, label = { Text("Display name") }, singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(countryCode, { countryCode = it.take(2).uppercase() }, label = { Text("Country code") }, supportingText = { Text("Two-letter code, e.g. NZ") }, singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
-                Button(enabled = !s.accountBusy && countryCode.matches(Regex("[A-Z]{2}")), onClick = { vm.saveAccountProfile(displayName, countryCode) }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text(if (s.accountBusy) "Please wait…" else "Save changes") }
+                AccountSectionHeading("Profile", null, Icons.Default.PersonOutline)
+                OutlinedTextField(displayName, { displayName = it.take(80) }, label = { Text("Name") }, singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
+                Box {
+                    OutlinedTextField("${Countries.flag(countryCode)} ${Countries.name(countryCode)}".trim(), {}, readOnly = true, label = { Text("Country") },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }, singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
+                    // A read-only field does not take clicks, so a transparent layer on top opens the list.
+                    Box(Modifier.matchParentSize().clickable(onClickLabel = "Choose country") { showCountries = true })
+                }
+                val profileChanged = displayName.trim() != user.displayName || countryCode != user.countryCode
+                Button(enabled = !s.accountBusy && profileChanged, onClick = { profileSaved = true; vm.saveAccountProfile(displayName, countryCode) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
+                    if (profileSaved && !profileChanged) { Icon(Icons.Default.Check, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Saved") }
+                    else Text(if (s.accountBusy) "Saving…" else "Save changes")
+                }
             }
             AccountPanel {
                 AccountSectionHeading("Sync trips and catch log", "Use them on your other signed-in devices", Icons.Default.Sync)
@@ -174,19 +205,30 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
                 }
             }
             AccountPanel {
-                AccountSectionHeading("Sign-in options", "Google or Apple", Icons.Default.Lock)
-                socialButtons()
-            }
-            AccountPanel {
-                AccountSectionHeading("Password", if (s.account.user.hasPassword) null else "Add one to also sign in with your email.", Icons.Default.Lock)
-                if (s.account.user.hasPassword) {
-                    OutlinedButton(enabled = !s.accountBusy, onClick = { showChangePassword = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text("Change password") }
-                } else {
-                    OutlinedButton(enabled = !s.accountBusy, onClick = {
-                        nz.fishingnz.app.data.Analytics.track("password_reset_opened")
-                        uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.forgotPassword)
-                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) { Text("Add a password") }
+                AccountSectionHeading("Sign-in & security", null, Icons.Default.Security)
+                SignInRow("Email & password", if (user.hasPassword) user.email else "Add a password to also sign in with your email") {
+                    TextButton(enabled = !s.accountBusy, onClick = {
+                        if (user.hasPassword) showChangePassword = true
+                        else {
+                            nz.fishingnz.app.data.Analytics.track("password_reset_opened")
+                            uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.forgotPassword)
+                        }
+                    }) { Text(if (user.hasPassword) "Change" else "Add") }
                 }
+                listOf("google" to "Google", "apple" to "Apple").forEach { (provider, label) ->
+                    val connected = provider in s.signInProviders.connected
+                    val available = if (provider == "google") s.signInProviders.google else s.signInProviders.apple
+                    if (connected || available) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        SignInRow(label, if (connected) "Connected" else "Not connected") {
+                            if (connected) Icon(Icons.Default.CheckCircle, null, Modifier.padding(horizontal = 12.dp), tint = MaterialTheme.colorScheme.primary)
+                            else TextButton(enabled = !s.accountBusy, onClick = {
+                                vm.startSocialSignIn(provider) { url -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                            }) { Text("Connect") }
+                        }
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 TextButton(enabled = !s.accountBusy, onClick = { showSignOutEverywhere = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Sign out of all devices") }
             }
             OutlinedButton(enabled = !s.accountBusy, onClick = vm::signOut, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
@@ -240,10 +282,68 @@ import nz.fishingnz.app.viewmodel.FishingViewModel
         confirmButton = { TextButton(enabled = !s.accountBusy, onClick = { showSignOutEverywhere = false; vm.signOutEverywhere() }) { Text("Sign out everywhere") } },
         dismissButton = { TextButton(onClick = { showSignOutEverywhere = false }) { Text("Cancel") } })
     if (showDeleteConfirmation) AlertDialog(onDismissRequest = { showDeleteConfirmation = false },
-        title = { Text("Permanently delete your account?") },
-        text = { Text("This removes your profile, sign-in connections, sessions, feedback, synced trips and catch log, and account-linked usage records from our live database. It also clears this device’s selected fish photo and trip shortlist and resets optional analytics. It cannot be undone. Recovery copies can remain for up to 30 days. Your Google or Apple account and gallery photos remain available.") },
+        title = { Text("Delete your account?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("This can’t be undone. It deletes from our live database:")
+                DeleteAccountDetails.deleted.forEach { line ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Text("•"); Text(line) }
+                }
+                DeleteAccountDetails.notes.forEach { Text(it) }
+            }
+        },
         confirmButton = { TextButton(enabled = !s.accountBusy, onClick = { showDeleteConfirmation = false; vm.deleteAccount() }) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") } })
+    if (showCountries) CountryDialog(countryCode, onDismiss = { showCountries = false }) { countryCode = it; showCountries = false }
+}
+
+/** What deleting an account removes and keeps; the iPhone app says the same, and it matches the privacy policy. */
+private object DeleteAccountDetails {
+    val deleted = listOf("Your profile, sign-in connections and sessions", "Your feedback, synced trips and catch log", "Usage records linked to your account")
+    val notes = listOf("On this phone it also clears the selected fish photo and trip shortlist, and turns off optional analytics.",
+        "Your Google or Apple account and the photos saved on your phone are not deleted. Recovery copies of the database can keep deleted records for up to 30 days.")
+}
+
+@Composable private fun HeaderStat(value: Int, label: String, modifier: Modifier) {
+    Column(modifier.background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Text("$value", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(label, color = Color(0xFFBFE6DF), style = MaterialTheme.typography.labelMedium, maxLines = 1)
+    }
+}
+
+@Composable private fun SignInRow(title: String, detail: String, action: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold, color = Navy)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        action()
+    }
+}
+
+@Composable private fun CountryDialog(selected: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val countries = remember { Countries.all() }
+    var query by rememberSaveable { mutableStateOf("") }
+    val shown = remember(query) { query.trim().let { q -> countries.filter { q.isEmpty() || it.name.contains(q, true) || it.code.equals(q, true) } } }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.padding(vertical = 20.dp)) {
+                Text("Country", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.headlineSmall, color = Navy)
+                OutlinedTextField(query, { query = it }, placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Default.Search, null) },
+                    singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp))
+                LazyColumn(Modifier.heightIn(max = 380.dp)) {
+                    items(shown, key = { it.code }) { country ->
+                        ListItem(headlineContent = { Text(country.name) }, leadingContent = { Text(country.flag, style = MaterialTheme.typography.titleLarge) },
+                            trailingContent = { if (country.code == selected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.clickable { onPick(country.code) }.padding(horizontal = 8.dp))
+                    }
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)) { Text("Cancel") }
+            }
+        }
+    }
 }
 
 

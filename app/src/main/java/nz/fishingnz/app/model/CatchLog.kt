@@ -46,6 +46,8 @@ data class CatchEntry(
     val deleted: Boolean = false
 )
 
+data class CatchTotals(val fish: Int, val species: Int)
+
 /** A size check against one MPI rule row. [meets] is null when the rule cannot be compared safely. */
 data class SizeVerdict(val rule: String, val meets: Boolean?, val text: String)
 
@@ -54,6 +56,12 @@ object CatchLog {
     const val MAX_LENGTH_CM = 400.0
 
     fun visible(entries: List<CatchEntry>): List<CatchEntry> = entries.filterNot { it.deleted }.sortedByDescending { it.caughtAtEpochSeconds }
+
+    /** Fish caught (each entry's count) and different species in the log, for the Account header. */
+    fun totals(entries: List<CatchEntry>): CatchTotals {
+        val live = entries.filterNot { it.deleted }
+        return CatchTotals(live.sumOf { it.count }, live.map { it.species.trim().lowercase() }.filter { it.isNotEmpty() }.toSet().size)
+    }
 
     /**
      * Compares [lengthCm] with each matching MPI rule row. Only a single plain number is compared; a range, several

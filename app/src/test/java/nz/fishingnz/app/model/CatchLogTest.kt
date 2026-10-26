@@ -98,4 +98,11 @@ class CatchLogTest {
         assertEquals("Around low", at("2026-10-18T01:00:00Z")?.first)
         assertNull(at("2026-10-18T13:00:00Z"))
     }
+
+    @Test fun totalsCountFishAndSpeciesButNotDeletedEntries() {
+        val entries = listOf(entry("a", "Snapper", count = 3), entry("b", " snapper "), entry("c", "Kahawai"),
+            entry("d", "Gurnard").copy(deleted = true), entry("e", " "))
+        assertEquals(CatchTotals(fish = 6, species = 2), CatchLog.totals(entries))
+        assertEquals(CatchTotals(0, 0), CatchLog.totals(emptyList()))
+    }
 }

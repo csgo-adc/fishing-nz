@@ -104,6 +104,13 @@ enum CatchLog {
 
     static func visible(_ entries: [CatchEntry]) -> [CatchEntry] { entries.filter { !$0.deleted }.sorted { $0.caughtAt > $1.caughtAt } }
 
+    /// Fish caught (each entry's count) and different species in the log, for the Account header.
+    static func totals(_ entries: [CatchEntry]) -> (fish: Int, species: Int) {
+        let live = entries.filter { !$0.deleted }
+        let species = Set(live.map { $0.species.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })
+        return (live.reduce(0) { $0 + $1.count }, species.count)
+    }
+
     /// Compares `lengthCm` with each matching MPI rule row. Only a single plain number is compared; a range, several
     /// numbers or a tail width points to MPI instead. Rules in millimetres are converted.
     static func sizeVerdicts(_ lengthCm: Double, rules: [FishRuleMatch]) -> [SizeVerdict] {

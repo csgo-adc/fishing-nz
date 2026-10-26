@@ -1335,6 +1335,8 @@ struct AccountView: View {
     @State private var showSignOutEverywhere = false
     @State private var showDeleteConfirmation = false
     @State private var showSyncOff = false
+    @State private var showCountries = false
+    @State private var profileSaved = false
     @State private var createAccount = false
     @State private var email = ""
     @State private var password = ""
@@ -1347,6 +1349,10 @@ struct AccountView: View {
     private var forgotPasswordURL: URL? {
         let base = (Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space"
         return URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/forgot-password")
+    }
+    private var privacyPolicyURL: URL? {
+        let base = (Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space"
+        return URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/privacy")
     }
     private var isEmailValid: Bool {
         email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1364,8 +1370,10 @@ struct AccountView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack(spacing: 14) {
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.system(size: 36, weight: .medium))
+                            Group {
+                                if let initials = vm.account?.initials { Text(initials).font(.title2.bold()) }
+                                else { Image(systemName: "person.crop.circle.fill").font(.system(size: 36, weight: .medium)) }
+                            }
                                 .foregroundStyle(.white)
                                 .frame(width: 60, height: 60)
                                 .background(.white.opacity(0.12), in: Circle())
@@ -1380,7 +1388,18 @@ struct AccountView: View {
                             }
                             Spacer(minLength: 0)
                         }
-                        if vm.account == nil {
+                        if let account = vm.account {
+                            let totals = CatchLog.totals(vm.catches)
+                            HStack(spacing: 10) {
+                                headerStat(totals.fish, "Fish caught")
+                                headerStat(totals.species, "Species")
+                                headerStat(vm.savedSpotNames.count, vm.savedSpotNames.count == 1 ? "Saved spot" : "Saved spots")
+                            }
+                            let details = [account.memberSince, vm.fishIdentityQuota.map { "\($0.remainingToday) of \($0.limit) fish IDs left today" }].compactMap { $0 }
+                            if !details.isEmpty {
+                                Text(details.joined(separator: " · ")).font(.footnote).foregroundStyle(.white.opacity(0.8))
+                            }
+                        } else {
                             Text("Sign in to identify fish and manage your profile.")
                                 .font(.subheadline).foregroundStyle(.white.opacity(0.8))
                         }
@@ -1400,23 +1419,34 @@ struct AccountView: View {
                             .background(Color.red.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
                     }
                     if vm.accountLoadFailed {
-                        Button("Check account again") { vm.refreshAccount() }
+                        Button("Retry account check") { vm.refreshAccount() }
                             .buttonStyle(.bordered)
                     }
                     if vm.accountLoading {
                         Card { ProgressView("Checking your account…") }
                     } else if let account = vm.account {
-                        accountSection("Profile", subtitle: account.email, icon: "person.text.rectangle") {
+                        accountSection("Profile", subtitle: nil, icon: "person.text.rectangle") {
                             AccountInput(icon: "person") { TextField("Name", text: $displayName).textContentType(.name) }
-                            AccountInput(icon: "globe") {
-                                TextField("Country code", text: $countryCode).textInputAutocapitalization(.characters)
-                                    .onChange(of: countryCode) { _, value in countryCode = String(value.uppercased().prefix(2)) }
+                            Button { showCountries = true } label: {
+                                AccountInput(icon: "globe") {
+                                    HStack {
+                                        Text("\(Countries.flag(countryCode)) \(Countries.name(countryCode))".trimmingCharacters(in: .whitespaces))
+                                            .foregroundStyle(CatchCheckColor.navy)
+                                        Spacer()
+                                        Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
                             }
-                            Button { vm.saveAccountProfile(displayName: displayName, countryCode: countryCode) } label: {
-                                Label(vm.accountBusy ? "Saving…" : "Save profile", systemImage: "checkmark")
-                                    .frame(maxWidth: .infinity)
-                            }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy)
+                            .buttonStyle(.plain).accessibilityLabel("Country, \(Countries.name(countryCode))").accessibilityHint("Choose country")
+                            let profileChanged = displayName.trimmingCharacters(in: .whitespacesAndNewlines) != account.displayName || countryCode != account.countryCode
+                            Button { profileSaved = true; vm.saveAccountProfile(displayName: displayName, countryCode: countryCode) } label: {
+                                Group {
+                                    if profileSaved && !profileChanged { Label("Saved", systemImage: "checkmark") }
+                                    else { Text(vm.accountBusy ? "Saving…" : "Save changes") }
+                                }.frame(maxWidth: .infinity)
+                            }.buttonStyle(.borderedProminent).tint(CatchCheckColor.accent).disabled(vm.accountBusy || !profileChanged)
                         }
+                        .sheet(isPresented: $showCountries) { CountryPickerSheet(selected: $countryCode) }
                         accountSection("Sync trips and catch log", subtitle: "Use them on your other signed-in devices", icon: "arrow.triangle.2.circlepath") {
                             Toggle("Sync on this device", isOn: Binding(get: { vm.syncEnabled }, set: { if $0 { vm.setSyncEnabled(true) } else { showSyncOff = true } }))
                                 .font(.subheadline.weight(.semibold))
@@ -1424,7 +1454,7 @@ struct AccountView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                             if vm.syncEnabled {
                                 Text(vm.syncing ? "Syncing…" : vm.syncError ?? vm.lastSyncedAt.map { "Last synced \(OfflineCache.savedLabel($0))" } ?? "Not synced yet")
-                                    .font(.caption).foregroundStyle(vm.syncError == nil ? Color.secondary : CatchCheckColor.warning)
+                                    .font(.caption).foregroundStyle(vm.syncError == nil ? Color.secondary : Color.red)
                                 Button("Sync now") { Task { await vm.syncNow() } }.font(.subheadline.weight(.semibold)).disabled(vm.syncing)
                             }
                         }
@@ -1434,24 +1464,38 @@ struct AccountView: View {
                         } message: {
                             Text("This phone keeps its trips and catch log. You can also delete the copy kept with your account; your other devices keep theirs.")
                         }
-                        if !offeredSignInProviders.isEmpty {
-                            accountSection("Sign-in options", subtitle: "Google or Apple", icon: "lock.shield") {
-                                socialSignInButtons
+                        accountSection("Sign-in & security", subtitle: nil, icon: "lock.shield") {
+                            signInRow("Email & password", detail: account.hasPassword ? account.email : "Add a password to also sign in with your email") {
+                                Button(account.hasPassword ? "Change" : "Add") {
+                                    if account.hasPassword { showChangePassword = true }
+                                    else if let forgotPasswordURL {
+                                        Analytics.track("password_reset_opened")
+                                        openURL(forgotPasswordURL)
+                                    }
+                                }.font(.subheadline.weight(.semibold)).disabled(vm.accountBusy)
                             }
-                        }
-                        accountSection("Password", subtitle: account.hasPassword ? nil : "Add one to also sign in with your email.", icon: "key") {
-                            if account.hasPassword {
-                                Button { showChangePassword = true } label: { Label("Change password", systemImage: "key").frame(maxWidth: .infinity) }
-                                    .buttonStyle(.bordered).disabled(vm.accountBusy)
-                            } else if let forgotPasswordURL {
-                                Button {
-                                    Analytics.track("password_reset_opened")
-                                    openURL(forgotPasswordURL)
-                                } label: { Label("Add a password", systemImage: "key").frame(maxWidth: .infinity) }
-                                    .buttonStyle(.bordered).disabled(vm.accountBusy)
+                            ForEach(offeredSignInProviders, id: \.self) { provider in
+                                let name = provider == "google" ? "Google" : "Apple"
+                                let connected = vm.signInProviders.connected.contains(provider)
+                                Divider()
+                                if connected {
+                                    signInRow(name, detail: "Connected") {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(CatchCheckColor.accent).accessibilityHidden(true)
+                                    }
+                                } else if provider == "apple" {
+                                    // Apple's guidelines ask for its own button, so connecting Apple uses it in full.
+                                    AppleIDButton { Task { await vm.signInWithProvider("apple") } }
+                                        .frame(height: 44).disabled(vm.accountBusy).accessibilityLabel("Connect Apple")
+                                } else {
+                                    signInRow(name, detail: "Not connected") {
+                                        Button("Connect") { Task { await vm.signInWithProvider(provider) } }
+                                            .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy)
+                                    }
+                                }
                             }
+                            Divider()
                             Button("Sign out of all devices") { showSignOutEverywhere = true }
-                                .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy)
+                                .font(.subheadline.weight(.semibold)).disabled(vm.accountBusy).frame(maxWidth: .infinity)
                                 .alert("Sign out of all devices?", isPresented: $showSignOutEverywhere) {
                                     Button("Sign out everywhere", role: .destructive) { vm.signOutEverywhere() }
                                     Button("Cancel", role: .cancel) {}
@@ -1462,12 +1506,7 @@ struct AccountView: View {
                         Button("Sign out") { vm.signOut() }.disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 8)
                         Button("Delete account", role: .destructive) { showDeleteConfirmation = true }
                             .disabled(vm.accountBusy).frame(maxWidth: .infinity).padding(.vertical, 4)
-                            .alert("Permanently delete your account?", isPresented: $showDeleteConfirmation) {
-                                Button("Delete permanently", role: .destructive) { vm.deleteAccount() }
-                                Button("Cancel", role: .cancel) {}
-                            } message: {
-                                Text("This removes your profile, sign-in connections, sessions, feedback, synced trips and catch log, and account-linked usage records from our live database. It also clears this phone’s selected fish photo and trip shortlist and turns off usage statistics. It does not delete your Google or Apple account or photos saved on your phone. It cannot be undone.")
-                            }
+                            .sheet(isPresented: $showDeleteConfirmation) { DeleteAccountSheet().environmentObject(vm) }
                     } else if vm.hasStoredSession {
                         Card {
                             Text("Session saved").font(.headline).foregroundStyle(CatchCheckColor.navy)
@@ -1560,6 +1599,9 @@ struct AccountView: View {
                         .overlay(RoundedRectangle(cornerRadius: 24).stroke(CatchCheckColor.outline, lineWidth: 1))
                         .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
                     }
+                    if let privacyPolicyURL {
+                        Link("Privacy policy", destination: privacyPolicyURL).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity)
+                    }
                 }.padding(20).padding(.bottom, 24)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -1609,6 +1651,27 @@ struct AccountView: View {
         }
     }
 
+    private func headerStat(_ value: Int, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(value)").font(.title2.bold()).foregroundStyle(.white)
+            Text(label).font(.caption.weight(.semibold)).foregroundStyle(Color(red: 0.78, green: 0.90, blue: 0.92)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func signInRow<Action: View>(_ title: String, detail: String, @ViewBuilder action: () -> Action) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
+                Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+            action()
+        }
+    }
+
     private func accountSection<Content: View>(_ title: String, subtitle: String?, icon: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
@@ -1623,6 +1686,71 @@ struct AccountView: View {
         .padding(18)
         .background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(CatchCheckColor.outline, lineWidth: 1))
+    }
+}
+
+/// Asks before deleting the account. The same wording as Android's dialog, matching the privacy policy.
+private struct DeleteAccountSheet: View {
+    @EnvironmentObject private var vm: FishingViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("This can’t be undone. It deletes from our live database:")
+                    ForEach(["Your profile, sign-in connections and sessions", "Your feedback, synced trips and catch log", "Usage records linked to your account"], id: \.self) { line in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) { Text("•"); Text(line) }
+                    }
+                    Text("On this phone it also clears the selected fish photo and trip shortlist, and turns off optional analytics.")
+                    Text("Your Google or Apple account and the photos saved on your phone are not deleted. Recovery copies of the database can keep deleted records for up to 30 days.")
+                        .foregroundStyle(.secondary)
+                    Button(role: .destructive) { dismiss(); vm.deleteAccount() } label: {
+                        Text("Delete permanently").frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.red).disabled(vm.accountBusy).padding(.top, 8)
+                }
+                .font(.subheadline).padding(20)
+            }
+            .navigationTitle("Delete your account?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// Searchable country list for the profile, New Zealand first.
+private struct CountryPickerSheet: View {
+    @Binding var selected: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    private let countries = Countries.all()
+
+    private var shown: [Countries.Country] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? countries : countries.filter { $0.name.localizedCaseInsensitiveContains(q) || $0.code.caseInsensitiveCompare(q) == .orderedSame }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(shown) { country in
+                Button { selected = country.code; dismiss() } label: {
+                    HStack {
+                        Text(Countries.flag(country.code)).font(.title3)
+                        Text(country.name).foregroundStyle(CatchCheckColor.navy)
+                        Spacer()
+                        if country.code == selected { Image(systemName: "checkmark").foregroundStyle(CatchCheckColor.accent) }
+                    }
+                }
+                .accessibilityAddTraits(country.code == selected ? .isSelected : [])
+            }
+            .listStyle(.plain)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always))
+            .navigationTitle("Country")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
     }
 }
 

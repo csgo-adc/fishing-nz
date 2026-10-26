@@ -488,7 +488,49 @@ struct AccountProfile: Decodable, Equatable {
     // Missing from older service responses; nil is treated as "has a password".
     let hasPasswordField: Bool?
     var hasPassword: Bool { hasPasswordField ?? true }
-    enum CodingKeys: String, CodingKey { case id, email, plan; case displayName = "display_name"; case countryCode = "country_code"; case hasPasswordField = "has_password" }
+    // ISO time the account was made; nil when the service does not say.
+    var createdAt: String? = nil
+    enum CodingKeys: String, CodingKey { case id, email, plan; case displayName = "display_name"; case countryCode = "country_code"; case hasPasswordField = "has_password"; case createdAt = "created_at" }
+
+    /// "Member since October 2026", in New Zealand time, or nil without a sign-up time. Matches Android.
+    var memberSince: String? {
+        guard let createdAt else { return nil }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = parser.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_NZ")
+        formatter.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        formatter.dateFormat = "MMMM yyyy"
+        return "Member since " + formatter.string(from: date)
+    }
+
+    /// Up to two initials from the name, like Android's header, or nil without a name.
+    var initials: String? {
+        let letters = displayName.split(whereSeparator: \.isWhitespace).prefix(2).compactMap { $0.first.map { String($0).uppercased() } }.joined()
+        return letters.isEmpty ? nil : letters
+    }
+}
+
+/// The profile's country choices, named in the phone's language with New Zealand first. Android has the same in `Countries`.
+enum Countries {
+    struct Country: Identifiable, Equatable { let code: String; let name: String; var id: String { code } }
+
+    static func all(locale: Locale = .current) -> [Country] {
+        let others = Locale.Region.isoRegions.map(\.identifier)
+            .filter { $0 != "NZ" && $0.range(of: #"^[A-Z]{2}$"#, options: .regularExpression) != nil }
+            .map { Country(code: $0, name: name($0, locale: locale)) }
+            .sorted { $0.name.compare($1.name, locale: locale) == .orderedAscending }
+        return [Country(code: "NZ", name: name("NZ", locale: locale))] + others
+    }
+
+    static func name(_ code: String, locale: Locale = .current) -> String { locale.localizedString(forRegionCode: code) ?? code }
+
+    /// The flag emoji for a two-letter code, or "" for anything else.
+    static func flag(_ code: String) -> String {
+        guard code.range(of: #"^[A-Z]{2}$"#, options: .regularExpression) != nil else { return "" }
+        return String(String.UnicodeScalarView(code.unicodeScalars.compactMap { UnicodeScalar(0x1F1E6 + $0.value - 65) }))
+    }
 }
 struct AccountFeatures: Decodable { let fishIdentity: Bool; enum CodingKeys: String, CodingKey { case fishIdentity = "fish_identity" } }
 struct FishIdentityQuota: Decodable {
