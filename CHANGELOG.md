@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.62 — 2026-10-27 (build code 63)
+
+- **Play listing in four more languages.** Short and full descriptions in Simplified Chinese (zh-CN), Traditional
+  Chinese (zh-TW), Korean (ko-KR) and Hindi (hi-IN), in `assets/google-play/listing-translations.md`, using the same
+  words the app shows in each language. The English full description gains a Languages section. All five are saved in
+  Play Console but not yet submitted: sending them now would restart the review of 62 (1.0.61), so they go once 62 is
+  approved.
+
 ## 1.0.61 — 2026-10-27 (build code 62)
 
 - **Sent to Google Play.** 58 (1.0.57) and the new store listing went live on 27 October at 7:30 AM. The same day

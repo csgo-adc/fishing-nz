@@ -15,7 +15,13 @@ en-AU release notes:
 > • Update inside the app when a new version is out
 > • Fishing rules quoted from MPI stay in English, as published
 
-The store listing is still English (en-AU) only. The next Play upload needs a version code above 62.
+**Translated store listing saved, not yet sent (1.0.62).** Simplified Chinese (zh-CN), Traditional Chinese (zh-TW),
+Korean (ko-KR) and Hindi (hi-IN) listings from
+[`assets/google-play/listing-translations.md`](../assets/google-play/listing-translations.md), plus a Languages
+section in the English full description, are saved in Play Console as 5 changes not yet submitted. Submitting them
+while 62 is in review would cancel and restart that review, so send them from Publishing overview once 62 is approved
+(this also keeps the listing from promising languages before the build that has them is live). They use the
+default-language screenshots. The next Play upload needs a version code above 62.
 
 ### Release of 27 October 2026 (58, 1.0.57)
 

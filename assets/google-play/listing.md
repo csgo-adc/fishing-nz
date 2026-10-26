@@ -14,6 +14,9 @@
 
 **Account deletion URL (deploy before use):** https://fishing.fishnz.space/delete-account
 
+**Translations:** Simplified Chinese (zh-CN), Traditional Chinese (zh-TW), Korean (ko-KR) and Hindi (hi-IN) are in
+`listing-translations.md`. Change them together with this English text.
+
 ## Full description
 
 Plan your next fishing day around New Zealand with tides, weather, fishing spots and size and bag limits in one free app.
@@ -38,6 +41,9 @@ Signed in, take or choose a photo for an AI species suggestion with the matching
 
 WEATHER
 Current conditions, an hourly outlook and up to 16 days of forecasts for your location or saved places.
+
+LANGUAGES
+Use the app in English, 简体中文 (Simplified Chinese), 繁體中文 (Traditional Chinese), 한국어 (Korean) or हिन्दी (Hindi). It follows your phone's language, or choose one in Settings → Language. Fishing rules quoted from MPI stay in English, as published.
 
 PRIVACY
 Location, camera and notifications are optional: choose places by hand or use the system photo picker. Planning, maps, tides and rules work without an account. An optional account syncs trips and the catch log between your devices. Anonymous usage statistics are explained when you first open the app and can be turned off in Settings. Delete your account in the app or on our website.
