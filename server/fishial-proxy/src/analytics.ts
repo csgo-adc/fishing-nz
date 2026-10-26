@@ -17,12 +17,14 @@ export const EVENT_NAMES = new Set([
   "rules_area_selected", "tide_station_selected", "weather_viewed", "place_conditions_opened",
   "sign_in_succeeded", "sign_in_failed", "sign_up_succeeded", "social_sign_in_started", "sign_out",
   "password_reset_opened", "password_changed", "signed_out_everywhere", "account_deleted", "feedback_sent", "permission_result",
+  "update_prompt_shown", "update_prompt_answered", "update_installed", "language_changed",
 ]);
 
 /** The only properties an event may carry. Free text, coordinates and addresses have no slot. */
 const PROP_KEYS = new Set([
   "screen", "mode", "radius_km", "date_preset", "result_count", "origin", "spot_id", "area_id", "station_id",
   "outcome", "error_code", "method", "is_fish", "confidence_level", "permission", "granted", "history_days", "location_kind",
+  "build", "prompt_number", "required", "language",
 ]);
 
 export type Props = Record<string, string | number | boolean>;

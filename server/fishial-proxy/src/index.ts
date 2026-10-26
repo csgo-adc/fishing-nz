@@ -12,6 +12,7 @@ import { corsHeaders, json, readJson, readLimit, readOffset } from "./http";
 import { deleteDeviceAnalytics, ingestAnalytics } from "./analytics";
 import { handleAdminAnalytics } from "./admin-analytics";
 import { recordApiUsage } from "./usage";
+import { handleAppVersionRoute } from "./app-version";
 
 export interface Env extends SocialAuthEnv {
   OPENAI_API_KEY: string;
@@ -538,6 +539,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (pathname === "/__health") return json({ ok: true, version: packageInfo.version });
     const privacyResponse = await handlePrivacyRoute(request, env);
     if (privacyResponse) return privacyResponse;
+    const versionResponse = handleAppVersionRoute(request, env);
+    if (versionResponse) return versionResponse;
     const shareResponse = await handleShareRoute(request, env);
     if (shareResponse) return shareResponse;
     const passwordResponse = await handlePasswordRoute(request, env);

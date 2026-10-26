@@ -32,6 +32,8 @@ struct CatchCheckNZApp: App {
                         Task { await RulesSync.sync() }
                         // The Tides widget reloads with the latest LINZ table whenever the app opens.
                         WidgetCenter.shared.reloadAllTimelines()
+                        // A newer version in the App Store, at most every 12 hours (docs/in-app-updates.md).
+                        Task { await AppUpdates.shared.check(language: Locale.preferredLanguages.first ?? "en") }
                     }
                 }
         }

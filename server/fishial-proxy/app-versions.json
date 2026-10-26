@@ -1,0 +1,17 @@
+{
+  "minimum_build": { "android": 1, "ios": 1 },
+  "releases": [
+    {
+      "version": "1.0.57",
+      "build": 58,
+      "platforms": ["android"],
+      "notes": {
+        "en": [
+          "New Home: today's tide curve, wind, moon and sunset, and the best fishing window found for you",
+          "Spots tab with a map and a nearest-first list, boat ramps, wharves and breakwaters",
+          "Fishing rules redesigned with species pictures, size bars and Check my catch"
+        ]
+      }
+    }
+  ]
+}

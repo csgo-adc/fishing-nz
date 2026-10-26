@@ -52,6 +52,9 @@
 		AA000031 /* ShoreStructureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100033 /* ShoreStructureViews.swift */; };
 		AA000096 /* shore_structures.json in Resources */ = {isa = PBXBuildFile; fileRef = AA100096 /* shore_structures.json */; };
 		AC000002 /* offline_rules.json in Resources */ = {isa = PBXBuildFile; fileRef = AC100002 /* offline_rules.json */; };
+		AE000001 /* UpdatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100001 /* UpdatePolicy.swift */; };
+		AE000002 /* AppUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100002 /* AppUpdates.swift */; };
+		AE000003 /* AppUpdateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE100003 /* AppUpdateViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -122,6 +125,9 @@
 		AA100033 /* ShoreStructureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoreStructureViews.swift; sourceTree = "<group>"; };
 		AA100096 /* shore_structures.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = shore_structures.json; sourceTree = "<group>"; };
 		AC100002 /* offline_rules.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = offline_rules.json; sourceTree = "<group>"; };
+		AE100001 /* UpdatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePolicy.swift; sourceTree = "<group>"; };
+		AE100002 /* AppUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdates.swift; sourceTree = "<group>"; };
+		AE100003 /* AppUpdateViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -184,6 +190,7 @@
 		AA300005 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				AE100001 /* UpdatePolicy.swift */,
 				AA100028 /* TripPlan.swift */,
 				AA100026 /* TripCheck.swift */,
 				AA100021 /* CatchLog.swift */,
@@ -197,6 +204,7 @@
 		AA300006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AE100002 /* AppUpdates.swift */,
 				AA100030 /* BoatRamps.swift */,
 				AA100032 /* ShoreStructures.swift */,
 				AC100001 /* RulesOffline.swift */,
@@ -227,6 +235,7 @@
 		AA300008 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AE100003 /* AppUpdateViews.swift */,
 				AA100031 /* BoatRampViews.swift */,
 				AA100033 /* ShoreStructureViews.swift */,
 				AA100023 /* CatchLogView.swift */,
@@ -368,6 +377,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AE000003 /* AppUpdateViews.swift in Sources */,
+				AE000002 /* AppUpdates.swift in Sources */,
+				AE000001 /* UpdatePolicy.swift in Sources */,
 				AA000029 /* BoatRampViews.swift in Sources */,
 				AA000028 /* BoatRamps.swift in Sources */,
 				AA000031 /* ShoreStructureViews.swift in Sources */,
@@ -429,8 +441,8 @@
 		AA700001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 59;
-				MARKETING_VERSION = 1.0.58;
+				CURRENT_PROJECT_VERSION = 60;
+				MARKETING_VERSION = 1.0.59;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -443,8 +455,8 @@
 		AA700002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 59;
-				MARKETING_VERSION = 1.0.58;
+				CURRENT_PROJECT_VERSION = 60;
+				MARKETING_VERSION = 1.0.59;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;

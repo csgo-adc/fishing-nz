@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Waves
@@ -60,6 +61,8 @@ import nz.fishingnz.app.data.Analytics
 import nz.fishingnz.app.data.AppShare
 import nz.fishingnz.app.data.PrivacyLinks
 import nz.fishingnz.app.data.PrivacyPreferences
+import nz.fishingnz.app.data.AppUpdates
+import kotlinx.coroutines.delay
 
 private enum class Appearance(val label: String) { SYSTEM("Use device setting"), LIGHT("Light"), DARK("Dark") }
 
@@ -88,8 +91,11 @@ private val darkPalette = darkColorScheme(
 )
 
 @Composable
-fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
+fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {}) {
     val state by vm.state.collectAsState()
+    val update by AppUpdates.state.collectAsState()
+    var updatePrompt by remember { mutableStateOf<Int?>(null) }
+    val snackbars = remember { SnackbarHostState() }
     val context = LocalContext.current
     val view = LocalView.current
     val density = LocalDensity.current
@@ -117,7 +123,26 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
         }
     }
     MaterialTheme(colorScheme = palette) {
+        if (update.required) { RequiredUpdateScreen(update, onUpdate); return@MaterialTheme }
+        // The update pop-up waits until Home has settled, and never shows over setup, a window, a spot, another
+        // notice or while a trip is under way (docs/in-app-updates.md).
+        val tripUnderWay = state.tripBackBy?.isAfter(java.time.Instant.now()) == true
+        LaunchedEffect(update.availableBuild, state.tab, setupDone, state.showResults, state.selectedSpot, state.sharedWindowNotice, tripUnderWay) {
+            if (update.availableBuild == null || state.tab != 0 || !setupDone || state.showResults || state.selectedSpot != null
+                || state.sharedWindowNotice != null || tripUnderWay) return@LaunchedEffect
+            delay(2_500)
+            updatePrompt = AppUpdates.claimPrompt()
+        }
+        LaunchedEffect(update.downloaded) {
+            if (update.downloaded && snackbars.showSnackbar("Update downloaded", actionLabel = "Restart", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                AppUpdates.restartNow()
+            }
+        }
+        updatePrompt?.let { number ->
+            UpdatePromptSheet(update, number, onUpdate = { updatePrompt = null; onUpdate() }, onLater = { updatePrompt = null; AppUpdates.later() })
+        }
         state.sharedWindowNotice?.let { notice ->
+            LaunchedEffect(notice) { AppUpdates.noteOtherNotice() }
             AlertDialog(onDismissRequest = vm::dismissSharedWindowNotice,
                 confirmButton = { TextButton(onClick = vm::dismissSharedWindowNotice) { Text("OK") } },
                 title = { Text("Shared window") }, text = { Text(notice) })
@@ -129,7 +154,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
             setupDone = true
         } else {
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
-        Scaffold(containerColor = palette.background, bottomBar = {
+        Scaffold(containerColor = palette.background, snackbarHost = { SnackbarHost(snackbars) }, bottomBar = {
             if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {
                 val destinations = listOf(
                     Triple(Icons.Default.Home, "Home", 0),
@@ -142,7 +167,10 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                     NavigationBarItem(
                         selected = if (tab == 6) state.tab in 3..10 || state.tab == 12 else state.tab == tab,
                         onClick = { vm.selectTab(tab) },
-                        icon = { Icon(icon, contentDescription = null) },
+                        icon = {
+                            if (tab == 6 && (update.remindersDone || update.downloaded)) BadgedBox(badge = { Badge() }) { Icon(icon, contentDescription = "More, update available") }
+                            else Icon(icon, contentDescription = null)
+                        },
                         label = { Text(label) }
                     )
                 }
@@ -167,7 +195,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel()) {
                 }
                 11 -> WeatherScreen(modifier)
                 12 -> MoreDetail("Catch log", { vm.selectTab(6) }, modifier) { CatchLogScreen(Modifier, state, vm) }
-                else -> MoreScreen(modifier, state.account?.user?.displayName, vm::selectTab)
+                else -> MoreScreen(modifier, state.account?.user?.displayName, update, { if (update.downloaded) AppUpdates.restartNow() else onUpdate() }, vm::selectTab)
             }
         }
         if (state.showResults) ResultsScreen(state, vm)
@@ -188,12 +216,15 @@ private fun MoreDetail(title: String, back: () -> Unit, modifier: Modifier, cont
 }
 
 @Composable
-private fun MoreScreen(modifier: Modifier, name: String?, onNavigate: (Int) -> Unit) {
+private fun MoreScreen(modifier: Modifier, name: String?, update: AppUpdates.State, onUpdate: () -> Unit, onNavigate: (Int) -> Unit) {
     val context = LocalContext.current
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Spacer(Modifier.height(2.dp))
         Text("More", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         name?.let { Text("Signed in as $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (update.available) Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            MoreItem(Icons.Default.SystemUpdate, "Update available", updateRowDetail(update), onClick = onUpdate)
+        }
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             MoreItem(Icons.Default.AccountCircle, "Account", "Profile and sign in") { onNavigate(5) }
         }

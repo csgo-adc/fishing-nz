@@ -44,6 +44,8 @@ struct CatchCheckRootView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @AppStorage("catchcheckAppearance") private var appearance = "light"
     @State private var moreDestination: MoreDestination?
+    @ObservedObject private var updates = AppUpdates.shared
+    @State private var updatePrompt: UpdatePromptItem?
     /// The first launch asks land or boat and where, once. People who used the app before 1.0.48 were already asked for
     /// location at launch, so they skip it.
     @State private var showSetup = !UserDefaults.standard.bool(forKey: "firstRunSetupDone") && CLLocationManager().authorizationStatus == .notDetermined
@@ -63,8 +65,24 @@ struct CatchCheckRootView: View {
             TideForecastView().tabItem { Label("Tide", systemImage: "water.waves") }.tag(2)
             WeatherView().tabItem { Label("Weather", systemImage: "cloud.sun.fill") }.tag(3)
             MoreView(open: { moreDestination = $0 }).tabItem { Label("More", systemImage: "square.grid.2x2.fill") }.tag(4)
+                .badge(updates.state.remindersDone ? 1 : 0)
         }
         .tint(CatchCheckColor.accent)
+        .overlay { if updates.state.required { RequiredUpdateView(state: updates.state) { updates.openStore() } } }
+        // The update pop-up waits until Home has settled, and never shows over setup, a window, a spot, a More page,
+        // another notice or while a trip is under way (docs/in-app-updates.md).
+        .task(id: updatePromptKey) {
+            guard updatePromptKey.hasPrefix("ready") else { return }
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled, let number = updates.claimPrompt() else { return }
+            updatePrompt = UpdatePromptItem(number: number)
+        }
+        .sheet(item: $updatePrompt) { item in
+            UpdatePromptSheet(state: updates.state, promptNumber: item.number,
+                              onUpdate: { updatePrompt = nil; updates.openStore() },
+                              onLater: { updatePrompt = nil; updates.later() })
+        }
+        .onChange(of: vm.sharedWindowNotice) { _, notice in if notice != nil { updates.noteOtherNotice() } }
         .preferredColorScheme(preferredAppearance)
         .fullScreenCover(isPresented: $vm.showingResults) { ResultsView() }
         // "Show on map" from a saved window under More closes that sheet too.
@@ -93,10 +111,19 @@ struct CatchCheckRootView: View {
         .onChange(of: vm.catchPrefill?.id) { _, id in if id != nil { moreDestination = .catchLog } }
         .onChange(of: vm.openTripsRequest) { _, _ in moreDestination = .trips }
     }
+
+    /// Changes whenever the pop-up's chance to show changes; starts with "ready" only when it may show now.
+    private var updatePromptKey: String {
+        let tripUnderWay = (vm.tripBackBy ?? .distantPast) > Date()
+        let ready = updates.state.available != nil && vm.selectedTab == 0 && !showSetup && !vm.showingResults && vm.selectedSpot == nil
+            && moreDestination == nil && vm.sharedWindowNotice == nil && !tripUnderWay && updatePrompt == nil
+        return "\(ready ? "ready" : "wait")-\(updates.state.available ?? 0)"
+    }
 }
 
 private struct MoreView: View {
     @EnvironmentObject private var vm: FishingViewModel
+    @ObservedObject private var updates = AppUpdates.shared
     let open: (MoreDestination) -> Void
 
     var body: some View {
@@ -104,6 +131,11 @@ private struct MoreView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("More").font(.largeTitle.bold()).foregroundStyle(CatchCheckColor.navy)
+                    if updates.state.available != nil {
+                        MoreNavigationRow(title: "Update available",
+                                          subtitle: [updates.state.availableVersion.map { "Version \($0)" }, "tap to update"].compactMap { $0 }.joined(separator: " · "),
+                                          icon: "arrow.down.app") { updates.openStore() }
+                    }
                     VStack(spacing: 10) {
                         MoreNavigationRow(title: "Account", subtitle: vm.account?.email ?? "Sign in and manage your profile", icon: "person.crop.circle") { open(.account) }
                     }

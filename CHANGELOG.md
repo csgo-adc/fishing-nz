@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.59 — 2026-10-27 (build code 60)
+
+- **Update without leaving the app.** When a newer version is out, Home shows an **Update available** sheet with what's
+  new. On Android, copies from Google Play download it in the background with Play's in-app update and install it by
+  themselves once the app has been out of sight for a minute ("Update downloaded · Restart" installs it at once). On
+  iPhone, Update shows the App Store page inside the app. Android and iPhone.
+- **At most three reminders per version:** the first time the store has it, 3 days later and 7 days after that (day
+  10); the third says it won't ask again. Then only an **Update available** row at the top of More and a badge on More
+  remain. Never on the first day of use, over setup, a window or a spot, on a day with another notice, while a trip is
+  under way, or offline. A newer version starts again. Rules in `UpdatePolicy` on both platforms, with tests.
+- **New `/v1/app/version` API** with "what's new" notes per language and an optional minimum build that shows a
+  full-screen **Update required** page, edited in `server/fishial-proxy/app-versions.json`. Deploy the API for notes;
+  without it the pop-up still appears, just without notes. `docs/in-app-updates.md` explains it all.
+
 ## 1.0.58 — 2026-10-27 (build code 59)
 
 - **Live on Google Play, update sent for review.** The first production release, 45 (1.0.44), went live on
