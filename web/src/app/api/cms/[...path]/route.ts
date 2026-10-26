@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 
 const COOKIE_NAME = "catchcheck_cms_session";
 const API_BASE = (process.env.FISH_ID_API_BASE_URL || "https://fishing.fishnz.space").replace(/\/+$/, "");
+const PAGE_LIMITS = { users: "25", feedback: "20" };
 
 function sessionCookie(value: string, maxAge: number): string {
   return `${COOKIE_NAME}=${value}; Path=/api/cms; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
@@ -72,15 +73,33 @@ async function proxy(request: Request): Promise<Response> {
     return Response.json(payload, { status: result.status, headers: { "cache-control": "no-store" } });
   }
 
+  // One list page on its own, so searching and paging do not reload the whole dashboard.
+  const list = path.match(/^\/(users|feedback)$/);
+  if (list && request.method === "GET") {
+    const key = list[1] as "users" | "feedback";
+    const offset = pageOffset(url.searchParams.get("offset"));
+    const search = key === "users" ? (url.searchParams.get("search") || "").trim() : "";
+    if (offset === null || search.length > 120) return errorResponse("Invalid list filters.", 400);
+    const params = new URLSearchParams({ limit: PAGE_LIMITS[key], offset: String(offset) });
+    if (search) params.set("search", search);
+    const result = await fetch(`${API_BASE}/v1/admin/${key}?${params}`, { headers: { "x-account-admin-token": token }, cache: "no-store" }).catch(() => null);
+    if (!result) return errorResponse("Could not reach the account service.", 503);
+    if (result.status === 401) return expiredSession();
+    if (!result.ok) return errorResponse(`The account service could not load ${key}. Try again.`, 502);
+    const payload = await result.json().catch(() => null);
+    if (!validPage(payload, key)) return errorResponse("The account service returned an invalid response.", 502);
+    return Response.json(payload, { headers: { "cache-control": "no-store" } });
+  }
+
   if (path === "/dashboard" && request.method === "GET") {
     const usersOffset = pageOffset(url.searchParams.get("users_offset"));
     const feedbackOffset = pageOffset(url.searchParams.get("feedback_offset"));
     const search = (url.searchParams.get("search") || "").trim();
     if (usersOffset === null || feedbackOffset === null || search.length > 120) return errorResponse("Invalid dashboard filters.", 400);
 
-    const usersParams = new URLSearchParams({ limit: "25", offset: String(usersOffset) });
+    const usersParams = new URLSearchParams({ limit: PAGE_LIMITS.users, offset: String(usersOffset) });
     if (search) usersParams.set("search", search);
-    const feedbackParams = new URLSearchParams({ limit: "20", offset: String(feedbackOffset) });
+    const feedbackParams = new URLSearchParams({ limit: PAGE_LIMITS.feedback, offset: String(feedbackOffset) });
     const headers = { "x-account-admin-token": token };
     const responses = await Promise.all([
       fetch(`${API_BASE}/v1/admin/analytics?days=30`, { headers, cache: "no-store" }),

@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.57 — 2026-10-26 (build code 58)
+
+- **CMS charts show the biggest numbers.** Ranked charts (feature usage, API calls by type, screens, events, app
+  versions) list the top 10 with "Show all", instead of dropping the top rows. Daily charts are column charts that
+  cover the whole 7, 30 or 90 days instead of the last 14, with the peak day named.
+- **One CMS header** with Accounts and Usage tabs, Refresh, "Updated 2 min ago" and Sign out on both pages. Dates
+  read "26 Oct 2026" and "2 h ago" (exact time on hover) instead of US-style dates.
+- **Accounts page tabs:** Users, Feedback and Charts sit under the summary numbers. Search runs as you type, with a
+  clear button, a match count and "/" to jump to it. Tab, search and page stay in the address bar.
+- **Plan changes ask first** ("Give paid access? Yes / Cancel") and confirm when saved. Unconfirmed users show
+  "Confirm email first". New Country, Sign-in (Email or Google / Apple) and Activity → columns.
+- **Feedback** shows category tags, star ratings, a Reply email link, Activity →, and a "new since your last visit"
+  badge (remembered in this browser).
+- **Usage page details open in a side panel** beside the list (over it on narrow screens) instead of far down the
+  page. Esc or × closes it, Back steps through it, and links can open a person or device directly. Error counts
+  above zero are highlighted, and device IDs have a Copy ID button.
+- Only the CMS (`web/`) changed; the admin API is unchanged. The CMS proxy gained read-only `/users` and `/feedback`
+  list routes so searching and paging no longer reload the whole dashboard.
+
 ## 1.0.56 — 2026-10-26 (build code 57)
 
 - **Fewer data-source names on screens.** Android and iPhone no longer name LINZ, Open-Meteo or OpenStreetMap next to
