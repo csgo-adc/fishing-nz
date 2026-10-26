@@ -140,7 +140,7 @@ object MarineProtection {
     fun sourceLine(catalogue: Catalogue): String {
         val date = runCatching { java.time.LocalDate.parse(catalogue.retrievedOn).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)) }
             .getOrDefault(catalogue.retrievedOn)
-        return "Approximate DOC boundaries retrieved $date; they may be out of date and are not for navigation. " +
+        return "Approximate boundaries retrieved $date; they may be out of date and are not for navigation. " +
             "Temporary closures and rāhui are not shown: check DOC and MPI before you fish."
     }
 }

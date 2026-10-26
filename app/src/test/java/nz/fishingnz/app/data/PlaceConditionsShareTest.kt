@@ -32,19 +32,19 @@ class PlaceConditionsShareTest {
             Tide at Auckland ($distance km away) – High 7:12 AM, low 1:20 PM
 
             Map: https://www.google.com/maps/search/?api=1&query=-36.7871,174.7705
-            Weather and waves: Open-Meteo. Tides: LINZ. Check local conditions and marine warnings before you go.
+            Check local conditions and marine warnings before you go.
         """.trimIndent(), PlaceConditionsShare.text(place, LocalDate.parse("2026-10-18"), today, rows, tide, station))
     }
 
     @Test fun aDroppedPinHasNoPlaceNameOrTide() {
         val pin = ConditionPlace("Dropped pin", GeoPoint(-37.8, 174.87), "Selected on map")
         val text = PlaceConditionsShare.text(pin, LocalDate.parse("2026-10-14"), today, rows, null, null)
-        assertEquals("Fishing conditions · pin on the map\nWed 14 Oct · Recent model data", text.lines().take(2).joinToString("\n"))
+        assertEquals("Fishing conditions · pin on the map\nWed 14 Oct · Recent days", text.lines().take(2).joinToString("\n"))
         assertEquals(false, text.contains("Tide at"))
     }
 
     @Test fun forecastLabelsFollowTheConditionsPage() {
-        assertEquals(listOf("Recent model data", "Short-range forecast", "Short-range forecast", "Planning forecast", "Planning forecast", "Early outlook"),
+        assertEquals(listOf("Recent days", "Short-range forecast", "Short-range forecast", "Planning forecast", "Planning forecast", "Early outlook"),
             listOf(-1L, 0L, 2L, 3L, 5L, 6L).map { PlaceConditionsShare.forecastLabel(today.plusDays(it), today) })
     }
 }

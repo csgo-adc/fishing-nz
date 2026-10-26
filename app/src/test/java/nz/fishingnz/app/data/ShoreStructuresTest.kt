@@ -17,7 +17,7 @@ class ShoreStructuresTest {
         assertEquals(setOf("wharf", "breakwater", "groyne"), structures.map { it.kind }.toSet())
         assertEquals("Wharf or jetty", structures.first { it.name == null && it.kind == "wharf" }.label)
         assertEquals("Breakwater", structures.first { it.name == null && it.kind == "breakwater" }.label)
-        assertEquals("Breakwater · © OpenStreetMap · access and fishing rules not checked", structures.first { it.kind == "breakwater" }.mapSubtitle)
+        assertEquals("Breakwater · access and fishing rules not checked", structures.first { it.kind == "breakwater" }.mapSubtitle)
     }
 
     @Test fun findsTheNearestStructuresForMostLandAreas() {

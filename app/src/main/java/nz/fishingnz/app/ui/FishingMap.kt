@@ -98,8 +98,8 @@ private enum class BaseMap(val label: String, val description: String) {
     STANDARD("Standard", "Roads and places"),
     LIGHT("Light", "Less detail behind fishing spots"),
     DARK("Dark", "Easier to read at night"),
-    AERIAL("LINZ aerial", "New Zealand aerial and satellite imagery"),
-    TOPOGRAPHIC("LINZ topographic", "New Zealand terrain, roads and places");
+    AERIAL("Aerial", "New Zealand aerial and satellite imagery"),
+    TOPOGRAPHIC("Topographic", "New Zealand terrain, roads and places");
 
     val isLinz get() = this == AERIAL || this == TOPOGRAPHIC
 
@@ -279,7 +279,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         map.setOnMarkerClickListener { marker ->
             if (marker.id == placeMarker?.id) { showConditions = true; return@setOnMarkerClickListener true }
             rampMarkers[marker.id]?.let { ramp ->
-                selectedPlace = ConditionPlace(ramp.label, ramp.point, "© OpenStreetMap · access and tide limits not checked", boat = true)
+                selectedPlace = ConditionPlace(ramp.label, ramp.point, "Access and tide limits not checked", boat = true)
                 navigationError = false
                 return@setOnMarkerClickListener true
             }
@@ -547,7 +547,7 @@ fun MapScreen(modifier: Modifier, s: FishingUiState, vm: FishingViewModel) {
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         ListItem(
             headlineContent = { Text("Marine protected areas") },
-            supportingContent = { Text("Red: marine reserves and High Protection Areas, no fishing. Amber: Seafloor Protection Areas, where line fishing is allowed but trawling and dredging are not. Approximate DOC boundaries; not for navigation.") },
+            supportingContent = { Text("Red: marine reserves and High Protection Areas, no fishing. Amber: Seafloor Protection Areas, where line fishing is allowed but trawling and dredging are not. Approximate boundaries; not for navigation.") },
             trailingContent = { Switch(checked = showProtection, onCheckedChange = null) },
             modifier = Modifier.fillMaxWidth().clickable { showProtection = !showProtection })
         Spacer(Modifier.height(24.dp))

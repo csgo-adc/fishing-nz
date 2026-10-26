@@ -236,7 +236,7 @@ private struct WeatherForecastPage: View {
                         currentCard(forecast)
                         hourlyCard(forecast)
                         dailyCard(forecast)
-                        Text("Forecast: Open-Meteo, refreshed \(format(forecast.fetchedAt, "h:mm a", zone: forecast.timeZone)). Conditions can differ at exposed fishing spots; check official marine warnings before heading out.")
+                        Text("Updated \(format(forecast.fetchedAt, "h:mm a", zone: forecast.timeZone)). Conditions can differ at exposed fishing spots; check official marine warnings before heading out.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }

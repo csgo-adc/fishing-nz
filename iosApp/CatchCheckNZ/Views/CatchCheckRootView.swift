@@ -267,6 +267,13 @@ private struct TermsPrivacyView: View {
                     Text("Fishing windows, tide times, fish identification and rule summaries help you plan. They can be incomplete or out of date. Check the current MPI rules and local access conditions before fishing.")
                     Text("You are responsible for following applicable fishing and access rules.")
                 }
+                // The one place the app credits its data; the screens themselves stay free of source names. Android matches.
+                Card {
+                    Text("Data sources").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
+                    ForEach(["Weather and waves: Open-Meteo.com (CC BY 4.0)", "Tide times: Toitū Te Whenua LINZ (CC BY 4.0)",
+                             "Maps: Apple Maps and LINZ", "Boat ramps and wharves: © OpenStreetMap contributors",
+                             "Marine protected areas: Department of Conservation", "Fishing rules: summarised from MPI"], id: \.self) { Text($0).font(.subheadline) }
+                }
                 Card {
                     Text("Privacy").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
@@ -628,7 +635,7 @@ private struct TodayCard: View {
                     TideSparkline(points: tide.points, nowMinute: nowMinute).frame(height: 64)
                     Text(tide.events.map { "\($0.type) \($0.time)" }.joined(separator: "  ·  "))
                         .font(.caption.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
-                    if !tide.stationName.isEmpty { Text("\(tide.stationName) tide station · LINZ").font(.caption2).foregroundStyle(.secondary) }
+                    if !tide.stationName.isEmpty { Text("\(tide.stationName) tide station").font(.caption2).foregroundStyle(.secondary) }
                 } else {
                     Text(vm.conditionsError == nil ? "Loading today's tide…" : "Today's tide is unavailable right now.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -1974,9 +1981,6 @@ struct ResultsView: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Planning windows compare forecast conditions. Local access, wave exposure, marine warnings and current MPI rules still need checking.")
-                        Link("Weather and offshore waves: Open-Meteo", destination: URL(string: "https://open-meteo.com/")!)
-                        Link("Tide predictions, where verified: LINZ", destination: URL(string: "https://www.linz.govt.nz/products-services/tides-and-tidal-streams/tide-predictions")!)
-                        Text("See each window for its sources and limitations.")
                     }
                 }
             }
@@ -2180,7 +2184,7 @@ struct SpotDetailView: View {
                             WindowKeyTiles(spot: spot)
                             WindowWatchOut(spot: spot)
                             if let note = spot.forecastNote { Text(note).font(.caption).foregroundStyle(.secondary) }
-                            DisclosureGroup("Details & sources") { WindowSources(spot: spot).padding(.top, 6) }.font(.caption)
+                            DisclosureGroup("Details") { WindowSources(spot: spot).padding(.top, 6) }.font(.caption)
                         } else {
                             WindowOutlook(outlook: spot.windowOutlook)
                             WindowChecks(spot: spot)
@@ -2560,7 +2564,7 @@ private struct WindowChecks: View {
                 Text("\(assessment.checks.emoji) \(assessment.checks.label)")
                 Text("\(assessment.confidence.emoji) \(assessment.confidence.label)")
                 if showDetails {
-                    DisclosureGroup("Details & sources") {
+                    DisclosureGroup("Details") {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(assessment.details, id: \.self) { Text($0) }
                             if !spot.sourceNote.isEmpty { Text(spot.sourceNote) }

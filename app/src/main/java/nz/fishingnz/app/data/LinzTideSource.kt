@@ -40,12 +40,12 @@ internal suspend fun <T> loadTideReference(point: GeoPoint, linked: TideStation?
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { failure = error }
     }
-    throw failure ?: IllegalStateException("No nearby LINZ tide stations.")
+    throw failure ?: IllegalStateException("No tide stations nearby.")
 }
 
 internal fun tideReferenceLabel(spot: FishingSpot, station: TideStation): String {
     val distance = placeDistanceKm(GeoPoint(spot.latitude, spot.longitude), GeoPoint(station.latitude, station.longitude))
-    return "LINZ ${station.name}" + if (distance >= .1) " · ${String.format(Locale.US, "%.1f", distance)} km away" else ""
+    return station.name + if (distance >= .1) " · ${String.format(Locale.US, "%.1f", distance)} km away" else ""
 }
 
 /** One source for the Tide screen and recommendation explanations. Call from an IO dispatcher. */
@@ -80,10 +80,10 @@ object LinzTideSource {
         val until = end.plusDays(1).atStartOfDay()
         val ordered = events.sortedBy { it.at }
         require(ordered.zipWithNext().all { (a, b) -> a.at < b.at }) {
-            "LINZ tide tables contain conflicting events for $stationName."
+            "Tide tables contain conflicting events for $stationName."
         }
         val inRange = ordered.filter { it.at >= from && it.at < until }
-        require(inRange.isNotEmpty()) { "No LINZ tide predictions for $stationName in this date range." }
+        require(inRange.isNotEmpty()) { "No tide predictions for $stationName in this date range." }
         return classifyAndResolve(buildList {
             ordered.lastOrNull { it.at < from }?.let(::add)
             addAll(inRange)
@@ -102,7 +102,7 @@ object LinzTideSource {
             else {
                 fun complete(raw: String) = parseLocal(raw, station, year).also { events ->
                     require(events.map { it.at.toLocalDate() }.distinct().size == LocalDate.of(year, 1, 1).lengthOfYear()) {
-                        "LINZ annual tide table is incomplete for ${station.name} in $year."
+                        "Annual tide table is incomplete for ${station.name} in $year."
                     }
                 }
                 fun download(): List<LocalPrediction> {
@@ -113,7 +113,7 @@ object LinzTideSource {
                         readTimeout = 8_000
                     }
                     val raw = try {
-                        check(connection.responseCode in 200..299) { "LINZ tide table unavailable for ${station.name} in $year." }
+                        check(connection.responseCode in 200..299) { "Tide table unavailable for ${station.name} in $year." }
                         connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                     } finally { connection.disconnect() }
                     return complete(raw).also { OfflineCache.write(offlineKey(station, year), raw) }
@@ -138,17 +138,17 @@ object LinzTideSource {
 
     private fun resolve(event: LocalPrediction, high: Boolean): LinzPrediction {
         val offsets = zone.rules.getValidOffsets(event.at)
-        require(offsets.size == 1) { "LINZ tide event has an ambiguous or nonexistent local time: ${event.at}." }
+        require(offsets.size == 1) { "Tide event has an ambiguous or nonexistent local time: ${event.at}." }
         return LinzPrediction(event.at.toInstant(offsets.single()), event.height, high)
     }
 
     private fun classifyAndResolve(events: List<LocalPrediction>): List<LinzPrediction> {
-        require(events.size >= 2) { "LINZ tide range has too few events." }
+        require(events.size >= 2) { "Tide range has too few events." }
         return events.mapIndexed { index, event ->
             val high = if (index == 0) event.height > events[1].height else event.height > events[index - 1].height
             val neighbours = listOf(index - 1, index + 1).filter { it in events.indices }.map { events[it].height }
             require(neighbours.all { event.height > it } || neighbours.all { event.height < it }) {
-                "LINZ tide range has unclassifiable high and low water."
+                "Tide range has unclassifiable high and low water."
             }
             resolve(event, high)
         }
@@ -157,21 +157,21 @@ object LinzTideSource {
     /** Validate the complete table before resolving wall clocks to instants for a requested range. */
     private fun parseLocal(text: String, station: TideStation, year: Int): List<LocalPrediction> {
         val lines = text.removePrefix("\uFEFF").lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
-        require(lines.size >= 4) { "LINZ tide table is empty or incomplete." }
+        require(lines.size >= 4) { "Tide table is empty or incomplete." }
         val identity = lines[0].split(',').map(String::trim)
         require(identity.size >= 4 && identity[0].toIntOrNull() != null && matchesTideHeader(identity[1], station.csvName)) {
-            "LINZ tide table station does not match ${station.name}."
+            "Tide table station does not match ${station.name}."
         }
-        require(lines[1].startsWith("Based on constituent set with reference date:")) { "Unrecognised LINZ tide table header." }
+        require(lines[1].startsWith("Based on constituent set with reference date:")) { "Unrecognised tide table header." }
         require(lines[2].split(',').map(String::trim) == listOf("Local Std or Daylight Time", "Tidal heights in metres.")) {
-            "LINZ tide table time zone or height units are not recognised."
+            "Tide table time zone or height units are not recognised."
         }
         val dates = mutableListOf<LocalDate>()
         val events = lines.drop(3).flatMap { line ->
             val fields = line.split(',').map(String::trim)
-            require(fields.size >= 6 && fields.size % 2 == 0) { "Malformed LINZ tide row." }
+            require(fields.size >= 6 && fields.size % 2 == 0) { "Malformed tide row." }
             val date = LocalDate.of(fields[3].toInt(), fields[2].toInt(), fields[0].toInt())
-            require(date.year == year) { "LINZ tide table year does not match $year." }
+            require(date.year == year) { "Tide table year does not match $year." }
             dates += date
             var foundBlank = false
             val row = (4 until fields.size step 2).mapNotNull { index ->
@@ -179,19 +179,19 @@ object LinzTideSource {
                 val heightText = fields[index + 1]
                 if (time.isEmpty() && heightText.isEmpty()) { foundBlank = true; null }
                 else {
-                    require(!foundBlank && time.isNotEmpty() && heightText.isNotEmpty()) { "Incomplete LINZ tide event." }
+                    require(!foundBlank && time.isNotEmpty() && heightText.isNotEmpty()) { "Incomplete tide event." }
                     val local = LocalDateTime.of(date, LocalTime.parse(time))
                     val height = heightText.toDouble()
-                    require(height.isFinite()) { "LINZ tide height is invalid." }
+                    require(height.isFinite()) { "Tide height is invalid." }
                     LocalPrediction(local, height)
                 }
             }
-            require(row.isNotEmpty()) { "LINZ tide day has no events." }
+            require(row.isNotEmpty()) { "Tide day has no events." }
             row
         }
-        require(dates.zipWithNext().all { (a, b) -> b == a.plusDays(1) }) { "LINZ tide table has duplicate, missing or unordered days." }
+        require(dates.zipWithNext().all { (a, b) -> b == a.plusDays(1) }) { "Tide table has duplicate, missing or unordered days." }
         require(events.size >= 2 && events.zipWithNext().all { (a, b) -> a.at < b.at }) {
-            "LINZ tide table has duplicate or unordered events."
+            "Tide table has duplicate or unordered events."
         }
         // Rounded, equal-height extrema on another day must not hide valid requested tides.
         return events

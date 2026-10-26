@@ -30,8 +30,7 @@ struct NearbyRampsCard: View {
                 }
             }
             if let lowTide { Text(lowTide).font(.caption).foregroundStyle(CatchCheckColor.orange) }
-            Text("\(BoatRamps.caution) \(BoatRamps.credit).").font(.caption2).foregroundStyle(.secondary)
-            Link("OpenStreetMap licence", destination: BoatRamps.creditURL).font(.caption)
+            Text(BoatRamps.caution).font(.caption2).foregroundStyle(.secondary)
         }
         .task(id: "\(point.latitude),\(point.longitude),\(start?.timeIntervalSince1970 ?? 0)") {
             guard let start, let end, let station = nearbyTideStations(point: point).first,

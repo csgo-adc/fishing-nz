@@ -88,7 +88,7 @@ import Foundation
         let waitawaRow = waitawaWindow.assessment!.conditions.first { $0.title == "Tide" }!
         try expect(waitawaRow.mood.label == "Around high" && waitawaWindow.tidePreferenceFit >= 0.8, "Waitawa reference was not used for the around-high selection")
         try expect(waitawaRow.value.contains("2:53 PM") && waitawaRow.value.contains("3.0 m CD"), "Waitawa window omitted published tide events")
-        try expect(waitawaRow.value.contains("LINZ Man o‘War Bay · 14.5 km away"), "Waitawa window must identify the actual nearby reference")
+        try expect(waitawaRow.value.contains("Man o‘War Bay · 14.5 km away"), "Waitawa window must identify the actual nearby reference")
         try expect(!waitawaWindow.assessment!.details.contains("Local tide coverage unverified."), "Loaded Waitawa tides still show unverified")
         if CommandLine.arguments.contains("--live-tides") {
             let store = LINZTideStore()
@@ -102,7 +102,7 @@ import Foundation
             let plannerDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: .now))!
             let liveWindows = try await FishingScoringService().rank(origin: waitawaSpot.coordinate, radiusKm: 1, days: [plannerDay], boat: false, preferredHours: nil)
             try expect(!liveWindows.isEmpty && liveWindows.allSatisfy { $0.spotName == "Waitawa Wharf" }, "Live planner did not return Waitawa windows")
-            try expect(liveWindows.allSatisfy { $0.assessment?.conditions.first(where: { $0.title == "Tide" })?.value.contains("LINZ Man o‘War Bay · 14.5 km away") == true }, "Live planner failed to populate the nearby tide reference")
+            try expect(liveWindows.allSatisfy { $0.assessment?.conditions.first(where: { $0.title == "Tide" })?.value.contains("Man o‘War Bay · 14.5 km away") == true }, "Live planner failed to populate the nearby tide reference")
             print("Live Thames and Waitawa tides, cached date changes and Waitawa fishing windows passed.")
         }
         var weather = try JSONDecoder().decode(WeatherPayload.self, from: Data(contentsOf: fixture.appendingPathComponent("weather.json")))

@@ -29,7 +29,7 @@ struct PlanMatter: Identifiable, Equatable {
     let note: String
     var id: String { label }
 
-    private static let tideNote = "Windows that mostly fall in the part of the tide you choose. Times are for the nearest LINZ station."
+    private static let tideNote = "Windows that mostly fall in the part of the tide you choose. Times are for the nearest tide station."
     private static let sunNote = "The hour either side of sunrise or sunset. Part of the window can be dark."
 
     static func choices(boat: Bool) -> [PlanMatter] {
@@ -395,7 +395,7 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     var searchesOnePlace: Bool { searchPlace != nil && searchJustThisPlace }
 
     var tideLocationSummary: String {
-        if !usesNearbyTideStation { return "Chosen LINZ tide station" }
+        if !usesNearbyTideStation { return "Chosen tide station" }
         if hasDeviceLocation { return "Nearest station to \(devicePlaceName ?? "your current location")" }
         if let tideLocationIssue { return tideLocationIssue }
         return "Finding a station near your current location…"

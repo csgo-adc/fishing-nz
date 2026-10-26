@@ -18,7 +18,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +49,6 @@ internal fun NearbyRampsCard(point: GeoPoint, start: Instant?, end: Instant?) {
     val ramps = rememberBoatRamps() ?: return
     val nearby = BoatRamps.nearest(point, ramps)
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     val lowTide by produceState<String?>(null, point, start, end) {
         if (start == null || end == null) return@produceState
         value = withContext(Dispatchers.IO) {
@@ -77,8 +75,7 @@ internal fun NearbyRampsCard(point: GeoPoint, start: Instant?, end: Instant?) {
                 }
             }
             lowTide?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
-            Text("${BoatRamps.CAUTION} ${BoatRamps.CREDIT}.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { uriHandler.openUri(BoatRamps.CREDIT_URL) }, contentPadding = PaddingValues(0.dp)) { Text("OpenStreetMap licence") }
+            Text(BoatRamps.CAUTION, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

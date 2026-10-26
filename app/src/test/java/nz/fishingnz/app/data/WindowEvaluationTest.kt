@@ -40,7 +40,7 @@ class WindowEvaluationTest {
         val row = result.assessment!!.conditions.first { it.title == "Tide" }
         assertEquals("Around high", row.mood.label)
         assertTrue(row.value.contains("2:53 PM") && row.value.contains("3.0 m CD"))
-        assertTrue(row.value.contains("LINZ Man o‘War Bay · 14.5 km away"))
+        assertTrue(row.value.contains("Man o‘War Bay · 14.5 km away"))
         assertFalse(result.assessment.details.contains("Local tide coverage unverified."))
         assertTrue(result.tidePreferenceFit >= .8)
     }

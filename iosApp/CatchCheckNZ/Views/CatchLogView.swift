@@ -100,7 +100,7 @@ private struct CatchCard: View {
                 Text(CatchLog.headline(entry)).bold().foregroundStyle(CatchCheckColor.navy)
                 Text([entry.placeName, catchTimeFormat.string(from: entry.caughtAt)].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
-                let conditions = [entry.conditions.tide.map { $0.components(separatedBy: " (LINZ").first ?? $0 },
+                let conditions = [entry.conditions.tide.map { $0.components(separatedBy: " (").first ?? $0 },
                                   entry.conditions.wind.map { $0.components(separatedBy: ":").first ?? $0 }, entry.conditions.moon].compactMap { $0 }
                 if !conditions.isEmpty { Text(conditions.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
                 if !entry.notes.isEmpty { Text(entry.notes).font(.caption).lineLimit(2).foregroundStyle(.primary) }
@@ -138,7 +138,8 @@ private struct CatchFormView: View {
     private var conditionLines: [String] {
         let c = original.conditions
         var lines: [String] = []
-        if let tide = c.tide { lines.append("Tide: \(tide)") }
+        // Catches saved before 1.0.56 name the station as "(LINZ Raglan)".
+        if let tide = c.tide { lines.append("Tide: " + tide.replacingOccurrences(of: "(LINZ ", with: "(")) }
         if let wind = c.wind { lines.append("Wind: \(wind)") }
         if let waves = c.waves { lines.append("Waves: \(waves)") }
         if let water = c.waterTemperature { lines.append("Water: \(water)") }
@@ -197,9 +198,7 @@ private struct CatchFormView: View {
                 if !isNew && !original.conditions.isEmpty {
                     Section {
                         ForEach(conditionLines, id: \.self) { Text($0).font(.subheadline) }
-                    } header: { Text("Conditions at the time") } footer: {
-                        Text("Model forecasts and LINZ predictions for the nearest grid and tide station, not measurements.")
-                    }
+                    } header: { Text("Conditions at the time") }
                 }
                 if !isNew {
                     Section { Button("Delete this catch", role: .destructive) { confirmDelete = true } }

@@ -13,7 +13,6 @@ struct BoatRamp: Decodable, Sendable {
 /// Boat ramps bundled from `tools/build_boat_ramps.py` (© OpenStreetMap contributors, ODbL). Android has the same rules
 /// in `BoatRamps.kt`. Access, condition and tide limits are not known, so the app says so wherever ramps show.
 enum BoatRamps {
-    static let credit = "Boat ramps © OpenStreetMap contributors"
     static let creditURL = URL(string: "https://www.openstreetmap.org/copyright")!
     static let caution = "Public access, condition and tide limits aren't checked."
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.56 — 2026-10-26 (build code 57)
+
+- **Fewer data-source names on screens.** Android and iPhone no longer name LINZ, Open-Meteo or OpenStreetMap next to
+  tide times, forecasts, fishing windows, place conditions, the catch log, ramps and wharves, or the shared conditions
+  message, and drop "model data", "wave model" and "heights above Chart Datum". Examples: "Raglan tide station · LINZ"
+  is now "Raglan tide station", "Forecast: Open-Meteo, refreshed 9:41 AM" is now "Updated 9:41 AM", "Details &
+  sources" is now "Details", and the map styles are "Aerial" and "Topographic". Safety advice stays.
+- **Tide problems show one plain message** instead of technical table errors. Older saved catches no longer show
+  "LINZ" in their tide line.
+- **New Data sources card** in Settings → Terms & privacy credits Open-Meteo, LINZ, the map providers, OpenStreetMap,
+  DOC and MPI in one place, as their licences require.
+- Unchanged: the credit line on the map, the privacy text naming Cloudflare, OpenAI and Open-Meteo, the photo consent
+  screen, the independence notice, and MPI rule links. The shared-window web page footer is unchanged.
+
 ## 1.0.55 — 2026-10-26 (build code 56)
 
 - **Account page shows your fishing.** Signed in, the header now shows fish caught, species and saved spots from this

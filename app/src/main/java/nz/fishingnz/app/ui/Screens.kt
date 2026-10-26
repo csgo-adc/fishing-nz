@@ -320,7 +320,7 @@ private fun planTimeNote(s: FishingUiState): String = when (s.timeChoice) {
 /** The "What matters most?" choices: one list that sets the window preference and, on land, the tie-break. */
 private data class MatterChoice(val label: String, val priority: WindowPriority, val land: LandPriority, val note: String)
 
-private const val tideNote = "Windows that mostly fall in the part of the tide you choose. Times are for the nearest LINZ station."
+private const val tideNote = "Windows that mostly fall in the part of the tide you choose. Times are for the nearest tide station."
 private const val sunNote = "The hour either side of sunrise or sunset. Part of the window can be dark."
 
 private fun matterChoices(boat: Boolean): List<MatterChoice> = if (boat) listOf(
@@ -1116,7 +1116,7 @@ private fun mapAction(item: Recommendation, vm: FishingViewModel): (() -> Unit)?
     var expanded by rememberSaveable(item.startsAtEpochSeconds, item.name) { mutableStateOf(false) }
     Text("${assessment.checks.emoji} ${assessment.checks.label}", style = MaterialTheme.typography.labelMedium)
     Text("${assessment.confidence.emoji} ${assessment.confidence.label}", style = MaterialTheme.typography.labelMedium)
-    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { Text(if (expanded) "Hide details" else "Details & sources") }
+    TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) { Text(if (expanded) "Hide details" else "Details") }
     if (expanded) {
         assessment.details.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         if (item.sourceNote.isNotEmpty()) Text(item.sourceNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1219,7 +1219,6 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
             }
             if ((s.recommendationSearch?.failedSpots ?: 0) > 0 && !s.recommendationsLoading) item { Text("Forecasts failed for ${s.recommendationSearch?.failedSpots} nearby spot(s); no planning windows are shown for those spots.", color = Orange, style = MaterialTheme.typography.bodySmall) }
             item { Text("Planning windows compare forecast conditions. Local access, wave exposure, marine warnings and current MPI rules still need checking.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            item { Text("Weather and offshore waves: Open-Meteo. Tide predictions, where verified: LINZ. See each window for its sources and limitations.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -1242,7 +1241,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 WindowWatchOut(spot)
                 spot.forecastNote()?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium) }
                 var sources by rememberSaveable(spot.startsAtEpochSeconds, spot.name) { mutableStateOf(false) }
-                TextButton(onClick = { sources = !sources }, contentPadding = PaddingValues(0.dp)) { Text(if (sources) "Hide details" else "Details & sources") }
+                TextButton(onClick = { sources = !sources }, contentPadding = PaddingValues(0.dp)) { Text(if (sources) "Hide details" else "Details") }
                 if (sources) WindowSources(spot)
             } else {
                 Text(spot.area, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1477,7 +1476,7 @@ internal val fishingRulesAreas = listOf(
     LazyColumn(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Text("Tide forecast", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Navy)
-            Text("${s.selectedStation.name} · official LINZ tide times", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(s.selectedStation.name, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item { Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1548,16 +1547,16 @@ internal val fishingRulesAreas = listOf(
         } ?: item {
             if (s.tideLoading) CircularProgressIndicator()
             else Column {
-                Text(s.tideError ?: "LINZ tide data unavailable for this station and date.", color = Navy)
+                Text(s.tideError ?: "Tide times aren't available for this station and date.", color = Navy)
                 OutlinedButton(onClick = vm::refreshStationTide) { Text("Try again") }
             }
         }
-        item { Text("Tide predictions: Toitū Te Whenua LINZ. Heights above Chart Datum; the curve between highs and lows is estimated.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        item { Text("The curve between highs and lows is estimated.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
     }
     if (showStations) ModalBottomSheet(onDismissRequest = { showStations = false }) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Choose tide location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("${tideStations.size} LINZ daily-prediction locations", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text("${tideStations.size} tide stations", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(stationQuery, onValueChange = { stationQuery = it }, modifier = Modifier.fillMaxWidth(),
                 label = { Text("Search location") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) })
             val matching = remember(stationQuery) { tideStations.filter { it.name.contains(stationQuery.trim(), ignoreCase = true) } }

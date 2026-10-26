@@ -100,7 +100,7 @@ enum CatchConditionsLookup {
         if rising { phase = until <= 120 ? "Around high" : since <= 90 ? "Around low" : "Incoming" }
         else { phase = since <= 60 ? "Around high" : until <= 90 ? "Around low" : "Outgoing" }
         let relative = since <= until ? "\(span(since)) after \(rising ? "low" : "high")" : "\(span(until)) before \(rising ? "high" : "low")"
-        return (phase, "\(rising ? "Incoming" : "Outgoing") · \(relative) (LINZ \(stationName))")
+        return (phase, "\(rising ? "Incoming" : "Outgoing") · \(relative) (\(stationName))")
     }
 
     private static func span(_ minutes: Double) -> String {

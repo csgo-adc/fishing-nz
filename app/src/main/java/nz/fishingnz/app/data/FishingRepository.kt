@@ -58,7 +58,7 @@ class FishingRepository {
         // The curve between events is only a visual interpolation, never an official prediction.
         val predictions = LinzTideSource.predictions(station, date, date)
         val selected = predictions.filter { it.at.atZone(nzZone).toLocalDate() == date }
-        require(selected.isNotEmpty()) { "No LINZ tide predictions for ${station.name} on $date." }
+        require(selected.isNotEmpty()) { "No tide times for ${station.name} on $date." }
         val timeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
         val eventFormat = DateTimeFormatter.ofPattern("EEE d MMM · h:mm a", Locale.US)
         fun typeOf(item: LinzPrediction) = if (item.high) "High" else "Low"

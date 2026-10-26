@@ -133,10 +133,10 @@ struct PlaceConditionsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(format(day, "EEEE d MMM")).font(.headline)
                     Text("\(WeatherPresentation.label(daily?.code)) · \(PlaceConditionRows.range([daily?.low, daily?.high]))°C").font(.subheadline)
-                    Text(recent ? "Recent model data" : ahead > 5 ? "🔭 Early outlook" : ahead > 2 ? "🗓️ Planning forecast" : "⏱️ Short-range forecast").font(.caption).foregroundStyle(.secondary)
+                    Text(recent ? "Recent days" : ahead > 5 ? "🔭 Early outlook" : ahead > 2 ? "🗓️ Planning forecast" : "⏱️ Short-range forecast").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if let grid = snapshot.marine?.gridPoint { Text("Offshore wave model · \(Int(placeDistanceKm(place.point, grid))) km from pin").font(.caption).foregroundStyle(.secondary) }
+            if let grid = snapshot.marine?.gridPoint { Text("Waves \(Int(placeDistanceKm(place.point, grid))) km offshore").font(.caption).foregroundStyle(.secondary) }
         }
     }
     private func conditionRow(_ row: ConditionItem, details: [String]) -> some View {
@@ -175,18 +175,17 @@ struct PlaceConditionsView: View {
                     TideChart(tide: tide, day: day, curveHeight: 180)
                         .id("\(station.id)-\(day.timeIntervalSince1970)")
                     Text("Published high and low tides").font(.subheadline.weight(.semibold)).foregroundStyle(CatchCheckColor.navy)
-                    Text("Heights above Chart Datum").font(.caption).foregroundStyle(.secondary)
                     TideEventRows(events: tide.events).font(.subheadline)
                     let moon = MoonPhase.forDay(day)
                     Text("\(moon.summary) · \(moon.tideRange.label)").font(.caption).foregroundStyle(.secondary)
                 }
                 DisclosureGroup("Tide details") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("LINZ \(station.name) · heights above Chart Datum")
+                        Text("\(station.name) tide station")
                         Text("High and low times are for this reference station. Check it represents this place. Tide height does not tell you current speed.")
                     }.font(.caption).foregroundStyle(.secondary).padding(.top, 8)
                 }.font(.caption)
-            } else { Text("Choose a LINZ reference station.").font(.subheadline).foregroundStyle(.secondary) }
+            } else { Text("Choose a tide station.").font(.subheadline).foregroundStyle(.secondary) }
         }.padding(16).background(CatchCheckColor.surface, in: RoundedRectangle(cornerRadius: 18))
     }
     @ViewBuilder private func hourly(_ snapshot: PlaceConditions, _ day: Date) -> some View {
@@ -222,7 +221,7 @@ struct PlaceConditionsView: View {
             Text("Weather \(weatherEnd.map { "through " + format($0, "d MMM") } ?? "unavailable") · waves \(waveEnd.map { "through " + format($0, "d MMM") } ?? "unavailable here")").font(.caption)
             DisclosureGroup("Forecast details") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Open-Meteo model data · \(zone.identifier). Recent days use archived model output. Local exposure and official warnings need checking.")
+                    Text("Check local exposure and official warnings.")
                     Text("Waves are the offshore typical (significant) height and the average time between waves. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
                     if let weather = snapshot.weather { Text("Weather updated \(format(weather.fetchedAt, "h:mm a"))") }
                     if let marine = snapshot.marine { Text("Waves updated \(format(marine.fetchedAt, "h:mm a"))") }

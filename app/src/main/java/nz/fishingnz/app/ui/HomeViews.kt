@@ -98,7 +98,7 @@ private fun moonRangeShort(range: TideRange) = when (range) {
                     TideSparkline(tide.points, nowMinute)
                     Text(tide.events.joinToString("  ·  ") { "${it.type} ${it.time}" }, color = Navy, style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold)
-                    if (tide.stationName.isNotBlank()) Text("${tide.stationName} tide station · LINZ", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (tide.stationName.isNotBlank()) Text("${tide.stationName} tide station", color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall)
                 } else Text(if (s.error != null) "Today's tide is unavailable right now." else "Loading today's tide…",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)

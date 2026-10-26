@@ -8,8 +8,8 @@ import org.json.JSONObject
 data class ShoreStructure(val point: GeoPoint, val name: String?, val kind: String) {
     val kindLabel: String get() = when (kind) { "breakwater" -> "breakwater"; "groyne" -> "groyne"; else -> "wharf" }
     val label: String get() = name ?: when (kind) { "breakwater" -> "Breakwater"; "groyne" -> "Groyne"; else -> "Wharf or jetty" }
-    /** The map card's subtitle, such as "Breakwater · © OpenStreetMap · access and fishing rules not checked". */
-    val mapSubtitle: String get() = kindLabel.replaceFirstChar { it.uppercase() } + " · © OpenStreetMap · access and fishing rules not checked"
+    /** The map card's subtitle, such as "Breakwater · access and fishing rules not checked". */
+    val mapSubtitle: String get() = kindLabel.replaceFirstChar { it.uppercase() } + " · access and fishing rules not checked"
 }
 
 /** A structure and how far it is from a place. */
@@ -20,7 +20,6 @@ data class NearbyStructure(val structure: ShoreStructure, val distanceKm: Double
  * The iPhone app has the same rules in `ShoreStructures.swift`. A mapped wharf isn't permission to fish, so the apps say so.
  */
 object ShoreStructures {
-    const val CREDIT = "Wharves © OpenStreetMap contributors"
     const val CREDIT_URL = "https://www.openstreetmap.org/copyright"
     const val CAUTION = "A wharf on the map doesn't mean you can fish there: ports, ferry wharves and some council wharves ban it. Check the signs."
     @Volatile private var loaded: List<ShoreStructure>? = null

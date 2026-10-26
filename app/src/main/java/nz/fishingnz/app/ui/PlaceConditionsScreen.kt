@@ -136,10 +136,10 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                 Column(Modifier.weight(1f)) {
                                     Text(day.format(DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH)), fontWeight = FontWeight.Bold)
                                     Text("${WeatherLabels.describe(daily?.code)} · ${PlaceConditionRows.range(listOf(daily?.low, daily?.high))}°C")
-                                    Text(if (recent) "Recent model data" else if (day > today.plusDays(5)) "🔭 Early outlook" else if (day > today.plusDays(2)) "🗓️ Planning forecast" else "⏱️ Short-range forecast", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (recent) "Recent days" else if (day > today.plusDays(5)) "🔭 Early outlook" else if (day > today.plusDays(2)) "🗓️ Planning forecast" else "⏱️ Short-range forecast", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            snapshot.marine?.gridPoint?.let { grid -> Text("Offshore wave model · ${placeDistanceKm(place.point, grid).toInt()} km from pin", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            snapshot.marine?.gridPoint?.let { grid -> Text("Waves ${placeDistanceKm(place.point, grid).toInt()} km offshore", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                         item {
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -155,7 +155,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                         Text("Tide", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                                         TextButton(onClick = { showStations = true }) { Text(station?.name ?: "Choose station") }
                                     }
-                                    if (station == null) Text("Choose a LINZ reference station.", style = MaterialTheme.typography.bodySmall)
+                                    if (station == null) Text("Choose a tide station.", style = MaterialTheme.typography.bodySmall)
                                     else {
                                         val distance = placeDistanceKm(place.point, GeoPoint(station!!.latitude, station!!.longitude))
                                         Text("Reference station · ${PlaceConditionRows.number(distance, 1)} km away", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -181,7 +181,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                                             Icon(if (tideDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (tideDetails) "Hide tide details" else "Show tide details")
                                         }
                                         if (tideDetails) {
-                                            Text("LINZ ${station!!.name} · heights above Chart Datum", style = MaterialTheme.typography.bodySmall)
+                                            Text("${station!!.name} tide station", style = MaterialTheme.typography.bodySmall)
                                             Text("High and low times are for this reference station. Check it represents this place. Tide height does not tell you current speed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
@@ -222,7 +222,7 @@ fun PlaceConditionsScreen(place: ConditionPlace, dismiss: () -> Unit) {
                             Text("Weather ${weatherEnd?.let { "through ${it.format(shortDate)}" } ?: "unavailable"} · waves ${waveEnd?.let { "through ${it.format(shortDate)}" } ?: "unavailable here"}", style = MaterialTheme.typography.bodySmall)
                             TextButton(onClick = { sources = !sources }, contentPadding = PaddingValues(0.dp)) { Text(if (sources) "Hide forecast details" else "Forecast details") }
                             if (sources) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Open-Meteo model data · ${snapshot.zone.id}. Recent days use archived model output. Local exposure and official warnings need checking.")
+                                Text("Check local exposure and official warnings.")
                                 Text("Waves are the offshore typical (significant) height and the average time between waves. Hourly gusts and rain cover the preceding hour. Rain chance is an hourly maximum, not a whole-day probability.")
                                 snapshot.weather?.let { Text("Weather updated ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)}") }
                                 snapshot.marine?.let { Text("Waves updated ${it.fetchedAt.atZone(snapshot.zone).format(timeOfDay)}") }

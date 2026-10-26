@@ -230,8 +230,8 @@ enum PlaceConditionRows {
         case "Feels like": ["The range includes overnight hours and accounts for wind, humidity and sunshine.", "Check the hourly values for your visit. Wet clothes can make you feel colder."]
         case "Daylight": ["Sunrise–sunset in local time.", "Allow time to walk back or return to the ramp before dark."]
         case "UV": ["The day's peak UV index. Protection is useful from UV 3, even when it feels cool.", "Shade, sunscreen, a hat and sunglasses help on shore and on the water."]
-        case "Visibility": ["The lowest model visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours."]
-        case "Water temperature": ["Model temperature at the sea surface, not a measurement at this pin.", "It can help compare days; it does not measure water clarity or fish activity."]
+        case "Visibility": ["The lowest visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours."]
+        case "Water temperature": ["Sea surface temperature near this pin.", "It can help compare days; it does not measure water clarity or fish activity."]
         case "Offshore swell": ["Swell travels from weather farther away. Seconds apart is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water."]
         default: []
         }
@@ -263,10 +263,10 @@ enum PlaceConditionRows {
         let uv = ConditionItem(title: "UV", value: number(day?.uv, 1), mood: day?.uv == nil ? needsDataMood : .init(emoji: "☀️", label: day!.uv! >= 3 ? "Sun protection" : "Lower UV"))
         let view = ConditionItem(title: "Visibility", value: visibility.map { "down to \(number($0/1000, 1)) km" } ?? "—", mood: visibility == nil ? needsDataMood : .init(emoji: visibility! < 1000 ? "🌫️" : "👀", label: visibility! < 1000 ? "Poor at times" : "Check visibility"))
         let water = sea.compactMap(\.waterTemperature)
-        let waterRow = ConditionItem(title: "Water temperature", value: water.isEmpty ? "—" : "\(range(water, 1))°C", mood: water.isEmpty ? needsDataMood : .init(emoji: "🌡️", label: "Offshore model"))
+        let waterRow = ConditionItem(title: "Water temperature", value: water.isEmpty ? "—" : "\(range(water, 1))°C", mood: water.isEmpty ? needsDataMood : .init(emoji: "🌡️", label: "Offshore"))
         let swells = sea.map(\.swell)
         let swell = ConditionItem(title: "Offshore swell", value: PlainConditions.waves(height: swells.compactMap { $0 }.max(), periods: range(sea.map(\.swellPeriod), 1)),
-            mood: swells.isEmpty || swells.contains(where: { $0 == nil }) || sea.contains(where: { $0.swellPeriod == nil }) ? needsDataMood : .init(emoji: "🌊", label: "Offshore model"))
+            mood: swells.isEmpty || swells.contains(where: { $0 == nil }) || sea.contains(where: { $0.swellPeriod == nil }) ? needsDataMood : .init(emoji: "🌊", label: "Offshore"))
         return [waves, wind] + [rain, feels, light, uv, view, waterRow, swell]
     }
 }
@@ -277,7 +277,7 @@ enum PlaceConditionsShare {
     /// "Short-range forecast" for today and the next two days, "Planning forecast" to day 5, then "Early outlook".
     static func forecastLabel(day: Date, today: Date, calendar: Calendar) -> String {
         let ahead = calendar.dateComponents([.day], from: today, to: day).day ?? 0
-        return ahead < 0 ? "Recent model data" : ahead > 5 ? "Early outlook" : ahead > 2 ? "Planning forecast" : "Short-range forecast"
+        return ahead < 0 ? "Recent days" : ahead > 5 ? "Early outlook" : ahead > 2 ? "Planning forecast" : "Short-range forecast"
     }
 
     /// A Google Maps link to the position, which opens on any phone or computer.
@@ -305,7 +305,7 @@ enum PlaceConditionsShare {
         }
         lines.append("")
         lines.append("Map: \(mapLink(place.point))")
-        lines.append("Weather and waves: Open-Meteo. Tides: LINZ. Check local conditions and marine warnings before you go.")
+        lines.append("Check local conditions and marine warnings before you go.")
         return lines.joined(separator: "\n")
     }
 

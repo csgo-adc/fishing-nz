@@ -950,9 +950,9 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                // A connection failure reads as the iPhone app does; LINZ data problems keep their own explanation.
+                // A connection failure reads as the iPhone app does; any problem with the tide table gets one plain message.
                 val message = if (error is java.io.IOException) "Tide predictions are unavailable for ${station.name} on this date. Check your connection and try again."
-                    else error.message ?: "Tide table unavailable."
+                    else "Tide times aren't available for this station right now."
                 if (_state.value.selectedStation == station && _state.value.tideDate == date)
                     _state.value = _state.value.copy(tideLoading = false, tideError = message)
             }

@@ -19,7 +19,7 @@ object PlaceConditionsShare {
 
     /** "Short-range forecast" for today and the next two days, "Planning forecast" to day 5, then "Early outlook". */
     fun forecastLabel(day: LocalDate, today: LocalDate): String = when {
-        day < today -> "Recent model data"
+        day < today -> "Recent days"
         day > today.plusDays(5) -> "Early outlook"
         day > today.plusDays(2) -> "Planning forecast"
         else -> "Short-range forecast"
@@ -47,7 +47,7 @@ object PlaceConditionsShare {
         }
         lines += ""
         lines += "Map: ${mapLink(place.point)}"
-        lines += "Weather and waves: Open-Meteo. Tides: LINZ. Check local conditions and marine warnings before you go."
+        lines += "Check local conditions and marine warnings before you go."
         return lines.joinToString("\n")
     }
 

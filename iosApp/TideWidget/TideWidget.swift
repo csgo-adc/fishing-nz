@@ -17,7 +17,7 @@ struct TideWidget: Widget {
                 .widgetURL(URL(string: "nz.fishingnz.catchcheck://tide?station=\(entry.stationID)"))
         }
         .configurationDisplayName("Tides")
-        .description("The tide curve with the next high and low for a LINZ station, the moon and the wind.")
+        .description("The tide curve with the next high and low for a tide station, the moon and the wind.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -42,7 +42,7 @@ struct StationQuery: EntityStringQuery {
 
 struct TideWidgetIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource { "Tide station" }
-    static var description: IntentDescription { IntentDescription("Choose the LINZ station whose tides the widget shows.") }
+    static var description: IntentDescription { IntentDescription("Choose the tide station the widget shows.") }
     @Parameter(title: "Station") var station: StationEntity?
 }
 

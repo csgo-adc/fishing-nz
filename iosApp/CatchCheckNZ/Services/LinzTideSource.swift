@@ -38,12 +38,12 @@ func loadTideReference<Value>(point: GeoPoint, linked: TideStation? = nil, selec
 
 func tideReferenceLabel(spot: FishingSpot, station: TideStation) -> String {
     let distance = placeDistanceKm(spot.coordinate, .init(latitude: station.latitude, longitude: station.longitude))
-    return "LINZ \(station.name)" + (distance >= 0.1 ? String(format: " · %.1f km away", distance) : "")
+    return station.name + (distance >= 0.1 ? String(format: " · %.1f km away", distance) : "")
 }
 
 enum TideDataError: LocalizedError {
     case noPredictions, invalidSource
-    var errorDescription: String? { "LINZ tide predictions could not be verified for this station and date." }
+    var errorDescription: String? { "Tide times aren't available for this station right now." }
 }
 
 /// Shared by the Tide page and fishing-window planner; no offshore sea-level fallback.

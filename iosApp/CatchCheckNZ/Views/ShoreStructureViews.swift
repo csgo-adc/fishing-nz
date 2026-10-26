@@ -25,8 +25,7 @@ struct NearbyStructuresCard: View {
                     }.font(.subheadline.weight(.semibold))
                 }
             }
-            Text("\(ShoreStructures.caution) \(ShoreStructures.credit).").font(.caption2).foregroundStyle(.secondary)
-            Link("OpenStreetMap licence", destination: ShoreStructures.creditURL).font(.caption)
+            Text(ShoreStructures.caution).font(.caption2).foregroundStyle(.secondary)
         }
     }
 }

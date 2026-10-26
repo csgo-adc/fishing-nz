@@ -131,7 +131,7 @@ enum MarineProtection {
         input.locale = Locale(identifier: "en_US_POSIX"); input.dateFormat = "yyyy-MM-dd"
         output.locale = Locale(identifier: "en_US_POSIX"); output.dateFormat = "d MMM yyyy"
         let date = input.date(from: catalogue.retrievedOn).map(output.string(from:)) ?? catalogue.retrievedOn
-        return "Approximate DOC boundaries retrieved \(date); they may be out of date and are not for navigation. "
+        return "Approximate boundaries retrieved \(date); they may be out of date and are not for navigation. "
             + "Temporary closures and rāhui are not shown: check DOC and MPI before you fish."
     }
 }

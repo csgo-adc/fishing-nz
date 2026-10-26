@@ -721,7 +721,7 @@ struct FishingScoringService: Sendable {
         case .incoming: bands = zip(events, events.dropFirst()).filter { !$0.0.1 && $0.1.1 }.map { ($0.0.0.time, $0.1.0.time) }
         case .outgoing: bands = zip(events, events.dropFirst()).filter { $0.0.1 && !$0.1.1 }.map { ($0.0.0.time, $0.1.0.time) }
         }
-        return ("\(eventText). LINZ \(station.name).", fit(start: start, end: end, bands: bands), true)
+        return ("\(eventText). \(station.name) tide station.", fit(start: start, end: end, bands: bands), true)
     }
 
     static func daylightFraction(start: Date, end: Date, solar: [Date: SolarDay], calendar: Calendar) -> Double? {
@@ -738,8 +738,8 @@ struct FishingScoringService: Sendable {
 
     private static func sourceNote(spot: FishingSpot, weather: WeatherPayload, marine: MarinePayload?, station: TideStation?) -> String {
         let updated = format(weather.retrievedAt, pattern: "h:mm a")
-        let text = marine != nil ? "Weather and waves: Open-Meteo, updated \(updated)." : "Weather: Open-Meteo, updated \(updated). No offshore wave data."
-        return text + (station.map { " Tide: \(tideReferenceLabel(spot: spot, station: $0))." } ?? " No LINZ tide data.")
+        let text = marine != nil ? "Updated \(updated)." : "Updated \(updated). No offshore wave data."
+        return text + (station.map { " Tide: \(tideReferenceLabel(spot: spot, station: $0))." } ?? " No tide data.")
     }
     private static func clock(_ time: Date) -> String { format(time, pattern: "h:mm a") }
     private static func format(_ time: Date, pattern: String) -> String {

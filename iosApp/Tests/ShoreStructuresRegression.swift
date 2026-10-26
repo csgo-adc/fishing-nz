@@ -16,7 +16,7 @@ import Foundation
         try expect(Set(structures.map(\.kind)) == ["wharf", "breakwater", "groyne"], "Kinds")
         try expect(structures.first { $0.name == nil && $0.kind == "wharf" }?.label == "Wharf or jetty", "Unnamed wharf label")
         try expect(structures.first { $0.name == nil && $0.kind == "breakwater" }?.label == "Breakwater", "Unnamed breakwater label")
-        try expect(structures.first { $0.kind == "breakwater" }?.mapSubtitle == "Breakwater · © OpenStreetMap · access and fishing rules not checked", "Map subtitle")
+        try expect(structures.first { $0.kind == "breakwater" }?.mapSubtitle == "Breakwater · access and fishing rules not checked", "Map subtitle")
         let landSpots = fishingSpots.filter { !$0.boat }
         let covered = landSpots.filter { !ShoreStructures.nearest($0.coordinate, in: structures, limit: 1).isEmpty }.count
         try expect(covered * 10 >= landSpots.count * 6, "\(covered) of \(landSpots.count) land areas have a structure within 10 km")

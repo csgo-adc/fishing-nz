@@ -338,7 +338,7 @@ private fun WeatherForecastPage(place: WeatherPlace, isActive: Boolean, refreshI
             item { WeatherWeekCard(data.daily) }
             item {
                 Text(
-                    "Forecast: Open-Meteo, refreshed ${data.fetchedAt.atZone(data.timeZone).format(refreshedFormatter)}. Conditions can differ at exposed fishing spots; check official marine warnings before heading out.",
+                    "Updated ${data.fetchedAt.atZone(data.timeZone).format(refreshedFormatter)}. Conditions can differ at exposed fishing spots; check official marine warnings before heading out.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

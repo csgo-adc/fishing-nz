@@ -153,8 +153,8 @@ internal object PlaceConditionRows {
             "Feels like" -> listOf("The range includes overnight hours and accounts for wind, humidity and sunshine.", "Check the hourly values for your visit. Wet clothes can make you feel colder.")
             "Daylight" -> listOf("Sunrise–sunset in local time.", "Allow time to walk back or return to the ramp before dark.")
             "UV" -> listOf("The day's peak UV index. Protection is useful from UV 3, even when it feels cool.", "Shade, sunscreen, a hat and sunglasses help on shore and on the water.")
-            "Visibility" -> listOf("The lowest model visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours.")
-            "Water temperature" -> listOf("Model temperature at the sea surface, not a measurement at this pin.", "It can help compare days; it does not measure water clarity or fish activity.")
+            "Visibility" -> listOf("The lowest visibility for the day.", "Fog or rain can hide landmarks and other boats. Check your visit's hours.")
+            "Water temperature" -> listOf("Sea surface temperature near this pin.", "It can help compare days; it does not measure water clarity or fish activity.")
             "Offshore swell" -> listOf("Swell travels from weather farther away. Seconds apart is the time between swells.", "Check swell direction and local exposure; calm wind does not guarantee calm water.")
             else -> emptyList()
         }
@@ -192,10 +192,10 @@ internal object PlaceConditionRows {
         val uv = ConditionItem("UV", number(day?.uv, 1), if (day?.uv == null) needsDataMood else WindowMood("☀️", if (day.uv >= 3) "Sun protection" else "Lower UV"))
         val view = ConditionItem("Visibility", visibility?.let { "down to ${number(it / 1000, 1)} km" } ?: "—", if (visibility == null) needsDataMood else WindowMood(if (visibility < 1000) "🌫️" else "👀", if (visibility < 1000) "Poor at times" else "Check visibility"))
         val water = sea.mapNotNull { it.waterTemperature }
-        val waterRow = ConditionItem("Water temperature", if (water.isEmpty()) "—" else "${range(water, 1)}°C", if (water.isEmpty()) needsDataMood else WindowMood("🌡️", "Offshore model"))
+        val waterRow = ConditionItem("Water temperature", if (water.isEmpty()) "—" else "${range(water, 1)}°C", if (water.isEmpty()) needsDataMood else WindowMood("🌡️", "Offshore"))
         val swells = sea.map { it.swell }
         val swell = ConditionItem("Offshore swell", PlainConditions.waves(swells.filterNotNull().maxOrNull(), range(sea.map { hour -> hour.swellPeriod }, 1)),
-            if (swells.isEmpty() || swells.any { it == null } || sea.any { it.swellPeriod == null }) needsDataMood else WindowMood("🌊", "Offshore model"))
+            if (swells.isEmpty() || swells.any { it == null } || sea.any { it.swellPeriod == null }) needsDataMood else WindowMood("🌊", "Offshore"))
         return listOf(waves, wind) + listOf(rain, feels, light, uv, view, waterRow, swell)
     }
 }

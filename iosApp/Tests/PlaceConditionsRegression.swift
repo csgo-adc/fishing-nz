@@ -196,14 +196,14 @@ import Foundation
             Tide at Auckland (\(distance) km away) – High 7:12 AM, low 1:20 PM
 
             Map: https://www.google.com/maps/search/?api=1&query=-36.7871,174.7705
-            Weather and waves: Open-Meteo. Tides: LINZ. Check local conditions and marine warnings before you go.
+            Check local conditions and marine warnings before you go.
             """
         let text = PlaceConditionsShare.text(place: place, day: day, today: today, calendar: calendar, rows: rows, tide: tide, station: station)
         try expect(text == expected, "Shared conditions message:\n\(text)")
         let pin = ConditionPlace(name: "Dropped pin", point: GeoPoint(latitude: -37.8, longitude: 174.87), region: "Selected on map")
         let pinText = PlaceConditionsShare.text(place: pin, day: calendar.date(byAdding: .day, value: -2, to: today)!, today: today, calendar: calendar, rows: rows, tide: nil, station: nil)
-        try expect(pinText.hasPrefix("Fishing conditions · pin on the map\nWed 14 Oct · Recent model data") && !pinText.contains("Tide at"), "Dropped pin message")
+        try expect(pinText.hasPrefix("Fishing conditions · pin on the map\nWed 14 Oct · Recent days") && !pinText.contains("Tide at"), "Dropped pin message")
         try expect([-1, 0, 2, 3, 5, 6].map { PlaceConditionsShare.forecastLabel(day: calendar.date(byAdding: .day, value: $0, to: today)!, today: today, calendar: calendar) }
-                   == ["Recent model data", "Short-range forecast", "Short-range forecast", "Planning forecast", "Planning forecast", "Early outlook"], "Forecast labels")
+                   == ["Recent days", "Short-range forecast", "Short-range forecast", "Planning forecast", "Planning forecast", "Early outlook"], "Forecast labels")
     }
 }

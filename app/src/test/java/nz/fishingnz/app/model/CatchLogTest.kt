@@ -90,7 +90,7 @@ class CatchLogTest {
         val nextLow = LinzPrediction(Instant.parse("2026-10-18T12:20:00Z"), 0.5, false)
         val tides = listOf(low, high, nextLow)
         fun at(time: String) = CatchConditionsLookup.tideAt(tides, Instant.parse(time), "Raglan")
-        assertEquals("Incoming" to "Incoming · 2 h after low (LINZ Raglan)", at("2026-10-18T02:00:00Z"))
+        assertEquals("Incoming" to "Incoming · 2 h after low (Raglan)", at("2026-10-18T02:00:00Z"))
         assertEquals("Around high", at("2026-10-18T04:30:00Z")?.first)
         assertEquals("Around high", at("2026-10-18T07:00:00Z")?.first)
         assertEquals("Outgoing", at("2026-10-18T09:00:00Z")?.first)

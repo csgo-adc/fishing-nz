@@ -275,6 +275,16 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 Text("You are responsible for following applicable fishing and access rules.")
             }
         }
+        // The one place the app credits its data; the screens themselves stay free of source names. The iPhone app matches.
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Data sources", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                listOf("Weather and waves: Open-Meteo.com (CC BY 4.0)", "Tide times: Toitū Te Whenua LINZ (CC BY 4.0)",
+                    "Maps: OpenFreeMap, © OpenStreetMap contributors and LINZ", "Boat ramps and wharves: © OpenStreetMap contributors",
+                    "Marine protected areas: Department of Conservation", "Fishing rules: summarised from MPI")
+                    .forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            }
+        }
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Privacy", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

@@ -102,7 +102,7 @@ internal object WindowEvaluation {
         }
         val nextHigh = tides.firstOrNull { it.high && it.at > start }
         val highNote = if (nextHigh != null && turns.none { it.high } && nextHigh != after) "; next high ${eventTime(nextHigh.at, start)}" else ""
-        return "$phase$highNote. LINZ ${station.name}; heights above Chart Datum."
+        return "$phase$highNote. ${station.name} tide station."
     }
 
     fun evaluate(

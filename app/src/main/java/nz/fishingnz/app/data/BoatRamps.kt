@@ -21,7 +21,6 @@ data class NearbyRamp(val ramp: BoatRamp, val distanceKm: Double)
  * rules in `BoatRamps.swift`. Access, condition and tide limits are not known, so the apps say so wherever ramps show.
  */
 object BoatRamps {
-    const val CREDIT = "Boat ramps © OpenStreetMap contributors"
     const val CREDIT_URL = "https://www.openstreetmap.org/copyright"
     const val CAUTION = "Public access, condition and tide limits aren't checked."
     @Volatile private var loaded: List<BoatRamp>? = null

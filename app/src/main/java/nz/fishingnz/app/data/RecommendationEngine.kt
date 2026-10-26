@@ -109,7 +109,7 @@ class RecommendationEngine {
             val index = weather.hours.indexOfFirst { it.time == start }
             if (index < 0 || index + window.durationHours >= weather.hours.size) return@withContext null
             val samples = weather.hours.subList(index, index + window.durationHours + 1)
-            val source = "Weather: Open-Meteo, updated ${weather.retrievedAt.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))}."
+            val source = "Updated ${weather.retrievedAt.atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))}."
             WindowEvaluation.evaluate(spot, 0.0, samples, marine?.hours.orEmpty(), weather.solar, reference?.value.orEmpty(), reference?.station,
                 Instant.now(), source, priority, land, weather.hours, weather.retrievedAt, tidePhase)
         }
@@ -134,9 +134,9 @@ class RecommendationEngine {
         val station = reference?.station
         val tides = reference?.value.orEmpty()
         val updated = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-        val source = (if (marine != null) "Weather and waves: Open-Meteo, updated ${weather.retrievedAt.atZone(zone).format(updated)}. "
-            else "Weather: Open-Meteo, updated ${weather.retrievedAt.atZone(zone).format(updated)}. No offshore wave data. ") +
-            (station?.takeIf { tides.isNotEmpty() }?.let { "Tide: ${tideReferenceLabel(spot, it)}." } ?: "No LINZ tide data.")
+        val source = (if (marine != null) "Updated ${weather.retrievedAt.atZone(zone).format(updated)}. "
+            else "Updated ${weather.retrievedAt.atZone(zone).format(updated)}. No offshore wave data. ") +
+            (station?.takeIf { tides.isNotEmpty() }?.let { "Tide: ${tideReferenceLabel(spot, it)}." } ?: "No tide data.")
         val hours = weather.hours.filter {
             val day = it.time.atZone(zone).toLocalDate()
             day >= start && day <= end.plusDays(1) && it.time >= now

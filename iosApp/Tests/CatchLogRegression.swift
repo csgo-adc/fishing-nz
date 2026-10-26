@@ -55,7 +55,7 @@ import Foundation
         func at(_ time: String) -> (phase: String, text: String)? {
             CatchConditionsLookup.tideAt([low, high, nextLow], date: ISO8601DateFormatter().date(from: time)!, stationName: "Raglan")
         }
-        try expect(at("2026-10-18T02:00:00Z")?.phase == "Incoming" && at("2026-10-18T02:00:00Z")?.text == "Incoming · 2 h after low (LINZ Raglan)", "Incoming")
+        try expect(at("2026-10-18T02:00:00Z")?.phase == "Incoming" && at("2026-10-18T02:00:00Z")?.text == "Incoming · 2 h after low (Raglan)", "Incoming")
         try expect(at("2026-10-18T04:30:00Z")?.phase == "Around high" && at("2026-10-18T07:00:00Z")?.phase == "Around high", "Around high")
         try expect(at("2026-10-18T09:00:00Z")?.phase == "Outgoing" && at("2026-10-18T11:30:00Z")?.phase == "Around low", "Falling")
         try expect(at("2026-10-18T01:00:00Z")?.phase == "Around low" && at("2026-10-18T13:00:00Z") == nil, "Edges")

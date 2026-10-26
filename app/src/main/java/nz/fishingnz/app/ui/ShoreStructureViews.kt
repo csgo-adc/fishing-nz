@@ -18,7 +18,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +43,6 @@ internal fun NearbyStructuresCard(point: GeoPoint) {
     val structures = rememberShoreStructures() ?: return
     val nearby = ShoreStructures.nearest(point, structures)
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Wharves and breakwaters nearby", fontWeight = FontWeight.Bold, color = Navy)
@@ -59,8 +57,7 @@ internal fun NearbyStructuresCard(point: GeoPoint) {
                     TextButton(onClick = { openPositionInMaps(context, structure.point, structure.label) }) { Text("Open in Maps") }
                 }
             }
-            Text("${ShoreStructures.CAUTION} ${ShoreStructures.CREDIT}.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { uriHandler.openUri(ShoreStructures.CREDIT_URL) }, contentPadding = PaddingValues(0.dp)) { Text("OpenStreetMap licence") }
+            Text(ShoreStructures.CAUTION, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -8,9 +8,9 @@ private enum FishingMapLayer: String, CaseIterable {
     case map = "Map"
     case satellite = "Satellite"
     case hybrid = "Hybrid"
-    case linzAerial = "LINZ aerial"
-    case linzTopo = "LINZ topo"
-    case linzTopoGridded = "LINZ topo with grid"
+    case linzAerial = "Aerial"
+    case linzTopo = "Topographic"
+    case linzTopoGridded = "Topographic with grid"
 
     var tileURLTemplate: String? {
         let tileSet: String
@@ -78,7 +78,7 @@ struct FishingMapView: View {
             FishingMapCanvas(layer: layer, showProtection: showProtection, showRamps: filter == "Boat", showStructures: filter == "Land", spots: visibleSpots, selectedPlace: selectedPlace, cameraCommand: cameraCommand,
                              currentCamera: $currentCamera, onSpotSelected: { selectedPlace = ConditionPlace($0) },
                              onPointSelected: { selectedPlace = ConditionPlace(name: "Dropped pin", point: $0, region: "Selected on map", boat: filter == "Boat") },
-                             onRampSelected: { selectedPlace = ConditionPlace(name: $0.label, point: $0.point, region: "© OpenStreetMap · access and tide limits not checked", boat: true) },
+                             onRampSelected: { selectedPlace = ConditionPlace(name: $0.label, point: $0.point, region: "Access and tide limits not checked", boat: true) },
                              onStructureSelected: { selectedPlace = ConditionPlace(name: $0.label, point: $0.point, region: $0.mapSubtitle, boat: false) })
             .overlay(alignment: .topLeading) {
                 Text("\(visibleSpots.count) spots" + (filter == "Boat" ? " · teal pins are boat ramps" : filter == "Land" ? " · brown pins are wharves and breakwaters" : ""))
@@ -675,7 +675,7 @@ struct TideForecastView: View {
                     Text("Tide forecast")
                         .font(.largeTitle.bold())
                         .foregroundStyle(CatchCheckColor.navy)
-                    Text("New Zealand tide predictions · heights above Chart Datum")
+                    Text("New Zealand tide times")
                         .foregroundStyle(.secondary)
 
                     Card {
@@ -748,11 +748,11 @@ struct TideForecastView: View {
                                 .buttonStyle(.bordered)
                         }
                     } else {
-                        ProgressView("Loading LINZ tide predictions…")
+                        ProgressView("Loading tide times…")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 28)
                     }
-                    Text("Tide predictions: Toitū Te Whenua LINZ. Heights above Chart Datum; the curve between highs and lows is estimated.")
+                    Text("The curve between highs and lows is estimated.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -788,8 +788,6 @@ private struct TideStationPicker: View {
                     } label: {
                         Label(vm.hasDeviceLocation ? "Near \(vm.devicePlaceName ?? "my location")" : "Use my location", systemImage: "location.fill")
                     }
-                } footer: {
-                    Text("Only LINZ sites with direct daily predictions are listed. Offset locations need a reference-port calculation.")
                 }
                 Section("Stations") {
                     ForEach(matchingStations) { station in
@@ -917,7 +915,7 @@ struct TideChart: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(shownTime).font(.title3.bold())
-                    Text("Estimated above Chart Datum").font(.caption).foregroundStyle(.secondary)
+                    Text("Estimated").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
                 if let shownHeight {

@@ -11,13 +11,12 @@ struct ShoreStructure: Decodable, Sendable {
     var kindLabel: String { kind == "breakwater" || kind == "groyne" ? kind : "wharf" }
     var label: String { name ?? (kind == "breakwater" ? "Breakwater" : kind == "groyne" ? "Groyne" : "Wharf or jetty") }
     /// The map card's subtitle, such as "Breakwater · © OpenStreetMap · access and fishing rules not checked".
-    var mapSubtitle: String { kindLabel.prefix(1).uppercased() + kindLabel.dropFirst() + " · © OpenStreetMap · access and fishing rules not checked" }
+    var mapSubtitle: String { kindLabel.prefix(1).uppercased() + kindLabel.dropFirst() + " · access and fishing rules not checked" }
 }
 
 /// Wharves, breakwaters and groynes bundled from `tools/build_shore_structures.py` (© OpenStreetMap contributors, ODbL).
 /// Android has the same rules in `ShoreStructures.kt`. A mapped wharf isn't permission to fish, so the app says so.
 enum ShoreStructures {
-    static let credit = "Wharves © OpenStreetMap contributors"
     static let creditURL = URL(string: "https://www.openstreetmap.org/copyright")!
     static let caution = "A wharf on the map doesn't mean you can fish there: ports, ferry wharves and some council wharves ban it. Check the signs."
 

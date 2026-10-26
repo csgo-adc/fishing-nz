@@ -159,7 +159,7 @@ object CatchConditionsLookup {
         val rising = if (after.high) "Incoming" else "Outgoing"
         val relative = if (since <= until) "${span(since)} after ${if (before.high) "high" else "low"}"
             else "${span(until)} before ${if (after.high) "high" else "low"}"
-        return phase to "$rising · $relative (LINZ $stationName)"
+        return phase to "$rising · $relative ($stationName)"
     }
 
     private fun span(minutes: Long): String = when {

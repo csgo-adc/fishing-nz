@@ -143,7 +143,7 @@ private fun newCatch(s: FishingUiState): CatchEntry {
                 Text(CatchLog.headline(entry), fontWeight = FontWeight.Bold, color = Navy)
                 Text(listOf(entry.placeName, Instant.ofEpochSecond(entry.caughtAtEpochSeconds).atZone(nzZone).format(whenFormat))
                     .filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val conditions = listOfNotNull(entry.conditions.tide?.substringBefore(" (LINZ"), entry.conditions.wind?.substringBefore(":"), entry.conditions.moon)
+                val conditions = listOfNotNull(entry.conditions.tide?.substringBefore(" ("), entry.conditions.wind?.substringBefore(":"), entry.conditions.moon)
                 if (conditions.isNotEmpty()) Text(conditions.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (entry.notes.isNotBlank()) Text(entry.notes, style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
@@ -231,12 +231,11 @@ private fun newCatch(s: FishingUiState): CatchEntry {
                 if (!original.conditions.isEmpty && !isNew) Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("Conditions at the time", fontWeight = FontWeight.Bold, color = Navy)
-                        listOfNotNull(original.conditions.tide?.let { "Tide: $it" }, original.conditions.wind?.let { "Wind: $it" },
+                        // Catches saved before 1.0.56 name the station as "(LINZ Raglan)".
+                        listOfNotNull(original.conditions.tide?.let { "Tide: " + it.replace("(LINZ ", "(") }, original.conditions.wind?.let { "Wind: $it" },
                             original.conditions.waves?.let { "Waves: $it" }, original.conditions.waterTemperature?.let { "Water: $it" },
                             original.conditions.moon?.let { "Moon: $it · ${original.conditions.tideRange.orEmpty()}" })
                             .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                        Text("Model forecasts and LINZ predictions for the nearest grid and tide station, not measurements.",
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Button(onClick = {
