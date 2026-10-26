@@ -14,7 +14,7 @@ package nz.fishingnz.app.model
  * The iPhone app has the same rules in `Translator.swift`; both read the same catalogues.
  */
 class Translator(val language: String, entries: Map<String, String>, private val onMiss: ((String) -> Unit)? = null) {
-    private class Template(val regex: Regex, val anchor: String, val order: List<Int>, val target: String, val spansParts: Boolean)
+    private class Template(val regex: Regex, val anchor: String, val order: List<Int>, val target: String, val spansParts: Boolean, val spansSentences: Boolean)
 
     private val exact = HashMap<String, String>()
     private val templates: List<Template>
@@ -39,7 +39,7 @@ class Translator(val language: String, entries: Map<String, String>, private val
                 append('$')
             }
             val order = placeholder.findAll(source).map { it.groupValues[1].toInt() }.toList()
-            patterns += literals.sumOf { it.length } to Template(Regex(regex), literals.maxBy { it.length }, order, target, source.contains(SEPARATOR))
+            patterns += literals.sumOf { it.length } to Template(Regex(regex), literals.maxBy { it.length }, order, target, source.contains(SEPARATOR), sentenceBreak.containsMatchIn(source))
         }
         // The most specific pattern wins: the one with the most text of its own.
         templates = patterns.sortedByDescending { it.first }.map { it.second }
@@ -76,6 +76,7 @@ class Translator(val language: String, entries: Map<String, String>, private val
                 val groups = match.groupValues.drop(1)
                 // A gap never swallows several " · " parts unless the pattern itself has them.
                 if (!template.spansParts && groups.any { it.contains(SEPARATOR) }) continue
+                if (!template.spansSentences && groups.any { sentenceBreak.containsMatchIn(it) }) continue
                 val fills = groups.map { compute(it, depth + 1) }
                 var result = template.target
                 template.order.forEachIndexed { index, number -> result = result.replace("{$number}", fills[index]) }
@@ -85,6 +86,12 @@ class Translator(val language: String, entries: Map<String, String>, private val
             if (text.contains('\n')) return text.split('\n').joinToString("\n") { compute(it, depth + 1) }
             val sentences = sentenceBreak.split(text)
             if (sentences.size > 1) return sentences.joinToString(if (language.startsWith("zh")) "" else " ") { compute(it, depth + 1) }
+            // A lowercase copy of a known pattern, such as "near Auckland" for "Near {0}".
+            if (text[0].isLowerCase()) {
+                val capital = text.replaceFirstChar { it.uppercaseChar() }
+                val translated = translateTrimmed(capital, depth + 1)
+                if (translated != DateWords.localize(capital, language)) return translated
+            }
         }
         return DateWords.localize(text, language)
     }
@@ -135,6 +142,7 @@ object DateWords {
     private val shortDate = Regex("\\b(${alternatives(shortDays)}),? (\\d{1,2}) (${alternatives(shortMonths)})(?: (\\d{4}))?\\b")
     private val dayMonth = Regex("\\b(\\d{1,2}) (${alternatives(longMonths)}|${alternatives(shortMonths)})(?: (\\d{4}))?\\b")
     private val monthYear = Regex("\\b(${alternatives(longMonths)}) (\\d{4})\\b")
+    private val dayOfMonth = Regex("\\b(${alternatives(shortDays)}) (\\d{1,2})\\b")
     private val clock = Regex("\\b(\\d{1,2})(:\\d{2})? ?(AM|PM)\\b")
 
     private fun month(name: String): Int = longMonths.indexOf(name).takeIf { it >= 0 } ?: shortMonths.indexOf(name)
@@ -162,6 +170,11 @@ object DateWords {
             val name = short[shortDays.indexOf(weekday)]
             val date = dayAndMonth(day, monthName, year.ifEmpty { null }, longForm = false)
             when { hindi -> "$name, $date"; korean -> "$date ($name)"; else -> "$date $name" }
+        }
+        result = dayOfMonth.replace(result) { match ->
+            val (weekday, day) = match.destructured
+            val name = short[shortDays.indexOf(weekday)]
+            when { hindi -> "$name $day"; korean -> "${day}일($name)"; else -> "$name ${day}日" }
         }
         result = dayMonth.replace(result) { match ->
             val (day, monthName, year) = match.destructured

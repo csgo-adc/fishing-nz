@@ -1564,6 +1564,7 @@
  "{0} kept, {1} released": "app/src/main/java/nz/fishingnz/app/model/CatchLog.kt:101",
  "{0} km": "app/src/main/java/nz/fishingnz/app/data/BoatRamps.kt:77",
  "{0} km away": "app/src/main/java/nz/fishingnz/app/data/LinzTideSource.kt:48",
+ "{0} km away.": "tools/i18n/extra.json",
  "{0} km radius": "app/src/main/java/nz/fishingnz/app/ui/Screens.kt:1150",
  "{0} km straight line": "app/src/main/java/nz/fishingnz/app/data/LandAssessment.kt:198",
  "{0} km straight-line": "iosApp/CatchCheckNZ/ViewModels/FishingViewModel.swift:431",

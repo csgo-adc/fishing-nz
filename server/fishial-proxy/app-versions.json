@@ -1,10 +1,50 @@
 {
-  "minimum_build": { "android": 1, "ios": 1 },
+  "minimum_build": {
+    "android": 1,
+    "ios": 1
+  },
   "releases": [
+    {
+      "version": "1.0.61",
+      "build": 62,
+      "platforms": [
+        "android",
+        "ios"
+      ],
+      "notes": {
+        "en": [
+          "Now in Simplified Chinese, Traditional Chinese, Korean and Hindi: it follows your phone's language, or choose one in Settings → Language",
+          "Update inside the app when a new version is out",
+          "Fishing rules quoted from MPI stay in English, as published"
+        ],
+        "zh-Hans": [
+          "现已支持简体中文、繁体中文、韩语和印地语：默认跟随手机语言，也可在“设置 → 语言”中选择",
+          "有新版本时可直接在应用内更新",
+          "引用自 MPI 的钓鱼规则保留官方英文原文"
+        ],
+        "zh-Hant": [
+          "現已支援簡體中文、繁體中文、韓語和印地語：預設跟隨手機語言，也可在「設定 → 語言」中選擇",
+          "有新版本時可直接在應用程式內更新",
+          "引用自 MPI 的釣魚規則保留官方英文原文"
+        ],
+        "ko": [
+          "이제 중국어 간체, 중국어 번체, 한국어, 힌디어를 지원합니다. 기본으로 휴대폰 언어를 따르며, 설정 → 언어에서 고를 수 있습니다",
+          "새 버전이 나오면 앱 안에서 바로 업데이트할 수 있습니다",
+          "MPI에서 인용한 낚시 규정은 게시된 대로 영어로 표시됩니다"
+        ],
+        "hi": [
+          "अब सरलीकृत चीनी, पारंपरिक चीनी, कोरियाई और हिन्दी में: यह आपके फ़ोन की भाषा अपनाता है, या सेटिंग्स → भाषा में चुनें",
+          "नया संस्करण आने पर ऐप के अंदर ही अपडेट करें",
+          "MPI से उद्धृत फ़िशिंग नियम प्रकाशित रूप में अंग्रेज़ी में ही रहते हैं"
+        ]
+      }
+    },
     {
       "version": "1.0.57",
       "build": 58,
-      "platforms": ["android"],
+      "platforms": [
+        "android"
+      ],
       "notes": {
         "en": [
           "New Home: today's tide curve, wind, moon and sunset, and the best fishing window found for you",

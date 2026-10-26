@@ -19,7 +19,8 @@ class TranslatorTest {
         "Check the forecast." to "查看预报。",
         "Wind has picked up." to "风变大了。",
         "Okay" to "一般", "Breakwater" to "防波堤", "needs attention" to "需注意", "{0} total" to "共 {0}", "chance" to "概率",
-        "{0} mm" to "{0} 毫米",
+        "{0} mm" to "{0} 毫米", "Near {0}" to "{0} 附近", "Finding the best times {0}…" to "正在查找{0}的最佳时间…",
+        "Updated {0}" to "更新于 {0}", "Updated {0}." to "更新于 {0}。", "Tide: {0}" to "潮汐：{0}",
     ))
 
     @Test fun `exact text, patterns and filled gaps`() {
@@ -47,6 +48,8 @@ class TranslatorTest {
         assertEquals(", 需注意", chinese.translate(", needs attention"))
         assertEquals("730 m E · 防波堤", chinese.translate("730 m E · breakwater"))
         assertEquals("概率 · 共 0.0 毫米", chinese.translate("chance · 0.0 mm total"))
+        assertEquals("正在查找Auckland 附近的最佳时间…", chinese.translate("Finding the best times near Auckland…"))
+        assertEquals("更新于 上午11:23。潮汐：Auckland", chinese.translate("Updated 11:23 AM. Tide: Auckland"))
     }
 
     @Test fun `unknown text, blank translations and spacing stay as they are`() {
@@ -59,6 +62,8 @@ class TranslatorTest {
 
     @Test fun `dates and times follow the language`() {
         assertEquals("10月28日 周三", chinese.translate("Wed 28 Oct"))
+        assertEquals("周四 5日", chinese.translate("Thu 5"))
+        assertEquals("5일(목)", Translator("ko", emptyMap()).translate("Thu 5"))
         assertEquals("上午7:00–上午9:00", chinese.translate("7:00 AM–9:00 AM"))
         assertEquals("2026年10月27日 星期二", chinese.translate("Tuesday 27 October 2026"))
         assertEquals("2026年10月", chinese.translate("October 2026"))

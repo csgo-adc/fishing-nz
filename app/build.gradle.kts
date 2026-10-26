@@ -105,6 +105,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
+    // Play's update library brings an old Fragment; 1.3.0+ is needed for activity results (the update sheet's answer).
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("com.google.firebase:firebase-analytics")
     implementation("org.maplibre.gl:android-sdk:13.6.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")

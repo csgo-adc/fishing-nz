@@ -18,7 +18,7 @@ final class Translator: @unchecked Sendable {
     private static let sentenceBreak = try! NSRegularExpression(pattern: "(?<=[.!?])\\s+(?=[A-Z0-9\"“(])")
     private static let symbolPrefix = try! NSRegularExpression(pattern: "^([^\\p{L}\\p{N}\\s]+\\s+)([\\s\\S]*\\S)$")
 
-    private struct Template { let regex: NSRegularExpression; let anchor: String; let order: [Int]; let target: String; let spansParts: Bool }
+    private struct Template { let regex: NSRegularExpression; let anchor: String; let order: [Int]; let target: String; let spansParts: Bool; let spansSentences: Bool }
 
     let language: String
     private var exact: [String: String] = [:]
@@ -51,7 +51,8 @@ final class Translator: @unchecked Sendable {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
             let order = matches.map { Int(ns.substring(with: $0.range(at: 1))) ?? 0 }
             let anchor = literals.max { $0.count < $1.count } ?? ""
-            patterns.append((literals.reduce(0) { $0 + ($1 as NSString).length }, Template(regex: regex, anchor: anchor, order: order, target: target, spansParts: source.contains(Self.separator))))
+            patterns.append((literals.reduce(0) { $0 + ($1 as NSString).length }, Template(regex: regex, anchor: anchor, order: order, target: target, spansParts: source.contains(Self.separator),
+                                                                                             spansSentences: Self.sentenceBreak.firstMatch(in: source, range: NSRange(location: 0, length: ns.length)) != nil)))
         }
         // The most specific pattern wins: the one with the most text of its own. Ties keep a stable order.
         templates = patterns.enumerated().sorted { ($0.element.0, -$0.offset) > ($1.element.0, -$1.offset) }.map(\.element.1)
@@ -91,6 +92,7 @@ final class Translator: @unchecked Sendable {
                 let groups = template.order.indices.map { ns.substring(with: match.range(at: $0 + 1)) }
                 // A gap never swallows several " · " parts unless the pattern itself has them.
                 if !template.spansParts && groups.contains(where: { $0.contains(Self.separator) }) { continue }
+                if !template.spansSentences && groups.contains(where: { Self.sentenceBreak.firstMatch(in: $0, range: NSRange(location: 0, length: ($0 as NSString).length)) != nil }) { continue }
                 var result = template.target
                 for (index, number) in template.order.enumerated() {
                     result = result.replacingOccurrences(of: "{\(number)}", with: compute(groups[index], depth: depth + 1))
@@ -106,6 +108,12 @@ final class Translator: @unchecked Sendable {
             let sentences = Self.split(text, by: Self.sentenceBreak)
             if sentences.count > 1 {
                 return sentences.map { compute($0, depth: depth + 1) }.joined(separator: language.hasPrefix("zh") ? "" : " ")
+            }
+            // A lowercase copy of a known pattern, such as "near Auckland" for "Near {0}".
+            if text.first?.isLowercase == true {
+                let capital = text.prefix(1).uppercased() + text.dropFirst()
+                let translated = translateTrimmed(capital, depth: depth + 1)
+                if translated != DateWords.localize(capital, language: language) { return translated }
             }
         }
         return DateWords.localize(text, language: language)
@@ -160,6 +168,7 @@ enum DateWords {
     private static let shortDate = regex("\\b(\(shortDays.joined(separator: "|"))),? (\\d{1,2}) (\(shortMonths.joined(separator: "|")))(?: (\\d{4}))?\\b")
     private static let dayMonth = regex("\\b(\\d{1,2}) (\(longMonths.joined(separator: "|"))|\(shortMonths.joined(separator: "|")))(?: (\\d{4}))?\\b")
     private static let monthYear = regex("\\b(\(longMonths.joined(separator: "|"))) (\\d{4})\\b")
+    private static let dayOfMonth = regex("\\b(\(shortDays.joined(separator: "|"))) (\\d{1,2})\\b")
     private static let clock = regex("\\b(\\d{1,2})(:\\d{2})? ?(AM|PM)\\b")
 
     private static func month(_ name: String) -> Int { longMonths.firstIndex(of: name) ?? shortMonths.firstIndex(of: name) ?? 0 }
@@ -199,6 +208,10 @@ enum DateWords {
             let name = names.short[shortDays.firstIndex(of: g[0]) ?? 0]
             let date = dayAndMonth(g[1], g[2], g[3], long: false)
             return hindi ? "\(name), \(date)" : korean ? "\(date) (\(name))" : "\(date) \(name)"
+        }
+        result = replace(result, dayOfMonth) { g in
+            let name = names.short[shortDays.firstIndex(of: g[0]) ?? 0]
+            return hindi ? "\(name) \(g[1])" : korean ? "\(g[1])일(\(name))" : "\(name) \(g[1])日"
         }
         result = replace(result, dayMonth) { g in dayAndMonth(g[0], g[1], g[2], long: g[1].count > 3) }
         result = replace(result, monthYear) { g in

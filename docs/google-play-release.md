@@ -4,6 +4,21 @@ Reviewed 6 October 2026 against the Android app, shared API, deployed provider s
 
 ## Current status
 
+**Update 62 (1.0.61) sent for review on 27 October 2026**, as a full rollout replacing 58 (1.0.57), which went live
+with the new store listing at 7:30 AM the same day. Built from 1.0.61 with the upload key: 197 unit tests, release
+lint, the 64-bit/16 KB check and `jarsigner` passed. Play accepted it (API 26+, target SDK 37, 20.4 MB for new installs,
+3.85 MB as an update, no devices dropped), with only the usual optional deobfuscation and debug-symbol warnings.
+en-AU release notes:
+
+> What's new:
+> • Use the app in Simplified Chinese, Traditional Chinese, Korean or Hindi. It follows your phone's language, or choose one in Settings → Language
+> • Update inside the app when a new version is out
+> • Fishing rules quoted from MPI stay in English, as published
+
+The store listing is still English (en-AU) only. The next Play upload needs a version code above 62.
+
+### Release of 27 October 2026 (58, 1.0.57)
+
 **Live on Google Play since 27 October 2026; update 58 (1.0.57) and a new store listing sent for review the same day.**
 Google approved the first production release, **45 (1.0.44)**, which became available in all 178 countries and regions
 at 5:18 AM on 27 October.
@@ -35,7 +50,7 @@ went to Play's own upload field. Dragging the file from Finder into the release 
 With the app live, `ANDROID_DOWNLOAD_URL` now points at the Play page and Google's app signing key is in
 `ANDROID_CERT_SHA256` (`server/fishial-proxy/wrangler.toml`, see [share-fishing-window.md](share-fishing-window.md)).
 **Deploy the API** for shared-window pages to show the Play button and for Play-installed copies to open shared links.
-The next Play upload needs a version code above 58.
+
 
 ### First production release (24 October 2026)
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.61 — 2026-10-27 (build code 62)
+
+- **Sent to Google Play.** 58 (1.0.57) and the new store listing went live on 27 October at 7:30 AM. The same day
+  **62 (1.0.61)** was sent for review as a full rollout: languages, in-app updates and these fixes. en-AU release
+  notes: Chinese (Simplified and Traditional), Korean and Hindi, updating inside the app, MPI rules stay in English.
+- **Fewer English leftovers.** The translator now keeps a leading emoji or symbol ("🙂 Okay" → "🙂 一般"), matches
+  lowercase copies of known texts and patterns ("near Auckland", "breakwater", "minimum"), never lets a gap run across
+  " · " parts or sentences ("Updated 11:23 AM. Tide: …"), and writes weekday + day labels ("Thu 5" → "周四 5日",
+  "5일(목)"). New patterns for tide highs and lows, moon light, tide ranges and distances. Same rules and tests on
+  Android and iPhone; checked on screen in Chinese and Korean on both.
+- **Settings → Language opens on Android** (the tab was refused before).
+- **In-app update fix:** Android now uses Fragment 1.8.5, so Play's update sheet reports back reliably (release lint
+  caught the old Fragment brought in by Play's update library).
+- **"What's new" for 1.0.61** in all five languages in `server/fishial-proxy/app-versions.json`. Deploy the API for
+  the pop-up notes and `/v1/app/version`.
+
 ## 1.0.60 — 2026-10-27 (build code 61)
 
 - **Four more languages:** Simplified Chinese, Traditional Chinese, Korean and Hindi, on Android and iPhone. The app

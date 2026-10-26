@@ -15,7 +15,8 @@ import Foundation
             "Gusts to {0} km/h": "阵风达 {0} 公里/小时", "{0} of {1} spots": "{1} 个钓点中的 {0} 个", "Version {0}": "版本 {0}",
             "Next {0}": "下一个 {0}", "{0} {1}": "ignored: no words of its own", "Empty": "",
             "Check the forecast.": "查看预报。", "Wind has picked up.": "风变大了。",
-            "Okay": "一般", "Breakwater": "防波堤", "needs attention": "需注意", "{0} total": "共 {0}", "chance": "概率", "{0} mm": "{0} 毫米",
+            "Okay": "一般", "Breakwater": "防波堤", "needs attention": "需注意", "{0} total": "共 {0}", "chance": "概率", "{0} mm": "{0} 毫米", "Near {0}": "{0} 附近", "Finding the best times {0}…": "正在查找{0}的最佳时间…",
+            "Updated {0}": "更新于 {0}", "Updated {0}.": "更新于 {0}。", "Tide: {0}": "潮汐：{0}",
         ])
         try expect(chinese.translate("Settings"), "设置")
         try expect(chinese.translate("Gusts to 38 km/h"), "阵风达 38 公里/小时")
@@ -29,6 +30,8 @@ import Foundation
         try expect(chinese.translate(", needs attention"), ", 需注意")
         try expect(chinese.translate("730 m E · breakwater"), "730 m E · 防波堤")
         try expect(chinese.translate("chance · 0.0 mm total"), "概率 · 共 0.0 毫米")
+        try expect(chinese.translate("Finding the best times near Auckland…"), "正在查找Auckland 附近的最佳时间…")
+        try expect(chinese.translate("Updated 11:23 AM. Tide: Auckland"), "更新于 上午11:23。潮汐：Auckland")
         try expect(chinese.translate("Mission Bay"), "Mission Bay")
         try expect(chinese.translate("Empty"), "Empty")
         try expect(chinese.translate("  Settings "), "  设置 ")
@@ -36,6 +39,8 @@ import Foundation
         try expect(Translator(language: "en", entries: ["Settings": "设置"]).translate("Settings"), "Settings")
 
         try expect(chinese.translate("Wed 28 Oct"), "10月28日 周三")
+        try expect(chinese.translate("Thu 5"), "周四 5日")
+        try expect(Translator(language: "ko", entries: [:]).translate("Thu 5"), "5일(목)")
         try expect(chinese.translate("7:00 AM–9:00 AM"), "上午7:00–上午9:00")
         try expect(chinese.translate("Tuesday 27 October 2026"), "2026年10月27日 星期二")
         try expect(chinese.translate("October 2026"), "2026年10月")
