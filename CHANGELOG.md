@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.65 — 2026-11-09 (build code 66)
+
+- **App Store upload** reads the API key only when exporting, so a run before the secrets exist still checks the
+  iPhone tests, the archive and its signing.
+
 ## 1.0.64 — 2026-11-09 (build code 65)
 
 - **App Store uploads without a Mac.** New manual **App Store upload** GitHub workflow: a macOS runner runs the iPhone

@@ -40,13 +40,6 @@ jobs:
       - uses: actions/checkout@v6
       - name: Check version metadata
         run: python3 tools/version.py check
-      - name: Save the App Store Connect API key
-        env:
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: |
-          key_path="$RUNNER_TEMP/app-store-connect/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
-          python3 tools/app_store_connect.py write-key --out "$key_path"
-          echo "APP_STORE_CONNECT_KEY_PATH=$key_path" >> "$GITHUB_ENV"
       - name: Select Xcode
         env:
           XCODE_VERSION: ${{ inputs.xcode }}
@@ -68,6 +61,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO archive
       - name: Sign the archive with the Release entitlements
         run: python3 tools/app_store_connect.py sign-archive "$RUNNER_TEMP/FishdaysNZ.xcarchive"
+      # The key is first needed here, so a run without it still checks the tests, archive and signing.
+      - name: Save the App Store Connect API key
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          key_path="$RUNNER_TEMP/app-store-connect/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          python3 tools/app_store_connect.py write-key --out "$key_path"
+          echo "APP_STORE_CONNECT_KEY_PATH=$key_path" >> "$GITHUB_ENV"
       - name: Export and check the App Store package
         run: |
           python3 tools/app_store_connect.py export-options --destination export --out "$RUNNER_TEMP/export.plist"
