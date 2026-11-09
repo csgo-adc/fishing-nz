@@ -59,7 +59,41 @@ Paid Apple Developer membership and Xcode account access are confirmed. Team `8T
 - **iPad.** Version 1.0.20 targets iPhone only (`TARGETED_DEVICE_FAMILY = 1`). Add iPad support with a layout review and iPad screenshots in a later version.
 - **Where to sell it.** The Play closed test targets New Zealand only. Choosing only New Zealand in Pricing and Availability keeps the two stores aligned and avoids the EU [trader-status declaration](https://developer.apple.com/news/upcoming-requirements/) that is required for EU storefronts. Price: Free.
 
-## Build, check and upload
+## Upload from GitHub Actions
+
+The manual **App Store upload** workflow (`.github/workflows/ios-app-store.yml`) does the upload without a Mac, so a
+cloud session can run it too. It builds the version in `version.properties` on GitHub's macOS runner with the newest
+released Xcode (26 or later; the **xcode** input picks another), runs the iPhone regression tests, and signs the
+archive with the Release entitlements written out in full. Xcode then re-signs it with Apple's cloud-managed
+distribution certificate. The exported package is checked (version, build, App Store signature, Associated Domains,
+Sign in with Apple, Keychain group) before it is uploaded. A second job waits up to an hour for Apple's processing,
+then puts the build on the App Store version page and sets the page's version number. When the last version is
+already live it adds the next version instead. It never submits for review. While a version is with App Review or
+waiting to be released, the build stays in TestFlight and the page is left alone.
+
+**One-time setup** (Account Holder or Admin):
+
+1. App Store Connect → Users and Access → Integrations → App Store Connect API → **Team Keys** → generate a key with
+   **Admin** access. Admin is needed because Xcode creates the cloud-managed distribution certificate and the App
+   Store profiles. Download `AuthKey_<Key ID>.p8`; Apple offers the download only once.
+2. GitHub → Settings → Secrets and variables → Actions → add the repository secrets `APP_STORE_CONNECT_KEY_ID`
+   (the 10-character Key ID), `APP_STORE_CONNECT_ISSUER_ID` (the Issuer ID shown above the keys) and
+   `APP_STORE_CONNECT_PRIVATE_KEY` (the `.p8` file's whole text). Keep the `.p8` somewhere safe outside the
+   repository; revoke the key in App Store Connect if it leaks.
+
+**Each upload:** bump and commit as usual, then Actions → **App Store upload** → Run workflow on `main`:
+
+| action | What it does |
+| --- | --- |
+| `upload` (default) | Build, check, upload, then update the version page once processed. |
+| `check` | Build, sign and check the package only; nothing reaches App Store Connect. |
+| `attach` | Only update the version page, for a build uploaded earlier whose processing took over an hour. |
+
+Every upload needs a build code App Store Connect has not seen, so bump before running `upload` again. Screenshots,
+What's New text, App Privacy answers, the App Review reply and **Submit for Review** stay in App Store Connect. The
+repository is public, so its Actions logs are public too; the workflow prints no keys or account details.
+
+## Build, check and upload on a Mac
 
 Bump the version before editing for each upload (`python3 tools/version.py bump`), then:
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.64 — 2026-11-09 (build code 65)
+
+- **App Store uploads without a Mac.** New manual **App Store upload** GitHub workflow: a macOS runner runs the iPhone
+  regression tests, archives the app and signs it with the full Release entitlements. Xcode re-signs it with Apple's
+  cloud-managed distribution certificate. The package is checked for version, build, signature, Associated Domains,
+  Sign in with Apple and the Keychain group, then uploaded to App Store Connect. Once Apple has processed it, the build
+  goes on the App Store version page, whose version number is updated (or the next version is added once the last
+  is live). Nothing is submitted for review. Needs an App Store Connect API key with Admin access in three repository
+  secrets; see `docs/app-store-release.md`.
+- `tools/app_store_connect.py` holds the steps, with tests in `tools/tests/test_app_store_connect.py`;
+  `tools/requirements.txt` adds `cryptography` for the API's signed tokens.
+
 ## 1.0.63 — 2026-10-27 (build code 64)
 
 - **Translated Play listing sent for review.** The zh-CN, zh-TW, ko-KR and hi-IN listings and the English Languages

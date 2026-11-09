@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.63 (build code 64)**. The original code is preserved
+Current project version: **1.0.64 (build code 65)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -43,6 +43,6 @@ Fishdays - NZ is an evolving project. Android preview builds are available from 
 
 Google Play release preparation, signing, privacy/deletion deployment, Data safety guidance and remaining account steps are in [the release checklist](docs/google-play-release.md). Store listing copy and graphics are in [assets/google-play](assets/google-play/listing.md).
 
-App Store readiness, the steps only the Apple account holder can do, listing copy, App Privacy answers and App Review notes are in [the App Store checklist](docs/app-store-release.md).
+App Store readiness, the steps only the Apple account holder can do, listing copy, App Privacy answers and App Review notes are in [the App Store checklist](docs/app-store-release.md). The manual **App Store upload** GitHub workflow builds, signs and uploads the iPhone app [without a Mac](docs/app-store-release.md#upload-from-github-actions).
 
 The fish and silver-fern app icon uses the black, royal-blue, white and red palette from the supplied New Zealand reference. [Brand artwork and platform exports](assets/branding/README.md).

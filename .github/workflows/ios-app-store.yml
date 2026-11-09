@@ -1,0 +1,111 @@
+name: App Store upload
+
+# Builds the iPhone app from version.properties, signs it with Apple's cloud-managed distribution certificate and
+# uploads it to App Store Connect, then puts the build on the App Store version page once Apple has processed it.
+# It never submits for review. Setup and secrets: docs/app-store-release.md#upload-from-github-actions.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "upload = build, upload and put on the version page; check = build and sign only; attach = put an already uploaded build on the version page"
+        type: choice
+        default: upload
+        options:
+          - upload
+          - check
+          - attach
+      xcode:
+        description: Xcode version, for example 26.1 (leave blank for the newest released Xcode on the runner)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-store-upload
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, sign and upload
+    if: inputs.action != 'attach'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check version metadata
+        run: python3 tools/version.py check
+      - name: Save the App Store Connect API key
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          key_path="$RUNNER_TEMP/app-store-connect/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          python3 tools/app_store_connect.py write-key --out "$key_path"
+          echo "APP_STORE_CONNECT_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+      - name: Select Xcode
+        env:
+          XCODE_VERSION: ${{ inputs.xcode }}
+        run: |
+          xcode=$(python3 tools/app_store_connect.py pick-xcode --version "$XCODE_VERSION")
+          sudo xcode-select --switch "$xcode"
+          xcodebuild -version
+      - name: iPhone regression tests
+        run: |
+          for test in tools/test_*_swift.sh; do
+            echo "::group::$test"
+            sh "$test"
+            echo "::endgroup::"
+          done
+      - name: Archive
+        run: |
+          xcodebuild -quiet -project iosApp/CatchCheckNZ.xcodeproj -scheme CatchCheckNZ -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/FishdaysNZ.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO archive
+      - name: Sign the archive with the Release entitlements
+        run: python3 tools/app_store_connect.py sign-archive "$RUNNER_TEMP/FishdaysNZ.xcarchive"
+      - name: Export and check the App Store package
+        run: |
+          python3 tools/app_store_connect.py export-options --destination export --out "$RUNNER_TEMP/export.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/FishdaysNZ.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates -authenticationKeyPath "$APP_STORE_CONNECT_KEY_PATH" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          python3 tools/app_store_connect.py check-ipa "$RUNNER_TEMP"/export/*.ipa
+      - name: Upload to App Store Connect
+        if: inputs.action == 'upload'
+        run: |
+          python3 tools/app_store_connect.py export-options --destination upload --out "$RUNNER_TEMP/upload.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/FishdaysNZ.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/upload.plist" -exportPath "$RUNNER_TEMP/upload" \
+            -allowProvisioningUpdates -authenticationKeyPath "$APP_STORE_CONNECT_KEY_PATH" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          echo "Uploaded $(grep -E '^version(Name|Code)=' version.properties | tr '\n' ' ')to App Store Connect." >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/app-store-connect"
+
+  attach:
+    name: Put the build on the App Store version page
+    needs: build
+    if: ${{ !cancelled() && (inputs.action == 'attach' || (inputs.action == 'upload' && needs.build.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
+      - run: pip install -r tools/requirements.txt
+      - name: Wait for processing, then update the version page
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: python3 tools/app_store_connect.py attach-build --wait-minutes 60
