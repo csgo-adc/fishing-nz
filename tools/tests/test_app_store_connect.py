@@ -181,6 +181,94 @@ class VersionPageTest(unittest.TestCase):
             self.run_attach([], ("PROCESSING",))
 
 
+class LocalizedApi(FakeApi):
+    """A version being prepared with three App Store languages."""
+
+    def __init__(self, versions):
+        super().__init__(versions, ["VALID"])
+        self.localizations = [
+            {"id": "l1", "attributes": {"locale": "en-AU", "whatsNew": None}},
+            {"id": "l2", "attributes": {"locale": "zh-Hans", "whatsNew": None}},
+            {"id": "l3", "attributes": {"locale": "fr-FR", "whatsNew": None}},
+        ]
+
+    def request(self, method, path, params=None, body=None):
+        if path.endswith("/appStoreVersionLocalizations"):
+            self.calls.append((method, path, body))
+            return {"data": self.localizations}
+        if method == "PATCH" and path.startswith("/v1/appStoreVersionLocalizations/"):
+            self.calls.append((method, path, body))
+            localization = next(l for l in self.localizations if path.endswith(l["id"]))
+            localization["attributes"]["whatsNew"] = body["data"]["attributes"]["whatsNew"]
+            return {"data": localization}
+        return super().request(method, path, params, body)
+
+
+class WhatsNewTest(unittest.TestCase):
+    def notes_file(self, folder, version="1.0.65", platforms=("ios",)):
+        path = Path(folder, "app-versions.json")
+        path.write_text(json.dumps({"releases": [{"version": version, "build": 66, "platforms": list(platforms),
+                                                  "notes": {"en": ["Faster tides", "New widget"], "zh-Hans": ["潮汐更快"]}}]}))
+        return path
+
+    def test_release_notes_in_the_repository_fit_the_app_store(self):
+        releases = json.loads(asc.APP_VERSIONS.read_text())["releases"]
+        for release in releases:
+            for locale in ("en-AU", "en-US", "zh-Hans", "zh-Hant", "ko", "hi"):
+                self.assertIsNotNone(asc.whats_new_text(release["notes"], locale), (release["version"], locale))
+
+    def test_each_language_gets_its_notes_or_english(self):
+        notes = {"en": ["Faster tides", "New widget"], "zh-Hans": ["潮汐更快"]}
+        self.assertEqual(asc.whats_new_text(notes, "en-AU"), "• Faster tides\n• New widget")
+        self.assertEqual(asc.whats_new_text(notes, "zh-Hans"), "• 潮汐更快")
+        self.assertEqual(asc.whats_new_text(notes, "ko"), "• Faster tides\n• New widget")
+        with self.assertRaisesRegex(StepError, "4,000"):
+            asc.whats_new_text({"en": ["x" * 4001]}, "en-AU")
+
+    def test_fills_the_version_being_prepared_once(self):
+        api = LocalizedApi([store_version("v2", "1.0.65", "PREPARE_FOR_SUBMISSION", "2026-11-09"),
+                            store_version("v1", "1.0.28", "READY_FOR_DISTRIBUTION", "2026-10-11")])
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.notes_file(folder)
+            summary = asc.fill_whats_new(api, path=path)
+            self.assertEqual(summary, "Filled What's New for 1.0.65 in en-AU, zh-Hans, fr-FR.")
+            self.assertEqual(api.localizations[1]["attributes"]["whatsNew"], "• 潮汐更快")
+            self.assertEqual(api.localizations[2]["attributes"]["whatsNew"], "• Faster tides\n• New widget")
+            self.assertIn("already up to date", asc.fill_whats_new(api, path=path))
+        self.assertFalse(any(call[0] == "POST" for call in api.calls))
+
+    def test_missing_notes_or_page_stop_or_skip(self):
+        api = LocalizedApi([store_version("v2", "1.0.65", "PREPARE_FOR_SUBMISSION", "2026-11-09")])
+        with tempfile.TemporaryDirectory() as folder:
+            android_only = self.notes_file(folder, platforms=("android",))
+            with self.assertRaisesRegex(StepError, "no iOS release notes for 1.0.65"):
+                asc.fill_whats_new(api, path=android_only)
+            self.assertIn("left as it is", asc.fill_whats_new(api, only_if_listed=True, path=android_only))
+            live = LocalizedApi([store_version("v1", "1.0.65", "READY_FOR_DISTRIBUTION", "2026-11-09")])
+            with self.assertRaisesRegex(StepError, "No App Store version is being prepared"):
+                asc.fill_whats_new(live, path=self.notes_file(folder))
+        self.assertFalse(any(call[0] == "PATCH" for call in api.calls + live.calls))
+
+    def test_status_lists_versions_and_whats_new(self):
+        api = LocalizedApi([store_version("v1", "1.0.28", "READY_FOR_DISTRIBUTION", "2026-10-11"),
+                            store_version("v2", "1.0.65", "PREPARE_FOR_SUBMISSION", "2026-11-09")])
+        api.attached = "build66"
+        api.localizations[0]["attributes"]["whatsNew"] = "• Faster tides"
+        original = api.request
+
+        def request(method, path, params=None, body=None):
+            if path.endswith("/build"):
+                return {"data": {"id": "build66", "attributes": {"version": "66"}}}
+            return original(method, path, params, body)
+
+        api.request = request
+        report = asc.status(api)
+        self.assertLess(report.index("1.0.65: prepare for submission"), report.index("1.0.28: ready for distribution"))
+        self.assertIn("Being prepared: 1.0.65 with build 66", report)
+        self.assertIn("en-AU: '• Faster tides'", report)
+        self.assertIn("zh-Hans: (empty)", report)
+
+
 @unittest.skipIf(ec is None, "cryptography is not installed")
 class TokenTest(unittest.TestCase):
     def test_token_is_an_es256_jwt_apple_accepts(self):

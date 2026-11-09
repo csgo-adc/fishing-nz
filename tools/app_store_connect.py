@@ -8,8 +8,12 @@
   export-options  Write the ExportOptions.plist for an App Store Connect export or upload.
   check-ipa       Check an exported .ipa: version, build, distribution signature and entitlements.
   attach-build    Wait for an uploaded build to finish processing, then put it on the App Store version page and set
-                  the page's version number (adding the next version when the current one is already live). It never
-                  submits anything for review.
+                  the page's version number (adding the next version when the current one is already live).
+  whats-new       Fill the version page's What's New text in every language from the matching iOS release notes in
+                  server/fishial-proxy/app-versions.json (the notes the in-app update pop-up shows).
+  status          Print the App Store versions, the version being prepared, its build and What's New per language.
+
+Nothing here submits anything for review.
 
 Only the standard library is needed, except attach-build, which signs API tokens with `cryptography`.
 """
@@ -37,6 +41,7 @@ from version import read_version
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = ROOT / "iosApp/CatchCheckNZ.xcodeproj/project.pbxproj"
 RELEASE_ENTITLEMENTS = ROOT / "iosApp/CatchCheckNZ/Resources/CatchCheckNZRelease.entitlements"
+APP_VERSIONS = ROOT / "server/fishial-proxy/app-versions.json"
 BUNDLE_ID = "nz.fishingnz.catchcheck"
 API = "https://api.appstoreconnect.apple.com"
 MINIMUM_XCODE = 26  # Apple's upload requirement since 28 April 2026
@@ -384,16 +389,26 @@ def wait_for_build(api, app_id, version, build, wait_minutes, poll_seconds=30, s
         sleep(poll_seconds)
 
 
-def attach_build(api, version, build, wait_minutes, bundle_id=BUNDLE_ID, sleep=time.sleep, clock=time.monotonic):
-    """Returns a one-line summary of what changed."""
-    app = find_app(api, bundle_id)
-    uploaded = wait_for_build(api, app["id"], version, build, wait_minutes, sleep=sleep, clock=clock)
-    versions = api.request("GET", f"/v1/apps/{app['id']}/appStoreVersions", {
+def store_versions(api, app_id):
+    return api.request("GET", f"/v1/apps/{app_id}/appStoreVersions", {
         "filter[platform]": "IOS",
         "fields[appStoreVersions]": "versionString,appVersionState,appStoreState,createdDate",
         "limit": "20",
     })["data"]
-    action, page = choose_version(versions)
+
+
+def localizations(api, version_id):
+    return api.request("GET", f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations", {
+        "fields[appStoreVersionLocalizations]": "locale,whatsNew",
+        "limit": "50",
+    })["data"]
+
+
+def attach_build(api, version, build, wait_minutes, bundle_id=BUNDLE_ID, sleep=time.sleep, clock=time.monotonic):
+    """Returns a one-line summary of what changed."""
+    app = find_app(api, bundle_id)
+    uploaded = wait_for_build(api, app["id"], version, build, wait_minutes, sleep=sleep, clock=clock)
+    action, page = choose_version(store_versions(api, app["id"]))
     if action == "wait":
         return (f"Build {version} ({build}) is processed and in TestFlight. It was not put on the App Store page: "
                 f"version {page['attributes']['versionString']} is {version_state(page).replace('_', ' ').lower()}. "
@@ -421,6 +436,75 @@ def attach_build(api, version, build, wait_minutes, bundle_id=BUNDLE_ID, sleep=t
             f"its version number went {renamed}. Nothing was submitted for review.")
 
 
+def release_notes(version, path=APP_VERSIONS):
+    """The in-app update notes for an iOS release, by language, or None when the release is not listed."""
+    for release in json.loads(Path(path).read_text()).get("releases", []):
+        if release.get("version") == version and "ios" in release.get("platforms", []):
+            return release.get("notes") or {}
+    return None
+
+
+def whats_new_text(notes, locale):
+    """App Store locales are like en-AU, zh-Hans or ko; the notes use en, zh-Hans, zh-Hant, ko and hi."""
+    for key in (locale, locale.split("-")[0], "en"):
+        if notes.get(key):
+            text = "\n".join(f"• {line}" for line in notes[key])
+            if len(text) > 4000:
+                raise StepError(f"What's New for {locale} is {len(text)} characters; App Store Connect allows 4,000")
+            return text
+    return None
+
+
+def fill_whats_new(api, bundle_id=BUNDLE_ID, only_if_listed=False, path=APP_VERSIONS):
+    """Returns a one-line summary of what changed."""
+    app = find_app(api, bundle_id)
+    action, page = choose_version(store_versions(api, app["id"]))
+    if action != "update":
+        message = "No App Store version is being prepared, so there is no What's New to fill"
+        if only_if_listed:
+            return message + "."
+        raise StepError(message)
+    version = page["attributes"]["versionString"]
+    notes = release_notes(version, path)
+    if not notes:
+        message = f"{Path(path).name} has no iOS release notes for {version}"
+        if only_if_listed:
+            return message + "; What's New was left as it is."
+        raise StepError(message + "; add them there first")
+    changed, unchanged = [], []
+    for localization in localizations(api, page["id"]):
+        locale = localization["attributes"]["locale"]
+        text = whats_new_text(notes, locale)
+        if not text or localization["attributes"].get("whatsNew") == text:
+            unchanged.append(locale)
+            continue
+        api.request("PATCH", f"/v1/appStoreVersionLocalizations/{localization['id']}", body={"data": {
+            "type": "appStoreVersionLocalizations", "id": localization["id"], "attributes": {"whatsNew": text},
+        }})
+        changed.append(locale)
+    if not changed:
+        return f"What's New for {version} was already up to date ({', '.join(unchanged) or 'no languages'})."
+    return f"Filled What's New for {version} in {', '.join(changed)}" + (
+        f"; already up to date in {', '.join(unchanged)}." if unchanged else ".")
+
+
+def status(api, bundle_id=BUNDLE_ID):
+    app = find_app(api, bundle_id)
+    versions = sorted(store_versions(api, app["id"]), key=lambda v: v["attributes"].get("createdDate") or "",
+                      reverse=True)
+    lines = [f"{app['attributes'].get('name')} ({bundle_id}) — App Store versions, newest first:"]
+    lines += [f"  {v['attributes']['versionString']}: {version_state(v).replace('_', ' ').lower()}" for v in versions]
+    action, page = choose_version(versions)
+    if action == "update":
+        build = api.request("GET", f"/v1/appStoreVersions/{page['id']}/build", {"fields[builds]": "version"})["data"]
+        lines.append(f"Being prepared: {page['attributes']['versionString']} with build "
+                     f"{build['attributes']['version'] if build else 'none'}. What's New by language:")
+        for localization in localizations(api, page["id"]):
+            text = localization["attributes"].get("whatsNew") or ""
+            lines.append(f"  {localization['attributes']['locale']}: " + (repr(text) if text else "(empty)"))
+    return "\n".join(lines)
+
+
 # --- Command line ------------------------------------------------------------------------------------------------
 
 
@@ -440,6 +524,10 @@ def main(argv=None):
     command.add_argument("ipa")
     command = commands.add_parser("attach-build")
     command.add_argument("--wait-minutes", type=int, default=60)
+    command = commands.add_parser("whats-new")
+    command.add_argument("--only-if-listed", action="store_true",
+                         help="skip quietly when no version is being prepared or its notes are not listed")
+    commands.add_parser("status")
     args = parser.parse_args(argv)
 
     try:
@@ -455,8 +543,14 @@ def main(argv=None):
                 plistlib.dump(export_options(args.destination, team_id()), file)
         elif args.command == "check-ipa":
             check_ipa(args.ipa, team_id(), name, code)
-        elif args.command == "attach-build":
-            summary = attach_build(AppStoreConnect(*credentials()), name, code, args.wait_minutes)
+        elif args.command == "status":
+            print(status(AppStoreConnect(*credentials())))
+        else:
+            api = AppStoreConnect(*credentials())
+            if args.command == "attach-build":
+                summary = attach_build(api, name, code, args.wait_minutes)
+            else:
+                summary = fill_whats_new(api, only_if_listed=args.only_if_listed)
             print(summary)
             if os.environ.get("GITHUB_STEP_SUMMARY"):
                 with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as file:

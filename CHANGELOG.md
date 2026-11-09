@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.66 — 2026-11-09 (build code 67)
+
+- **In App Store Connect:** 1.0.65 (66) was uploaded from the new workflow and processed. The workflow added App Store
+  version 1.0.65 with that build. It has not been submitted for review.
+- **App Store upload** now fills **What's New** from the iOS notes in `server/fishial-proxy/app-versions.json`, the
+  same notes the in-app update pop-up shows, in each App Store language with English as the fallback. New actions:
+  `whats-new` fills only What's New, and `status` shows the App Store versions, the version being prepared, its build
+  and What's New per language. Every run of the version-page job ends with that status.
+
 ## 1.0.65 — 2026-11-09 (build code 66)
 
 - **App Store upload** reads the API key only when exporting, so a run before the secrets exist still checks the

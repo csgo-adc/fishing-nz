@@ -1,20 +1,22 @@
 name: App Store upload
 
 # Builds the iPhone app from version.properties, signs it with Apple's cloud-managed distribution certificate and
-# uploads it to App Store Connect, then puts the build on the App Store version page once Apple has processed it.
-# It never submits for review. Setup and secrets: docs/app-store-release.md#upload-from-github-actions.
+# uploads it to App Store Connect, then puts the build on the App Store version page once Apple has processed it and
+# fills What's New from the iOS notes in server/fishial-proxy/app-versions.json. It never submits for review. Setup and secrets: docs/app-store-release.md#upload-from-github-actions.
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "upload = build, upload and put on the version page; check = build and sign only; attach = put an already uploaded build on the version page"
+        description: "upload = build, upload and put on the version page; check = build and sign only; attach = put an already uploaded build on the version page; whats-new = fill What's New only; status = show the App Store versions"
         type: choice
         default: upload
         options:
           - upload
           - check
           - attach
+          - whats-new
+          - status
       xcode:
         description: Xcode version, for example 26.1 (leave blank for the newest released Xcode on the runner)
         required: false
@@ -30,7 +32,7 @@ concurrency:
 jobs:
   build:
     name: Build, sign and upload
-    if: inputs.action != 'attach'
+    if: inputs.action == 'upload' || inputs.action == 'check'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -90,12 +92,16 @@ jobs:
         if: always()
         run: rm -rf "$RUNNER_TEMP/app-store-connect"
 
-  attach:
-    name: Put the build on the App Store version page
+  version-page:
+    name: Update the App Store version page
     needs: build
-    if: ${{ !cancelled() && (inputs.action == 'attach' || (inputs.action == 'upload' && needs.build.result == 'success')) }}
+    if: ${{ !cancelled() && inputs.action != 'check' && (inputs.action != 'upload' || needs.build.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    env:
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -104,9 +110,14 @@ jobs:
           cache: pip
           cache-dependency-path: tools/requirements.txt
       - run: pip install -r tools/requirements.txt
-      - name: Wait for processing, then update the version page
-        env:
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      - name: Wait for processing, then put the build on the version page
+        if: inputs.action == 'upload' || inputs.action == 'attach'
         run: python3 tools/app_store_connect.py attach-build --wait-minutes 60
+      - name: Fill What's New
+        if: inputs.action != 'status'
+        env:
+          ONLY_IF_LISTED: ${{ inputs.action != 'whats-new' && '--only-if-listed' || '' }}
+        run: python3 tools/app_store_connect.py whats-new $ONLY_IF_LISTED
+      - name: App Store status
+        if: always()
+        run: python3 tools/app_store_connect.py status

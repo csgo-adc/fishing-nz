@@ -88,9 +88,16 @@ waiting to be released, the build stays in TestFlight and the page is left alone
 | `upload` (default) | Build, check, upload, then update the version page once processed. |
 | `check` | Build, sign and check the package only; nothing reaches App Store Connect. |
 | `attach` | Only update the version page, for a build uploaded earlier whose processing took over an hour. |
+| `whats-new` | Only fill What's New on the version being prepared. |
+| `status` | Only show the App Store versions, the version being prepared, its build and What's New per language. |
+
+**What's New** comes from the iOS release in `server/fishial-proxy/app-versions.json` whose `version` matches the
+version page (the same notes the in-app update pop-up shows). Each App Store language gets its own notes (en-AU and
+other English locales use `en`, then `zh-Hans`, `zh-Hant`, `ko`, `hi`), falling back to English, as "• " lines.
+`upload` and `attach` fill it when that release is listed and leave it alone otherwise.
 
 Every upload needs a build code App Store Connect has not seen, so bump before running `upload` again. Screenshots,
-What's New text, App Privacy answers, the App Review reply and **Submit for Review** stay in App Store Connect. The
+App Privacy answers, the App Review reply and **Submit for Review** stay in App Store Connect. The
 repository is public, so its Actions logs are public too; the workflow prints no keys or account details.
 
 ## Build, check and upload on a Mac
