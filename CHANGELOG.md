@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.67 — 2026-11-10 (build code 68)
+
+- **What's New for iPhone 1.0.65 (66).** New iOS release in `server/fishial-proxy/app-versions.json` with four notes
+  in English, Simplified and Traditional Chinese, Korean and Hindi, covering what changed since 1.0.28, the version
+  live on the App Store: the new Home, the Spots tab, the redesigned fishing rules and the four new languages. The
+  English lines are the 1.0.57 and 1.0.61 notes. The App Store version page has one language, English (U.K.), which
+  gets the English notes. Deploy the API for the in-app update pop-up to show them.
+
 ## 1.0.66 — 2026-11-09 (build code 67)
 
 - **In App Store Connect:** 1.0.65 (66) was uploaded from the new workflow and processed. The workflow added App Store
