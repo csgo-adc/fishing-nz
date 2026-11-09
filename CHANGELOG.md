@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.68 — 2026-11-10 (build code 69)
+
+- **New App Store screenshots.** Six 1320×2868 iPhone screenshots of the 1.0.65 app replace the three from October
+  in `assets/app-store` and on App Store version 1.0.65 (6.9-inch display, scaled down for smaller iPhones): Home,
+  best fishing window, Spots map, Fishing rules with Check my catch, tide curve and Weather, the same screens as
+  Google Play. Taken on the iPhone 17 Pro Max simulator near Auckland with live data. No app code changed.
+
 ## 1.0.67 — 2026-11-10 (build code 68)
 
 - **What's New for iPhone 1.0.65 (66).** New iOS release in `server/fishial-proxy/app-versions.json` with four notes
