@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.78 — 2026-11-11 (build code 79)
+
+- **Release note for Android 1.0.77 (78)** in `server/fishial-proxy/app-versions.json`, in all five languages: the app
+  now names the AI services a photo goes to before sending it, and asks again if they change. It is the Play release
+  note too; the in-app update pop-up shows it once the API is deployed. No app code changed.
+
 ## 1.0.77 — 2026-11-11 (build code 78)
 
 - **Photo consent names the AI services from the CMS.** New public `GET /v1/fish/providers` gives the main and backup

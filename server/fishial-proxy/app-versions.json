@@ -5,6 +5,30 @@
   },
   "releases": [
     {
+      "version": "1.0.77",
+      "build": 78,
+      "platforms": [
+        "android"
+      ],
+      "notes": {
+        "en": [
+          "Before a photo is sent for identification, the app now names the AI services it goes to, and asks again if they change"
+        ],
+        "zh-Hans": [
+          "发送照片进行识别前，应用现在会说明照片将发送到哪些 AI 服务；如果服务有变化，会再次询问"
+        ],
+        "zh-Hant": [
+          "傳送照片進行辨識前，App 現在會說明照片將傳送到哪些 AI 服務；如果服務有變更，會再次詢問"
+        ],
+        "ko": [
+          "식별을 위해 사진을 보내기 전에 이제 앱이 사진이 전송되는 AI 서비스를 알려 주며, 서비스가 바뀌면 다시 묻습니다"
+        ],
+        "hi": [
+          "पहचान के लिए फ़ोटो भेजने से पहले ऐप अब बताता है कि फ़ोटो किन AI सेवाओं को जाएगी, और सेवाएँ बदलने पर फिर से पूछता है"
+        ]
+      }
+    },
+    {
       "version": "1.0.73",
       "build": 74,
       "platforms": [
