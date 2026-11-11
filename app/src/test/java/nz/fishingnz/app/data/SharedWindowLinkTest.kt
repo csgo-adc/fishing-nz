@@ -77,7 +77,9 @@ class SharedWindowLinkTest {
     @Test fun theShareTextSaysWhereWhenAndHowItLooks() {
         val original = window()
         val text = SharedWindowLink.text(original, "https://fishing.fishnz.space/w/abc")
-        assertEquals("Fishing window: Takapuna Beach, Auckland\nSun 11 Oct, 6:00 PM–8:00 PM · 🙂 Okay\nhttps://fishing.fishnz.space/w/abc", text)
+        assertEquals("Fishing window: Takapuna Beach, Auckland\nSun 11 Oct, 6:00 PM–8:00 PM · 🙂 Okay\nhttps://fishing.fishnz.space/w/abc\n\n" +
+            "Get the Fishdays - NZ app:\niPhone: https://apps.apple.com/app/id6820858116\n" +
+            "Android: https://play.google.com/store/apps/details?id=nz.fishingnz.app", text)
     }
 
     @Test fun aSharedLinkIsLongEnoughForRealConditionsButStillShort() {

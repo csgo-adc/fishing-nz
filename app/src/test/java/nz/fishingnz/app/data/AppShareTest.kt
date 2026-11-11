@@ -1,14 +1,15 @@
 package nz.fishingnz.app.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppShareTest {
-    @Test fun shareTextNamesTheAppAndEndsWithItsPlayStoreLink() {
-        val text = AppShare.text()
-        assertTrue(text.startsWith("Fishdays - NZ "))
-        assertTrue(text.endsWith(AppShare.playStoreUrl))
+    @Test fun shareTextNamesTheAppAndGivesBothStoreLinks() {
+        assertEquals(
+            "Fishdays - NZ helps you plan fishing days around New Zealand with tides, weather, fishing windows and MPI fishing rules.\n" +
+                "iPhone: https://apps.apple.com/app/id6820858116\n" +
+                "Android: https://play.google.com/store/apps/details?id=nz.fishingnz.app",
+            AppShare.text())
     }
 
     @Test fun playStoreLinkUsesTheApplicationId() {

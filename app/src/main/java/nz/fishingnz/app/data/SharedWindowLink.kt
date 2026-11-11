@@ -44,9 +44,11 @@ object SharedWindowLink {
     /** True for the service's short ids, which have to be looked up, and false for a token that holds the window itself. */
     fun isShortId(token: String): Boolean = shortId.matches(token)
 
-    /** The text the share sheet sends: where and when, how it looks, and the link. */
+    /** The text the share sheet sends: where and when, how it looks, the link, and where to get the app on either phone. */
     fun text(window: Recommendation, url: String): String =
-        "Fishing window: ${window.name}, ${window.area}\n${window.time} · ${window.windowOutlook}\n$url"
+        "Fishing window: ${window.name}, ${window.area}\n${window.time} · ${window.windowOutlook}\n$url\n\n$GET_THE_APP\n${AppShare.storeLines()}"
+
+    const val GET_THE_APP = "Get the Fishdays - NZ app:"
 
     fun encode(window: Recommendation, nowEpochSeconds: Long = Instant.now().epochSecond): String? {
         if (window.startsAtEpochSeconds <= 0 || window.durationHours <= 0) return null

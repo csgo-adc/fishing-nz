@@ -51,9 +51,9 @@ enum SharedWindowLink {
         token.count == 8 && token.allSatisfy { shortIDAlphabet.contains($0) }
     }
 
-    /// The text the share sheet sends: where and when, how it looks, and the link.
+    /// The text the share sheet sends: where and when, how it looks, the link, and where to get the app on either phone.
     static func text(for window: Recommendation, url: URL) -> String {
-        "Fishing window: \(window.name), \(window.area)\n\(window.time) · \(window.windowOutlook)\n\(url.absoluteString)"
+        "Fishing window: \(window.name), \(window.area)\n\(window.time) · \(window.windowOutlook)\n\(url.absoluteString)\n\nGet the Fishdays - NZ app:\n\(StoreLinks.lines)"
     }
 
     static func encode(_ window: Recommendation, now: Date = .now) -> String? {
@@ -194,4 +194,13 @@ enum SharedWindowLink {
         cut.append(contentsOf: scalars.prefix(max - 1))
         return String(cut).trimmingCharacters(in: .whitespaces) + "…"
     }
+}
+
+/// The app's two store pages, in every share: "Share Fishdays - NZ" on the More page and shared fishing windows.
+/// Android has the same text in `AppShare.kt`.
+enum StoreLinks {
+    static let appStore = "https://apps.apple.com/app/id6820858116"
+    static let googlePlay = "https://play.google.com/store/apps/details?id=nz.fishingnz.app"
+    /// "iPhone: …" and "Android: …", one per line.
+    static var lines: String { "iPhone: \(appStore)\nAndroid: \(googlePlay)" }
 }

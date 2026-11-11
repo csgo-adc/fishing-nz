@@ -78,6 +78,16 @@ class TranslatorTest {
         assertEquals("7:00 AM", hindi.translate("7:00 AM"))
     }
 
+    @Test fun `share texts keep both store links whole`() {
+        // The real catalogue, so the share lines added in 1.0.72 are covered as they ship.
+        val catalogue = org.json.JSONObject(java.io.File("../i18n/strings.zh-Hans.json").readText())
+        val real = Translator("zh-Hans", catalogue.keys().asSequence().associateWith { catalogue.getString(it) })
+        val shared = real.translate("https://fishing.fishnz.space/w/abc\n\nGet the Fishdays - NZ app:\n" + nz.fishingnz.app.data.AppShare.storeLines())
+        assertEquals("https://fishing.fishnz.space/w/abc\n\n下载 Fishdays - NZ 应用：\niPhone：https://apps.apple.com/app/id6820858116\n" +
+            "Android：https://play.google.com/store/apps/details?id=nz.fishingnz.app", shared)
+        assertEquals(true, real.translate(nz.fishingnz.app.data.AppShare.text()).endsWith("\nAndroid：https://play.google.com/store/apps/details?id=nz.fishingnz.app"))
+    }
+
     @Test fun `phone languages map to the catalogues`() {
         assertEquals("zh-Hans", Translator.languageFor(listOf("zh-CN")))
         assertEquals("zh-Hans", Translator.languageFor(listOf("zh-Hans-NZ")))

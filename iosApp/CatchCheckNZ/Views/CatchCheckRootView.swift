@@ -172,26 +172,18 @@ private struct MoreNavigationRow: View {
     }
 }
 
-/// What the Share row on the More page sends. Until the app has an App Store page it sends text that tells people to
-/// search for it. Once the app record exists, set `appStoreURL` to its page: App Store Connect → App Information shows
-/// the Apple ID number, and the link is `https://apps.apple.com/app/id<that number>`.
-private enum AppShare {
-    static let appStoreURL: URL? = URL(string: "https://apps.apple.com/app/id6820858116")
+/// What the Share row on the More page sends: a short invitation and both store pages (`StoreLinks`), so a friend on
+/// either phone can get the app. Android sends the same text (`AppShare.kt`).
+enum AppShare {
     static let subject = "Fishdays - NZ"
     static let message = "Fishdays - NZ helps you plan fishing days around New Zealand with tides, weather, fishing windows and MPI fishing rules."
-    static let textOnly = message + " Search for “Fishdays - NZ” in the App Store."
+    static var text: String { "\(message)\n\(StoreLinks.lines)" }
 }
 
 private struct ShareAppRow: View {
     var body: some View {
-        Group {
-            if let url = AppShare.appStoreURL {
-                ShareLink(item: url, subject: Text(AppShare.subject), message: Text(AppShare.message)) { label }
-            } else {
-                ShareLink(item: tr(AppShare.textOnly), subject: Text(AppShare.subject)) { label }
-            }
-        }
-        .buttonStyle(.plain)
+        ShareLink(item: tr(AppShare.text), subject: Text(AppShare.subject)) { label }
+            .buttonStyle(.plain)
     }
 
     private var label: some View {

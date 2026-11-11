@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.72 — 2026-11-11 (build code 73)
+
+- **Shares give both store links.** "Share Fishdays - NZ" on the More page now sends the invitation with the App
+  Store and Google Play links on their own lines, on Android and iPhone alike (Android sent only Google Play, iPhone
+  only the App Store). "Share this window" messages end with "Get the Fishdays - NZ app:" and the same two links, below
+  the window's own link. Translated in all four languages, with the links left as they are.
+
 ## 1.0.71 — 2026-11-11 (build code 72)
 
 - **Fishing windows open instantly.** Android and iPhone keep the windows they found on the phone. **See all** now

@@ -64,7 +64,9 @@ import Foundation
 
         // What the share sheet sends.
         try expect(SharedWindowLink.text(for: original, url: URL(string: "https://fishing.fishnz.space/w/abc")!)
-                   == "Fishing window: Takapuna Beach, Auckland\nSun 11 Oct · 6:00 PM–8:00 PM · 🙂 Okay\nhttps://fishing.fishnz.space/w/abc", "Share text changed")
+                   == "Fishing window: Takapuna Beach, Auckland\nSun 11 Oct · 6:00 PM–8:00 PM · 🙂 Okay\nhttps://fishing.fishnz.space/w/abc\n\n"
+                   + "Get the Fishdays - NZ app:\niPhone: https://apps.apple.com/app/id6820858116\n"
+                   + "Android: https://play.google.com/store/apps/details?id=nz.fishingnz.app", "Share text changed")
 
         // Real conditions still make a short link.
         let rows = ["Wind", "Rain", "Feels like", "Tide", "Offshore waves", "Daylight"].map {
