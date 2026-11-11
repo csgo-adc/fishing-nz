@@ -2,7 +2,7 @@
 
 **Plan your next fishing trip around New Zealand.**
 
-Current project version: **1.0.76 (build code 77)**. The original code is preserved
+Current project version: **1.0.77 (build code 78)**. The original code is preserved
 at Git tag `v1.0.0`. For each future change or commit, run
 `python3 tools/version.py bump`, update [the changelog](CHANGELOG.md), and run
 `python3 tools/version.py check` before committing. See [the version policy](AGENTS.md).
@@ -33,7 +33,7 @@ The Tide page selects the nearest supported tide station from your location. You
 - **Fishing rules:** Choose the Fisheries New Zealand area that applies to your location (it's suggested from your position). Each species shows an illustration, its minimum size and daily limit as big figures with a size bar, and the area's combined finfish limit; tap a species for larger pictures (juvenile and adult, male and female where they differ) and every rule. **Check my catch** compares a length with the minimum. Species with no limit of their own in an area, such as John dory, mako or octopus, are listed with the combined finfish limit or MPI's "All others (combined)" shellfish limit they count toward. Every area's rules and the pictures are kept on the phone and updated from the Fishdays - NZ service when they change, so the page works on a boat with no signal; the app also carries a copy for a first launch with no signal. Open the [official area page](https://www.mpi.govt.nz/fishing-aquaculture/recreational-fishing/fishing-rules/) for complete limits and local restrictions.
 - **Weather:** Open the Weather tab next to Tide for current conditions, an hourly outlook, and up to 16 forecast days with familiar weather icons and plain labels. Choose your current location or a named New Zealand coastal location, save preferred locations, and swipe between them. Forecasts use Open-Meteo; check official marine warnings for the place you plan to fish.
 - **Account:** Create an account in the mobile app with an 8-character minimum password entered twice, or use Google or Apple once sign-in is configured. Manage your profile, connect sign-in options, turn on **Sync trips and catch log** to use them on your other devices (photos stay on the phone), and send feedback. The website is for administrators. [Sign-in setup](docs/account-sign-in.md).
-- **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information. Each account has five identifications per day, shared across devices and reset at midnight New Zealand time. Failed requests do not use the allowance. The app asks before each upload unless you tick “Don’t ask me again” (undo it in Settings → Terms & privacy), and **Report this AI result** flags a wrong or offensive suggestion.
+- **Fish photo identification:** Sign in, then take or choose a photo to get a suggested species and related rule information. Each account has five identifications per day, shared across devices and reset at midnight New Zealand time. Failed requests do not use the allowance. The app asks before each upload, naming the AI services in use (set in the admin CMS), unless you tick “Don’t ask me again” (undo it in Settings → Terms & privacy; a change of AI services asks again), and **Report this AI result** flags a wrong or offensive suggestion.
 
 ## Good to know
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.77 — 2026-11-11 (build code 78)
+
+- **Photo consent names the AI services from the CMS.** New public `GET /v1/fish/providers` gives the main and backup
+  services' names, whether they train on photos, whether any is in China, and a version. Android and iPhone fetch it at
+  launch, keep the last answer for use offline, and build the consent dialog and the Terms & privacy text from it, now:
+  "…to an AI service that suggests a fish species: OpenAI, or Cloudflare's own AI if OpenAI is unavailable… neither
+  service uses it to train AI." "Don't ask me again" is kept for that version only, so a change of AI services shows
+  the consent again. The website privacy policy (updated 11 November 2026) lists the services in use and what each does
+  with photos, generated from the CMS setup, and says the app asks again when they change. Translated into all four
+  languages; the Play listing text (all five languages) now says photos go "to an AI service". Needs an API deploy and
+  new store builds.
+
 ## 1.0.76 — 2026-11-11 (build code 77)
 
 - **Free built-in fish identification with Cloudflare Workers AI.** New provider "Cloudflare Workers AI (built in)" on

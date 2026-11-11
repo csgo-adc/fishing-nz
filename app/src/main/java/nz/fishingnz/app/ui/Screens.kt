@@ -737,7 +737,8 @@ private fun showCustomDateRange(context: android.content.Context, selectedStart:
         AlertDialog(onDismissRequest = { photoAwaitingConsent = null },
             title = { Text("Send this photo for AI identification?") },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Your selected photo will be sent through the Fishdays - NZ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
+                val providers by nz.fishingnz.app.data.FishProviders.state.collectAsState()
+                Text(nz.fishingnz.app.model.PhotoConsentText.dialog(providers))
                 Text("Avoid photos containing people or private information. You can cancel and keep using the other tools. Details: More → Settings → Terms & privacy.")
                 TextButton(onClick = { uriHandler.openUri(nz.fishingnz.app.data.PrivacyLinks.policy) }) { Text("Privacy policy") }
                 Row(Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.Checkbox) { dontAskAgain = !dontAskAgain },

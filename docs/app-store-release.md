@@ -18,12 +18,12 @@ Six real signed-out iPhone 17 Pro Max screenshots (1320×2868, no transparency) 
 | --- | --- |
 | Built with Xcode 26+ and an iOS 26+ SDK ([required since 28 April 2026](https://developer.apple.com/news/upcoming-requirements/)) | Done. Xcode 27.0 / iOS 27.0 SDK, deployment target iOS 17. Simulator, unsigned Release device build, 101 fishing-window and 37 place-condition regression checks, 61 API tests and 21 tool tests pass. |
 | Account deletion in the app ([5.1.1(v)](https://developer.apple.com/support/offering-account-deletion-in-your-app/)) | Done in 1.0.11: More → Account → Delete account, with a permanent-deletion confirmation. Production deletion with a disposable account has not been exercised. |
-| Permission before sending a photo to third-party AI ([5.1.2(i)](https://developer.apple.com/app-store/review/guidelines/)) | Done in 1.0.15: a sheet names Cloudflare and OpenAI before the upload. “Don’t ask me again” is unticked by default, is kept only when the person taps **Agree and upload**, is cleared on sign-out and account deletion, and can be switched back on in More → Settings → Terms & privacy. Android has the same option from 1.0.22. From 1.0.22 a signed-in person can also **Report this AI result**, sent as feedback without the photo. |
+| Permission before sending a photo to third-party AI ([5.1.2(i)](https://developer.apple.com/app-store/review/guidelines/)) | Done in 1.0.15: a sheet names Cloudflare and the AI services before the upload (from 1.0.77 the names come from the CMS setup via `/v1/fish/providers`, and a change of services asks again). “Don’t ask me again” is unticked by default, is kept only when the person taps **Agree and upload**, is cleared on sign-out and account deletion, and can be switched back on in More → Settings → Terms & privacy. Android has the same option from 1.0.22. From 1.0.22 a signed-in person can also **Report this AI result**, sent as feedback without the photo. |
 | Login services ([4.8](https://developer.apple.com/app-store/review/guidelines/)) | Done by guard: Google sign-in is offered only when Sign in with Apple is also available. From 1.0.30 the iPhone uses Apple's native Sign in with Apple sheet and button. It appears once the API has the Apple key (`"apple_native": true`, see [account-sign-in.md](account-sign-in.md#apple)); until then the iPhone app shows **email and password only** and no “coming soon” text. Deleting an account revokes its Apple tokens (5.1.1(v)). |
 | Privacy manifest and required-reason APIs | Done in 1.0.15: `PrivacyInfo.xcprivacy` declares no tracking, the collected data below, and `UserDefaults` (reason `CA92.1`). It is packaged in the app. |
 | Export compliance | Done in 1.0.15: `ITSAppUsesNonExemptEncryption = NO` (the app only uses the operating system's HTTPS and Keychain), so App Store Connect will not ask on every build. |
 | Version and build number | Done. `Info.plist` now reads `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`, which `tools/version.py` keeps in step with `version.properties`. Every upload needs a higher build code. |
-| Privacy policy link in the app | Done. Terms & privacy links to `https://fishing.fishnz.space/privacy`, names OpenAI, Open-Meteo, Cloudflare and the publisher contact. |
+| Privacy policy link in the app | Done. Terms & privacy links to `https://fishing.fishnz.space/privacy`, names the AI services in use (generated from the CMS setup), Open-Meteo, Cloudflare and the publisher contact. |
 | Icon | 1024×1024 RGB with no alpha channel. Brand-rights question: see “Open risks”. |
 | Permissions | Location (when in use), camera and write-only calendar, each with a purpose string. Gallery uses the system photo picker, so there is no photo-library permission. No tracking, no advertising ID, no background modes. |
 | Government-information disclaimer | Present in the app and the listing copy below. |
@@ -141,7 +141,7 @@ Use **TestFlight** first: internal testers (people in your App Store Connect tea
 >
 > Explore a map of named fishing spots, check conditions for a place, compare hourly and daily weather, and keep a shortlist while you plan. See official LINZ high and low tide predictions, then slide along the estimated tide curve between those events.
 >
-> Choose an MPI fishing area and search species for rule summaries, with links to the official information. If you create an account you can also take or select a photo for an AI fish-species suggestion. You choose whether to send each photo to OpenAI through the Fishdays - NZ service, and results include uncertainty guidance.
+> Choose an MPI fishing area and search species for rule summaries, with links to the official information. If you create an account you can also take or select a photo for an AI fish-species suggestion. You choose whether to send each photo to an AI service through the Fishdays - NZ service, and results include uncertainty guidance.
 >
 > Location and camera access are optional: you can choose places manually and use the system photo picker. Planning, maps, tides, weather and rules work without an account. Anonymous usage statistics are shared after a one-time notice and can be turned off in Settings. You can delete your account inside the app.
 >
@@ -165,7 +165,7 @@ Use **TestFlight** first: internal testers (people in your App Store Connect tea
 | Usage data → Product interaction | Yes, once signed in | Analytics |
 | Diagnostics → Other diagnostic data (device model, iOS and app version, language, time zone; Apple lists no closer category) | Yes, once signed in | Analytics |
 | Location → Precise location (coordinates sent to Open-Meteo for forecasts) | No | App functionality |
-| User content → Photos or videos (fish photo to OpenAI via Cloudflare) | Yes | App functionality |
+| User content → Photos or videos (fish photo via Cloudflare to the AI services set in the CMS: OpenAI, Cloudflare Workers AI as backup) | Yes | App functionality |
 | User content → Customer support (feedback) | Yes | App functionality |
 
 Usage statistics are on by default (a one-time notice from 1.0.11 was removed in 1.0.26; the Settings switch still turns them off), which is why Device ID and Product interaction are declared. Re-check these answers whenever providers or analytics behaviour change.

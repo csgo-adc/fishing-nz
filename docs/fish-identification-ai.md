@@ -79,10 +79,21 @@ npx wrangler secret put SETTINGS_ENCRYPTION_KEY   # recommended, before saving k
 
 ## Privacy
 
-The photo consent screens in both apps and the privacy policy (`server/fishial-proxy/src/privacy.ts`) say photos go to
-OpenAI. Photos sent to a Chinese provider are handled under Chinese law, often on servers in China; under the New Zealand
-Privacy Act (IPP 12, disclosure overseas) the privacy policy and consent have to say so before one is used. Before making another provider the main one or a backup, update those texts and the App Store App Privacy and
-Google Play Data safety answers to name it. The CMS shows this reminder whenever a provider other than OpenAI is chosen.
+The apps and the privacy policy name the AI services from the CMS setup (1.0.77), so they stay right when the providers
+change:
+
+- `GET /v1/fish/providers` (public, cached 5 minutes) returns the main and backup names people read (for example
+  "OpenAI", "Cloudflare's own AI"), `no_training` (every provider says it doesn't train on the photos), `china` (any
+  Chinese provider) and a `version` that changes with any of these but not with a model change.
+- Both apps fetch it at launch and keep the last answer (`FishProviders.kt` / `FishProviders` in FishingRepository.swift);
+  before the first answer they assume OpenAI with Cloudflare Workers AI as backup. The consent dialog and Terms &
+  privacy are built from it (`PhotoConsentText.kt` / `.swift`, tested on both sides with the same wording). "Don't ask
+  me again" is kept with the version it was given for, so a change of services shows the consent again.
+- `/privacy` lists the services in use with what each does with photos, from `publicFacts` in `src/fish-ai/index.ts`
+  (OpenAI, Cloudflare Workers AI, Anthropic, Google Gemini, a named OpenAI-compatible host, and the Chinese providers,
+  which add that photos may be processed in China under Chinese law).
+- Before choosing a provider whose facts differ (Gemini's free tier may train; Chinese providers), check its terms and,
+  if needed, the App Store App Privacy and Google Play Data safety answers.
 
 ## Deploying
 

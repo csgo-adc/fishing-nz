@@ -37,7 +37,7 @@ CATCH LOG AND TRIPS
 Log each catch with its length, a photo and notes. The app checks the length against your area's minimum and records the tide, wind, waves and moon at the time. Save spots and plan trips: the forecast, tides and rules are saved for use offline, the app checks the forecast again before you go, and Tell someone shares your plan and back-by time.
 
 WHAT FISH IS THIS?
-Signed in, take or choose a photo for an AI species suggestion with the matching rules, up to five a day. You choose whether to send each photo, which goes to OpenAI through the Fishdays - NZ service. Results include uncertainty guidance and can be reported in the app.
+Signed in, take or choose a photo for an AI species suggestion with the matching rules, up to five a day. You choose whether to send each photo, which goes to an AI service through the Fishdays - NZ service. Results include uncertainty guidance and can be reported in the app.
 
 WEATHER
 Current conditions, an hourly outlook and up to 16 days of forecasts for your location or saved places.

@@ -88,6 +88,19 @@ class TranslatorTest {
         assertEquals(true, real.translate(nz.fishingnz.app.data.AppShare.text()).endsWith("\nAndroid：https://play.google.com/store/apps/details?id=nz.fishingnz.app"))
     }
 
+    @Test fun `the photo consent reads fully translated, with the service names kept`() {
+        val catalogue = org.json.JSONObject(java.io.File("../i18n/strings.zh-Hans.json").readText())
+        val real = Translator("zh-Hans", catalogue.keys().asSequence().associateWith { catalogue.getString(it) })
+        assertEquals("您选择的照片将通过 Fishdays - NZ 在 Cloudflare 上的服务发送到推荐鱼种的 AI 服务：OpenAI；如果 OpenAI 不可用，则使用 Cloudflare 自有 AI。" +
+            "原始照片的元数据会被移除。我们不会将照片保存在您的账户中，两项服务也都不会用它来训练 AI。安全记录可能保留最多 30 天，或在法律要求时保留更久。",
+            real.translate(PhotoConsentText.dialog(FishProviderInfo.DEFAULT)))
+        val card = real.translate(PhotoConsentText.privacyCard(FishProviderInfo.DEFAULT))
+        assertEquals(true, card.contains("目前为 OpenAI，并以 Cloudflare 自有 AI 作为备用"))
+        assertEquals(false, Regex("[a-z]{4,}").containsMatchIn(card.replace("Cloudflare", "").replace("OpenAI", "")))
+        val china = FishProviderInfo(listOf("OpenAI", "Alibaba Cloud (Qwen)"), noTraining = false, china = true, version = "a1b2c3d4")
+        assertEquals(true, real.translate(PhotoConsentText.dialog(china)).contains("照片可能会在中国处理，并受中国法律管辖。"))
+    }
+
     @Test fun `phone languages map to the catalogues`() {
         assertEquals("zh-Hans", Translator.languageFor(listOf("zh-CN")))
         assertEquals("zh-Hans", Translator.languageFor(listOf("zh-Hans-NZ")))

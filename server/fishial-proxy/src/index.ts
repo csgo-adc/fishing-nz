@@ -13,7 +13,7 @@ import { deleteDeviceAnalytics, ingestAnalytics } from "./analytics";
 import { handleAdminAnalytics } from "./admin-analytics";
 import { recordApiUsage } from "./usage";
 import { handleAppVersionRoute } from "./app-version";
-import { handleFishAiAdmin, identificationFailure, identifyFish, type FishAiEnv } from "./fish-ai";
+import { handleFishAiAdmin, handlePublicProviders, identificationFailure, identifyFish, type FishAiEnv } from "./fish-ai";
 import type { FishIdentification } from "./fish-ai/shared";
 import { handleRulesAdmin, sendRulesReminders, type RulesAreas } from "./rules-admin";
 
@@ -520,6 +520,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (pathname === "/__health") return json({ ok: true, version: packageInfo.version });
+    const providersResponse = await handlePublicProviders(request, env);
+    if (providersResponse) return providersResponse;
     const privacyResponse = await handlePrivacyRoute(request, env);
     if (privacyResponse) return privacyResponse;
     const versionResponse = handleAppVersionRoute(request, env);

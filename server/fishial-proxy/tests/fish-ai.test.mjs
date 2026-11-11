@@ -18,7 +18,7 @@ test("fish identification providers, backup and CMS settings, with real D1", { t
   const mf = new Miniflare({
     modules: true, script: await bundleWorker(), compatibilityDate: "2024-09-23",
     d1Databases: { RULES_DB: "fish-ai-tests" },
-    bindings: { ACCOUNT_ADMIN_TOKEN: ADMIN, OPENAI_API_KEY: "sk-secret-openai-1234" },
+    bindings: { ACCOUNT_ADMIN_TOKEN: ADMIN, OPENAI_API_KEY: "sk-secret-openai-1234", PUBLIC_DEVELOPER_NAME: "Tristan", PUBLIC_SUPPORT_EMAIL: "support@example.com" },
     outboundService: async (request) => {
       const body = request.method === "POST" ? await request.text() : "";
       const entry = { url: request.url, headers: Object.fromEntries(request.headers), body: body ? JSON.parse(body) : null };
@@ -52,6 +52,17 @@ test("fish identification providers, backup and CMS settings, with real D1", { t
     await t.test("admin routes need the admin token", async () => {
       const response = await mf.dispatchFetch("https://fishing.test/v1/admin/fish-ai");
       assert.equal(response.status, 401);
+    });
+
+    await t.test("the public provider list starts as OpenAI alone, with no training and nothing in China", async () => {
+      const response = await mf.dispatchFetch("https://fishing.test/v1/fish/providers");
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(body.providers, [{ id: "openai", name: "OpenAI", role: "main" }]);
+      assert.equal(body.no_training, true);
+      assert.equal(body.china, false);
+      assert.match(body.version, /^[0-9a-f]{16}$/);
+      assert.equal(body.policy, undefined);
     });
 
     await t.test("with nothing saved it uses OpenAI gpt-5.6-luna and the Worker secret", async () => {
@@ -243,6 +254,28 @@ test("fish identification providers, backup and CMS settings, with real D1", { t
       const openai = await provider("openai");
       assert.equal(openai.key.source, "secret");
       assert.match(openai.key.problem, /Enter the key again/);
+    });
+    await t.test("the provider list, its version and the privacy policy follow the CMS setup", async () => {
+      const list = async () => (await mf.dispatchFetch("https://fishing.test/v1/fish/providers")).json();
+      await admin("", "PUT", { primary: { provider: "openai", model: "gpt-5.6-luna" }, backup: { provider: "workers_ai", model: "@cf/meta/llama-4-scout-17b-16e-instruct" } });
+      const withBackup = await list();
+      assert.deepEqual(withBackup.providers.map((row) => [row.name, row.role]), [["OpenAI", "main"], ["Cloudflare's own AI", "backup"]]);
+      assert.equal(withBackup.no_training, true);
+      let html = await (await mf.dispatchFetch("https://fishing.test/privacy")).text();
+      assert.match(html, /We currently use OpenAI, and Cloudflare&#39;s own AI when OpenAI is unavailable/);
+      assert.match(html, /Cloudflare Workers AI \(AI models run by Cloudflare/);
+      assert.match(html, /the app asks for your agreement again/);
+      await admin("", "PUT", { primary: { provider: "openai", model: "gpt-5.6-luna" }, backup: { provider: "qwen", model: "qwen-vl-max" } });
+      const withChina = await list();
+      assert.equal(withChina.china, true);
+      assert.equal(withChina.no_training, false);
+      assert.equal(withChina.providers[1].name, "Alibaba Cloud (Qwen)");
+      assert.notEqual(withChina.version, withBackup.version);
+      html = await (await mf.dispatchFetch("https://fishing.test/privacy")).text();
+      assert.match(html, /Alibaba Cloud \(Qwen\), a company in China: photos may be processed in China and are subject to Chinese law/);
+      // A model change alone keeps the version, so people are not asked again for nothing.
+      await admin("", "PUT", { primary: { provider: "openai", model: "gpt-5.6-luna" }, backup: { provider: "qwen", model: "qwen-vl-plus" } });
+      assert.equal((await list()).version, withChina.version);
     });
   } finally {
     await mf.dispose();

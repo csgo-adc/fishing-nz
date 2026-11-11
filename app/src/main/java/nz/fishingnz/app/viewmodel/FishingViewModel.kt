@@ -186,6 +186,8 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
     init {
         // Every area's rules and the species pictures stay on the phone for use with no signal.
         viewModelScope.launch { nz.fishingnz.app.data.RulesSync.sync() }
+        // The AI services the photo consent names, as set in the CMS.
+        viewModelScope.launch { nz.fishingnz.app.data.FishProviders.refresh() }
         val (saved, active) = TripStore.load()
         _state.value = _state.value.copy(catches = CatchLogStore.load(), savedRecommendations = saved,
             savedSpots = saved.map(::recommendationKey).toSet(), activeTrip = active,

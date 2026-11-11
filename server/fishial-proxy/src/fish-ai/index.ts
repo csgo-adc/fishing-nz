@@ -362,3 +362,76 @@ export async function handleFishAiAdmin(request: Request, env: FishAiEnv, pathna
   }
   return null;
 }
+
+// --- What the apps and the privacy policy say about the providers (docs/fish-identification-ai.md) -----------------
+
+type PublicFacts = {
+  /** The name people read in the consent dialog: "OpenAI", "Cloudflare's own AI". */
+  name: string;
+  /** True when the provider says it does not train on these requests. */
+  noTraining: boolean;
+  /** A Chinese company, whose processing may be in China. */
+  china: boolean;
+  /** The privacy policy's sentence about this provider. */
+  policy: string;
+};
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname; } catch { return "an AI service"; }
+}
+
+function publicFacts(slot: SlotConfig): PublicFacts {
+  const china = (company: string, product: string): PublicFacts => ({
+    name: `${company} (${product})`, noTraining: false, china: true,
+    policy: `${company} (${product}), a company in China: photos may be processed in China and are subject to Chinese law; its own terms apply.`,
+  });
+  switch (slot.provider) {
+    case "openai": return { name: "OpenAI", noTraining: true, china: false,
+      policy: "OpenAI (United States): storage of the request is turned off and OpenAI does not use API data to train its models; abuse-monitoring records can remain for up to 30 days, or longer where required for legal or safety reasons." };
+    case "workers_ai": return { name: "Cloudflare's own AI", noTraining: true, china: false,
+      policy: "Cloudflare Workers AI (AI models run by Cloudflare, which already hosts our service): Cloudflare does not use these photos to train models or to improve its services." };
+    case "anthropic": return { name: "Anthropic", noTraining: true, china: false,
+      policy: "Anthropic (United States): Anthropic does not use API data to train its models; it may keep requests for a limited time for safety and legal reasons." };
+    case "gemini": return { name: "Google Gemini", noTraining: false, china: false,
+      policy: "Google Gemini (United States): Google's terms for the plan we use apply; on Google's free tier, Google may use photos to improve its products." };
+    case "openai_compatible": {
+      const host = hostOf(slot.base_url);
+      return { name: host, noTraining: false, china: false, policy: `${host}, a service that runs AI models for us: its own terms apply.` };
+    }
+    case "qwen": return china("Alibaba Cloud", "Qwen");
+    case "glm": return china("Zhipu AI", "GLM");
+    case "kimi": return china("Moonshot AI", "Kimi");
+    case "doubao": return china("ByteDance", "Doubao");
+    case "deepseek": return china("DeepSeek", "DeepSeek");
+  }
+}
+
+export type PublicProviders = {
+  providers: Array<{ id: ProviderId; name: string; role: "main" | "backup" }>;
+  no_training: boolean;
+  china: boolean;
+  /** Changes whenever the names or what they mean for photos change; the apps ask for consent again then. */
+  version: string;
+  policy: string[];
+};
+
+/** The providers in use, as the apps' consent text and the privacy policy describe them. */
+export async function publicProviders(env: FishAiEnv): Promise<PublicProviders> {
+  const config = await loadConfig(env);
+  const slots: Array<[SlotConfig, "main" | "backup"]> = [[config.primary, "main"]];
+  if (config.backup) slots.push([config.backup, "backup"]);
+  const facts = slots.map(([slot, role]) => ({ slot, role, ...publicFacts(slot) }));
+  const providers = facts.map(({ slot, role, name }) => ({ id: slot.provider, name, role }));
+  const noTraining = facts.every((fact) => fact.noTraining);
+  const inChina = facts.some((fact) => fact.china);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([providers, noTraining, inChina])));
+  const version = [...new Uint8Array(digest)].slice(0, 8).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return { providers, no_training: noTraining, china: inChina, version, policy: facts.map((fact) => fact.policy) };
+}
+
+/** `GET /v1/fish/providers`: public, cached for 5 minutes. */
+export async function handlePublicProviders(request: Request, env: FishAiEnv): Promise<Response | null> {
+  if (new URL(request.url).pathname !== "/v1/fish/providers" || request.method !== "GET") return null;
+  const { policy: _policy, ...answer } = await publicProviders(env);
+  return Response.json(answer, { headers: { "cache-control": "public, max-age=300", "access-control-allow-origin": "*" } });
+}

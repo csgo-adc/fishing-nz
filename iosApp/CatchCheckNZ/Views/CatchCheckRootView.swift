@@ -348,6 +348,7 @@ private struct TermsPrivacyView: View {
     @EnvironmentObject private var vm: FishingViewModel
     @State private var analyticsOn = AnalyticsPreferences.isEnabled
     @State private var photoConsentRemembered = PhotoUploadConsent.isRemembered
+    @ObservedObject private var fishProviders = FishProviders.shared
 
     private var privacyPolicyURL: URL? {
         let base = (Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space"
@@ -375,7 +376,7 @@ private struct TermsPrivacyView: View {
                 Card {
                     Text("Privacy").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
                     Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
-                    Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
+                    Text(PhotoConsentText.privacyCard(fishProviders.info))
                     Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device. You can delete your account from the Account page.")
                     Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
                     Text("Your catch log, with its photos and positions, stays on this phone unless you turn on sync on the Account page; photos never sync. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
@@ -392,7 +393,7 @@ private struct TermsPrivacyView: View {
                     if photoConsentRemembered {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Fish photos").fontWeight(.semibold)
-                            Text("You chose not to be asked before a photo is sent to OpenAI for identification.")
+                            Text(PhotoConsentText.remembered)
                                 .font(.footnote).foregroundStyle(.secondary)
                             Button("Ask me before sending photos again") {
                                 PhotoUploadConsent.isRemembered = false
@@ -1195,6 +1196,7 @@ private struct MoreOptions: View {
 /// kept when the person agrees; cancelling never stores it.
 private struct PhotoUploadConsentSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var fishProviders = FishProviders.shared
     @State private var dontAskAgain = false
     let onAgree: (_ dontAskAgain: Bool) -> Void
 
@@ -1202,7 +1204,7 @@ private struct PhotoUploadConsentSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Send this photo for AI identification?").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
-                Text("Your selected photo will be sent through the Fishdays - NZ Cloudflare service to OpenAI to suggest a fish species. Original photo metadata is removed. We do not save the photo in your account. OpenAI response storage is disabled, but security records can remain for up to 30 days or longer where legally required.")
+                Text(PhotoConsentText.dialog(fishProviders.info))
                 Text("Avoid photos containing people or private information. You can cancel and keep using the other tools. Details: More → Settings → Terms & privacy.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 Toggle(isOn: $dontAskAgain) {

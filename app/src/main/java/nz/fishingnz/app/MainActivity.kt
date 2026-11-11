@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
         nz.fishingnz.app.data.RulesSync.initialize(applicationContext)
         TripStore.initialize(applicationContext)
         nz.fishingnz.app.ui.AppTour.initialize(applicationContext)
+        nz.fishingnz.app.data.FishProviders.initialize(applicationContext)
         TripReminders.initialize(applicationContext)
         SyncStore.initialize(applicationContext)
         TideWidgetStation.initialize(applicationContext)

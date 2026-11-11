@@ -528,14 +528,54 @@ enum AnalyticsPayload {
     }
 }
 
-/// Whether the person ticked "Don't ask me again" when agreeing to send a photo to OpenAI. It is only ever switched on from
-/// the consent sheet, which shows the full disclosure, and it is cleared on sign-out and account deletion.
+/// Whether the person ticked "Don't ask me again" when agreeing to send a photo for AI identification, for the AI services
+/// as they are now (`FishProviders`): a new provider version asks again. It is only ever switched on from the consent sheet,
+/// which shows the full disclosure, and it is cleared on sign-out and account deletion.
 enum PhotoUploadConsent {
     private static let rememberedKey = "photo_upload_consent_remembered"
+    private static let versionKey = "photo_upload_consent_version"
 
     static var isRemembered: Bool {
-        get { UserDefaults.standard.bool(forKey: rememberedKey) }
-        set { UserDefaults.standard.set(newValue, forKey: rememberedKey) }
+        get {
+            UserDefaults.standard.bool(forKey: rememberedKey)
+                && UserDefaults.standard.string(forKey: versionKey) == FishProviders.currentVersion
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: rememberedKey)
+            if newValue { UserDefaults.standard.set(FishProviders.currentVersion, forKey: versionKey) }
+            else { UserDefaults.standard.removeObject(forKey: versionKey) }
+        }
+    }
+}
+
+/// The AI services set in the CMS, fetched from the Fishdays - NZ service and kept on the phone, so the photo consent names
+/// the services photos really go to, even with no signal. Android has `FishProviders.kt`.
+@MainActor final class FishProviders: ObservableObject {
+    static let shared = FishProviders()
+    nonisolated private static let savedKey = "fish_providers_last_answer"
+    @Published private(set) var info: FishProviderInfo
+
+    /// The version the consent is checked against; readable from anywhere.
+    nonisolated static var currentVersion: String {
+        UserDefaults.standard.data(forKey: savedKey).flatMap(PhotoConsentText.parse)?.version ?? FishProviderInfo.default.version
+    }
+
+    private init() {
+        info = UserDefaults.standard.data(forKey: Self.savedKey).flatMap(PhotoConsentText.parse) ?? .default
+    }
+
+    /// Asks the service for the current list; keeps the last one when it can't be reached.
+    func refresh() async {
+        let base = ((Bundle.main.object(forInfoDictionaryKey: "FishIdentificationAPIBaseURL") as? String) ?? "https://fishing.fishnz.space")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: base + "/v1/fish/providers") else { return }
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200, data.count < 8_000,
+              let answer = PhotoConsentText.parse(data) else { return }
+        UserDefaults.standard.set(data, forKey: Self.savedKey)
+        info = answer
     }
 }
 

@@ -32,6 +32,8 @@ struct CatchCheckNZApp: App {
                     // Keeps a booked trip check's text up to date with the latest forecast.
                     if phase == .active {
                         language.refresh()
+                        // The AI services the photo consent names, as set in the CMS.
+                        Task { await FishProviders.shared.refresh() }
                         // Windows found over an hour ago are refreshed (WindowCache).
                         viewModel.refreshWindowsIfOld()
                         Task { await TripReminders.refresh(force: false) }

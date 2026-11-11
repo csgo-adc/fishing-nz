@@ -369,7 +369,8 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Privacy", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("If you allow location access, the app uses your position to centre the map and find nearby information. You can change location permission in your phone’s settings.")
-                Text("A photo is uploaded only after you agree. It passes through Cloudflare to OpenAI for an AI fish suggestion. Original photo metadata is removed. OpenAI response storage is disabled; provider security records can remain for up to 30 days, or longer where legally required.")
+                val providers by nz.fishingnz.app.data.FishProviders.state.collectAsState()
+                Text(nz.fishingnz.app.model.PhotoConsentText.privacyCard(providers))
                 Text("If you sign in or send feedback, your account details and feedback are sent to the Fishdays - NZ service. Signing out removes the saved session from this device.")
                 Text("Weather requests send coordinates to Open-Meteo. Map and tide providers receive connection information and the places you request. You can choose locations manually.")
                 Text("Your catch log, with its photos and positions, stays on this phone unless you turn on sync on the Account page; photos never sync. Saving a catch sends its place and time to Open-Meteo for the weather then; tides come from LINZ.")
@@ -397,7 +398,7 @@ private fun TermsPrivacyScreen(modifier: Modifier) {
                 }
                 if (photoConsentRemembered) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Fish photos", fontWeight = FontWeight.SemiBold)
-                    Text("You chose not to be asked before a photo is sent to OpenAI for identification.", style = MaterialTheme.typography.bodySmall)
+                    Text(nz.fishingnz.app.model.PhotoConsentText.REMEMBERED, style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = {
                         PrivacyPreferences.setPhotoConsentRemembered(false)
                         photoConsentRemembered = false

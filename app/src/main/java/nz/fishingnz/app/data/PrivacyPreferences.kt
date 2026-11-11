@@ -15,6 +15,8 @@ object PrivacyPreferences {
     private const val MIGRATED_KEY = "consent_migrated"
     // "Don't ask me again" on the photo-upload consent. Only ever set from that dialog; cleared on sign-out and account deletion.
     private const val PHOTO_CONSENT_KEY = "photo_upload_consent_remembered"
+    // The AI services' version (FishProviders) when "Don't ask me again" was ticked; a new version asks again.
+    private const val PHOTO_CONSENT_VERSION_KEY = "photo_upload_consent_version"
     private var appContext: Context? = null
 
     private fun preferences(): SharedPreferences? = appContext?.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -83,10 +85,17 @@ object PrivacyPreferences {
         }
     }
 
-    fun photoConsentRemembered(): Boolean = preferences()?.getBoolean(PHOTO_CONSENT_KEY, false) ?: false
+    /** "Don't ask me again" was ticked for the AI services as they are now ([FishProviders]); any change asks again. */
+    fun photoConsentRemembered(): Boolean {
+        val preferences = preferences() ?: return false
+        return preferences.getBoolean(PHOTO_CONSENT_KEY, false) &&
+            preferences.getString(PHOTO_CONSENT_VERSION_KEY, null) == FishProviders.state.value.version
+    }
 
     fun setPhotoConsentRemembered(remembered: Boolean) {
-        preferences()?.edit()?.putBoolean(PHOTO_CONSENT_KEY, remembered)?.apply()
+        preferences()?.edit()?.putBoolean(PHOTO_CONSENT_KEY, remembered)
+            ?.apply { if (remembered) putString(PHOTO_CONSENT_VERSION_KEY, FishProviders.state.value.version) else remove(PHOTO_CONSENT_VERSION_KEY) }
+            ?.apply()
     }
 
     fun clearFishPhotos() {
