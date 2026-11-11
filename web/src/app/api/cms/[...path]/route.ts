@@ -149,7 +149,7 @@ async function proxy(request: Request): Promise<Response> {
   }
 
   // Fish identification AI: the provider setup, write-only API keys and test runs (docs/fish-identification-ai.md).
-  const fishAi = path.match(/^\/fish-ai(?:\/(test)|\/keys\/(openai|anthropic|gemini|openai_compatible))?$/);
+  const fishAi = path.match(/^\/fish-ai(?:\/(test)|\/keys\/(openai|anthropic|gemini|openai_compatible|qwen|glm|kimi|doubao|deepseek))?$/);
   if (fishAi) {
     const [, test, keyProvider] = fishAi;
     if (!test && !keyProvider && (request.method === "GET" || request.method === "PUT")) {

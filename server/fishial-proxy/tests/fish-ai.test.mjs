@@ -167,6 +167,57 @@ test("fish identification providers, backup and CMS settings, with real D1", { t
       assert.equal((await (await admin("")).json()).config.primary.provider, "openai_compatible");
     });
 
+    // The account's real daily allowance (5) would otherwise run out across these checks.
+    const freshAllowance = () => db.prepare("DELETE FROM account_identification_usage").run();
+
+    await t.test("Chinese providers: Qwen on its default endpoint in JSON object mode, keys saved in the CMS", async () => {
+      await freshAllowance();
+      const overview = await (await admin("")).json();
+      const qwenInfo = overview.providers.find((row) => row.id === "qwen");
+      assert.equal(qwenInfo.group, "china");
+      assert.equal(qwenInfo.default_base_url, "https://dashscope-intl.aliyuncs.com/compatible-mode/v1");
+      assert.ok(["glm", "kimi", "doubao", "deepseek"].every((id) => overview.providers.some((row) => row.id === id && row.group === "china")));
+      await admin("/keys/qwen", "PUT", { key: "sk-qwen-test-key-1111" });
+      // An empty base URL means the provider's default.
+      assert.equal((await admin("", "PUT", { primary: { provider: "qwen", model: "qwen-vl-max", base_url: "" } })).status, 200);
+      reply = () => Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(snapper) } }] });
+      const response = await identify();
+      assert.equal(response.status, 200);
+      const request = seen.at(-1);
+      assert.equal(request.url, "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions");
+      assert.equal(request.headers.authorization, "Bearer sk-qwen-test-key-1111");
+      assert.deepEqual(request.body.response_format, { type: "json_object" });
+      assert.equal(request.body.messages[0].content[0].type, "image_url");
+      assert.match(request.body.messages[0].content[1].text, /JSON object with these fields/);
+      // Another region is just another base URL.
+      await admin("", "PUT", { primary: { provider: "qwen", model: "qwen-vl-max", base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1" } });
+      await identify();
+      assert.equal(seen.at(-1).url, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
+    });
+
+    await t.test("a provider that rejects the JSON option is asked once more with the format in the prompt only", async () => {
+      await freshAllowance();
+      await admin("/keys/doubao", "PUT", { key: "ark-test-key-2222" });
+      await admin("", "PUT", { primary: { provider: "doubao", model: "doubao-seed-1-6-vision-250815" }, backup: null });
+      const before = seen.length;
+      reply = (request) => request.body.response_format
+        ? Response.json({ error: { code: "InvalidParameter", message: "The parameter `response_format` is not supported by this model" } }, { status: 400 })
+        : Response.json({ choices: [{ finish_reason: "stop", message: { content: "Here you go: " + JSON.stringify(snapper) } }] });
+      const response = await identify();
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).commonName, "Snapper");
+      const tries = seen.slice(before);
+      assert.equal(tries.length, 2);
+      assert.equal(tries[0].url, "https://ark.cn-beijing.volces.com/api/v3/chat/completions");
+      assert.equal(tries[1].body.response_format, undefined);
+      // A different 400, such as a model that can't read photos, is not retried.
+      const again = seen.length;
+      reply = () => Response.json({ error: { message: "This model does not support image input" } }, { status: 400 });
+      assert.equal((await identify()).status, 502);
+      assert.equal(seen.length - again, 1);
+      assert.match((await provider("doubao")).status.last_error, /does not support image/);
+    });
+
     await t.test("a saved key that can no longer be read says so and falls back to the Worker secret", async () => {
       await db.prepare("UPDATE app_settings SET value = ? WHERE key = 'fish_ai.key.openai'")
         .bind(JSON.stringify({ v: 1, iv: "AAAAAAAAAAAAAAAA", data: "AAAA", last4: "zzzz", secret: "admin" })).run();

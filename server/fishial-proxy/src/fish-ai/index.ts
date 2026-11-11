@@ -19,14 +19,55 @@ export interface FishAiEnv {
   ACCOUNT_ADMIN_TOKEN?: string;
 }
 
-type ProviderInfo = { label: string; defaultModel: string; secret: "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" | "GEMINI_API_KEY" | null; baseUrl: boolean;
-  run: (call: ProviderCall) => Promise<FishIdentification> };
+type ProviderInfo = {
+  label: string;
+  /** "china" for the Chinese providers, listed together in the CMS. */
+  group: "international" | "china";
+  defaultModel: string;
+  secret: "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" | "GEMINI_API_KEY" | null;
+  /** True when the CMS shows a base URL field; `defaultBaseUrl` fills it, and an empty field uses it. */
+  baseUrl: boolean;
+  defaultBaseUrl?: string;
+  /** Other regions' addresses or model notes, shown under the field. */
+  hint?: string;
+  /** Where to create an API key. */
+  keyUrl?: string;
+  run: (call: ProviderCall) => Promise<FishIdentification>;
+};
+
+/** A Chinese provider reached through its OpenAI-compatible Chat Completions API (JSON object mode). */
+const chinese = (label: string, defaultModel: string, defaultBaseUrl: string, hint: string, keyUrl: string): ProviderInfo => ({
+  label, group: "china", defaultModel, secret: null, baseUrl: true, defaultBaseUrl, hint, keyUrl,
+  // Room for vision models that think before answering.
+  run: (call) => identifyWithOpenAICompatible(call, { label, jsonMode: "object", maxTokens: 4096 }),
+});
 
 export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
-  openai: { label: "OpenAI", defaultModel: "gpt-5.6-luna", secret: "OPENAI_API_KEY", baseUrl: false, run: identifyWithOpenAI },
-  anthropic: { label: "Anthropic Claude", defaultModel: "claude-opus-5-5", secret: "ANTHROPIC_API_KEY", baseUrl: false, run: identifyWithAnthropic },
-  gemini: { label: "Google Gemini", defaultModel: "gemini-flash-latest", secret: "GEMINI_API_KEY", baseUrl: false, run: identifyWithGemini },
-  openai_compatible: { label: "OpenAI-compatible service", defaultModel: "", secret: null, baseUrl: true, run: identifyWithOpenAICompatible },
+  openai: { label: "OpenAI", group: "international", defaultModel: "gpt-5.6-luna", secret: "OPENAI_API_KEY", baseUrl: false,
+    keyUrl: "https://platform.openai.com/api-keys", run: identifyWithOpenAI },
+  anthropic: { label: "Anthropic Claude", group: "international", defaultModel: "claude-opus-5-5", secret: "ANTHROPIC_API_KEY", baseUrl: false,
+    keyUrl: "https://platform.claude.com/", run: identifyWithAnthropic },
+  gemini: { label: "Google Gemini", group: "international", defaultModel: "gemini-flash-latest", secret: "GEMINI_API_KEY", baseUrl: false,
+    keyUrl: "https://aistudio.google.com/apikey", run: identifyWithGemini },
+  openai_compatible: { label: "OpenAI-compatible service", group: "international", defaultModel: "", secret: null, baseUrl: true,
+    hint: "Any service with OpenAI's chat completions format, such as OpenRouter (https://openrouter.ai/api/v1).",
+    run: (call) => identifyWithOpenAICompatible(call) },
+  // Chinese providers. Model names change often: Test in the CMS checks the one typed in.
+  qwen: chinese("Alibaba Qwen (Model Studio)", "qwen-vl-max", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "International (Singapore). Mainland China: https://dashscope.aliyuncs.com/compatible-mode/v1. Vision models: qwen-vl-max, qwen-vl-plus, qwen3-vl-plus.",
+    "https://modelstudio.console.alibabacloud.com/"),
+  glm: chinese("Zhipu GLM (BigModel / Z.ai)", "glm-4.5v", "https://open.bigmodel.cn/api/paas/v4",
+    "Mainland China. International (Z.ai): https://api.z.ai/api/paas/v4. Vision models end in v, such as glm-4.5v.",
+    "https://open.bigmodel.cn/"),
+  kimi: chinese("Moonshot Kimi", "kimi-k2.6", "https://api.moonshot.ai/v1",
+    "International. Mainland China: https://api.moonshot.cn/v1. Use a model that accepts images, such as kimi-k2.6.",
+    "https://platform.moonshot.ai/"),
+  doubao: chinese("ByteDance Doubao (Volcano Engine Ark)", "doubao-seed-1-6-vision-250815", "https://ark.cn-beijing.volces.com/api/v3",
+    "Beijing region. Use a vision model ID or your Ark endpoint ID (ep-…) from the Ark console.",
+    "https://console.volcengine.com/ark"),
+  deepseek: chinese("DeepSeek", "deepseek-v4-flash-vision-exp", "https://api.deepseek.com",
+    "Only DeepSeek's vision models accept photos; text models such as deepseek-chat answer HTTP 400.",
+    "https://platform.deepseek.com/api_keys"),
 };
 
 export type SlotConfig = { provider: ProviderId; model: string; base_url: string };
@@ -74,7 +115,8 @@ function validSlot(value: unknown): SlotConfig | null {
   if (typeof slot.provider !== "string" || !(slot.provider in PROVIDERS)) return null;
   const provider = slot.provider as ProviderId;
   const model = typeof slot.model === "string" ? slot.model.trim() : "";
-  const baseUrl = typeof slot.base_url === "string" ? slot.base_url.trim().replace(/\/+$/, "") : "";
+  const typed = typeof slot.base_url === "string" ? slot.base_url.trim().replace(/\/+$/, "") : "";
+  const baseUrl = typed || PROVIDERS[provider].defaultBaseUrl || "";
   if (!/^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,119}$/.test(model)) return null;
   if (PROVIDERS[provider].baseUrl) {
     try {
@@ -175,7 +217,7 @@ async function runSlot(env: FishAiEnv, slot: SlotConfig, image: ArrayBuffer, con
     if (!slot.model) throw new ProviderError("not_configured", `Choose a ${info.label} model in the CMS.`);
     const { key, info: keyInfo } = await resolveKey(env, slot.provider);
     if (!key) throw new ProviderError("not_configured", keyInfo.problem || `No ${info.label} API key. Add one in the CMS (Fish ID).`);
-    const identification = await info.run({ model: slot.model, apiKey: key, baseUrl: slot.base_url, image, contentType });
+    const identification = await info.run({ model: slot.model, apiKey: key, baseUrl: slot.base_url || info.defaultBaseUrl || "", image, contentType });
     const latency = Date.now() - started;
     await recordResult(env, slot.provider, slot.model, { latency });
     return { identification, latency };
@@ -222,8 +264,10 @@ async function overview(env: FishAiEnv): Promise<Response> {
   const providers = await Promise.all((Object.keys(PROVIDERS) as ProviderId[]).map(async (id) => {
     const { info } = await resolveKey(env, id);
     const status = (await readSetting<ProviderStatus>(env.RULES_DB, statusName(id)))?.value ?? null;
-    return { id, label: PROVIDERS[id].label, default_model: PROVIDERS[id].defaultModel, needs_base_url: PROVIDERS[id].baseUrl,
-      secret_name: PROVIDERS[id].secret, key: info, status };
+    const provider = PROVIDERS[id];
+    return { id, label: provider.label, group: provider.group, default_model: provider.defaultModel, needs_base_url: provider.baseUrl,
+      default_base_url: provider.defaultBaseUrl ?? "", hint: provider.hint ?? "", key_url: provider.keyUrl ?? "",
+      secret_name: provider.secret, key: info, status };
   }));
   const since = new Date(Date.now() - 13 * 86_400_000).toISOString().slice(0, 10);
   const usage = await env.RULES_DB.prepare(`SELECT day, SUM(calls) AS calls, SUM(errors) AS errors FROM api_usage_daily

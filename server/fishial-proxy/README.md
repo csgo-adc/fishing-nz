@@ -20,7 +20,7 @@ A reset link lasts 1 hour, works once, ends every session and also confirms the 
 ## Fish identification
 
 `POST /v1/fish/identify` (signed in, a JPEG, PNG or WebP body) asks the AI provider chosen in the CMS → **Fish ID**:
-OpenAI, Anthropic Claude, Google Gemini or an OpenAI-compatible service, with an optional backup provider. API keys
+OpenAI, Anthropic Claude, Google Gemini, an OpenAI-compatible service, or a Chinese provider (Qwen, GLM, Kimi, Doubao, DeepSeek), with an optional backup provider. API keys
 entered in the CMS are stored encrypted; the Worker secrets are the fallback. Admin routes under `/v1/admin/fish-ai`.
 See [fish-identification-ai.md](../../docs/fish-identification-ai.md).
 

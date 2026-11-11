@@ -5,7 +5,7 @@ import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { AdminHeader, ApiError, DailyColumns, When, api, number, useNow } from "../cms";
 import styles from "./fish-id.module.css";
 
-type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible";
+type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible" | "qwen" | "glm" | "kimi" | "doubao" | "deepseek";
 type Slot = { provider: ProviderId; model: string; base_url: string };
 type FailureKind = "auth" | "quota" | "model" | "request" | "server" | "network" | "response" | "not_configured";
 type Status = {
@@ -13,7 +13,8 @@ type Status = {
   last_error: string | null; last_error_kind: FailureKind | null; successes: number; failures: number;
 };
 type Provider = {
-  id: ProviderId; label: string; default_model: string; needs_base_url: boolean; secret_name: string | null;
+  id: ProviderId; label: string; group: "international" | "china"; default_model: string; needs_base_url: boolean;
+  default_base_url: string; hint: string; key_url: string; secret_name: string | null;
   key: { source: "cms" | "secret" | null; last4: string | null; updated_at: string | null; problem: string | null };
   status: Status | null;
 };
@@ -183,13 +184,14 @@ export default function FishIdPage() {
                   <p>None. Add one so identification keeps working when the main provider is down or out of credit.</p>
                   <button type="button" onClick={() => {
                     const other = overview.providers.find((row) => row.id !== primary.provider && row.default_model && row.key.source) ?? overview.providers.find((row) => row.id !== primary.provider && row.default_model);
-                    if (other) setBackup({ provider: other.id, model: other.default_model, base_url: "" });
+                    if (other) setBackup({ provider: other.id, model: other.default_model, base_url: other.default_base_url });
                   }}>Add a backup</button>
                 </div>}
             </div>
             {[primary, backup].some((slot) => slot && slot.provider !== "openai") && <p className={styles.privacy} role="note">
               <b>Check the privacy texts first.</b> The photo consent screens in the apps and the privacy policy say photos go to OpenAI.
               Before {primary.provider !== "openai" ? "making" : "adding"} {[primary, backup].filter((slot) => slot && slot.provider !== "openai").map((slot) => providerById(slot!.provider)?.label).join(" or ")} {primary.provider !== "openai" ? "the main provider" : "as a backup"}, update those texts and the App Store and Google Play privacy answers to name it.
+              {[primary, backup].some((slot) => slot && providerById(slot.provider)?.group === "china") && " Photos sent to a Chinese provider are processed under Chinese law, often on servers in China; the privacy policy has to say so (New Zealand Privacy Act, overseas disclosure)."}
             </p>}
             <div className={styles.actions}>
               <button type="button" className={styles.primaryButton} disabled={!changed || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save providers"}</button>
@@ -204,7 +206,7 @@ export default function FishIdPage() {
               <table>
                 <thead><tr><th>Provider</th><th>Key in use</th><th>Last result</th><th>New key</th></tr></thead>
                 <tbody>{overview.providers.map((row) => <tr key={row.id}>
-                  <td><b>{row.label}</b><small>{row.secret_name ? `Worker secret: ${row.secret_name}` : "Key saved here only"}</small></td>
+                  <td><b>{row.label}</b><small>{row.group === "china" ? "China · " : ""}{row.secret_name ? `Worker secret: ${row.secret_name}` : "Key saved here only"}{row.key_url && <> · <a href={row.key_url} target="_blank" rel="noreferrer">get a key ↗</a></>}</small></td>
                   <td>
                     {row.key.source === "cms" && <><b>Saved here ••••{row.key.last4}</b><small>Added <When value={row.key.updated_at} now={now} /></small></>}
                     {row.key.source === "secret" && <><b>Worker secret ••••{row.key.last4}</b><small>{row.secret_name}</small></>}
@@ -256,20 +258,24 @@ function SlotEditor({ title, slot, providers, onChange, onRemove, test, onTest }
       <label htmlFor={`${id}-provider`}>Provider</label>
       <select id={`${id}-provider`} value={slot.provider} onChange={(event) => {
         const next = providers.find((row) => row.id === event.target.value);
-        if (next) onChange({ provider: next.id, model: next.default_model, base_url: "" });
+        if (next) onChange({ provider: next.id, model: next.default_model, base_url: next.default_base_url });
       }}>
-        {providers.map((row) => <option key={row.id} value={row.id}>{row.label}{row.key.source ? "" : " (no key)"}</option>)}
+        {(["international", "china"] as const).map((group) => <optgroup key={group} label={group === "china" ? "China" : "International"}>
+          {providers.filter((row) => row.group === group).map((row) => <option key={row.id} value={row.id}>{row.label}{row.key.source ? "" : " (no key)"}</option>)}
+        </optgroup>)}
       </select>
+      {info?.key_url && <a className={styles.keyLink} href={info.key_url} target="_blank" rel="noreferrer">Get an API key from {info.label} ↗</a>}
       <label htmlFor={`${id}-model`}>Model</label>
       <input id={`${id}-model`} value={slot.model} spellCheck={false} autoComplete="off" placeholder={info?.default_model || "vendor/model-name"}
         onChange={(event) => onChange({ ...slot, model: event.target.value.trim() })} />
       {info?.default_model && slot.model !== info.default_model && <button type="button" className={styles.linkButton} onClick={() => onChange({ ...slot, model: info.default_model })}>Use {info.default_model}</button>}
       {info?.needs_base_url && <>
         <label htmlFor={`${id}-base`}>Base URL</label>
-        <input id={`${id}-base`} value={slot.base_url} spellCheck={false} autoComplete="off" placeholder="https://openrouter.ai/api/v1"
+        <input id={`${id}-base`} value={slot.base_url} spellCheck={false} autoComplete="off" placeholder={info.default_base_url || "https://openrouter.ai/api/v1"}
           onChange={(event) => onChange({ ...slot, base_url: event.target.value.trim() })} />
-        <small>Any service with OpenAI&apos;s chat completions format, such as OpenRouter.</small>
+        {info.default_base_url && slot.base_url && slot.base_url !== info.default_base_url && <button type="button" className={styles.linkButton} onClick={() => onChange({ ...slot, base_url: info.default_base_url })}>Use {info.default_base_url}</button>}
       </>}
+      {info?.hint && <small>{info.hint}</small>}
       {!info?.key.source && <p className={styles.problem}>No API key for {info?.label}. Add one under API keys.</p>}
       <div className={styles.testRow}>
         <button type="button" disabled={test !== undefined && "running" in test} onClick={() => onTest()}>Test with sample picture</button>

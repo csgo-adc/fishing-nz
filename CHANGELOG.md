@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.75 — 2026-11-11 (build code 76)
+
+- **Chinese AI providers for fish identification.** The CMS Fish ID page lists five more providers under "China":
+  Alibaba Qwen (Model Studio), Zhipu GLM (BigModel / Z.ai), Moonshot Kimi, ByteDance Doubao (Volcano Engine Ark) and
+  DeepSeek, each with a default vision model, its endpoint filled in (editable for another region), a note on other
+  regions and models, and a link to get an API key. They use each provider's OpenAI-compatible API in JSON object mode;
+  when a provider rejects the JSON option, the request is retried once with the format in the prompt alone. Keys are
+  saved encrypted in the CMS. The CMS privacy reminder now also says photos sent to a Chinese provider are handled
+  under Chinese law, which the privacy policy has to disclose. See `docs/fish-identification-ai.md`. Needs an API and
+  CMS deploy. No app code changed.
+
 ## 1.0.74 — 2026-11-11 (build code 75)
 
 - **Release notes for 1.0.73 (74)** in `server/fishial-proxy/app-versions.json`, in all five languages: three lines

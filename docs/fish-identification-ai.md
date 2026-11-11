@@ -32,6 +32,21 @@ choose another provider.
   (`https://openrouter.ai/api/v1`). Each asks for the same JSON answer, so the apps see no difference.
 - Default models: `gpt-5.6-luna`, `claude-opus-5-5` (at effort `low`, with Anthropic's server-side refusal fallback),
   `gemini-flash-latest`. Any model name can be typed; it must accept photos.
+- **Chinese providers** (1.0.75), listed under "China" in the CMS. Each uses its OpenAI-compatible Chat Completions
+  API in JSON object mode, with the answer's fields spelled out in the prompt. The base URL is filled in and can be
+  changed for another region:
+
+  | Provider | Default model | Default base URL | Other region |
+  | --- | --- | --- | --- |
+  | Alibaba Qwen (Model Studio) | `qwen-vl-max` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | Mainland China `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+  | Zhipu GLM (BigModel / Z.ai) | `glm-4.5v` | `https://open.bigmodel.cn/api/paas/v4` | International `https://api.z.ai/api/paas/v4` |
+  | Moonshot Kimi | `kimi-k2.6` | `https://api.moonshot.ai/v1` | Mainland China `https://api.moonshot.cn/v1` |
+  | ByteDance Doubao (Volcano Engine Ark) | `doubao-seed-1-6-vision-250815` | `https://ark.cn-beijing.volces.com/api/v3` | Your Ark endpoint ID (`ep-…`) also works as the model |
+  | DeepSeek | `deepseek-v4-flash-vision-exp` | `https://api.deepseek.com` | Only its vision models accept photos |
+
+  These providers rename and retire models often, so the defaults are a starting point: **Test** checks the model
+  typed in before saving. Keys for them are saved in the CMS only (no Worker secrets). If a provider rejects the JSON
+  option, the request is sent once more with the format in the prompt alone; any other error is not retried.
 - **Test with sample picture** (the rules page's snapper) or **Test with a photo** runs the form as it is, before
   saving, and shows the answer, the time it took or the provider's error. Tests don't count toward anyone's allowance.
 - The top card shows whether the main provider is working: the last success, the last failure with the provider's
@@ -57,7 +72,8 @@ npx wrangler secret put SETTINGS_ENCRYPTION_KEY   # recommended, before saving k
 ## Privacy
 
 The photo consent screens in both apps and the privacy policy (`server/fishial-proxy/src/privacy.ts`) say photos go to
-OpenAI. Before making another provider the main one or a backup, update those texts and the App Store App Privacy and
+OpenAI. Photos sent to a Chinese provider are handled under Chinese law, often on servers in China; under the New Zealand
+Privacy Act (IPP 12, disclosure overseas) the privacy policy and consent have to say so before one is used. Before making another provider the main one or a backup, update those texts and the App Store App Privacy and
 Google Play Data safety answers to name it. The CMS shows this reminder whenever a provider other than OpenAI is chosen.
 
 ## Deploying

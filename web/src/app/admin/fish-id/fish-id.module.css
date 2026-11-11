@@ -269,3 +269,9 @@ button:disabled {
   margin: 14px 0 0;
   padding: 10px 14px;
 }
+
+.keyLink {
+  color: var(--ocean);
+  font-size: 12px;
+  font-weight: 700;
+}

@@ -1,4 +1,4 @@
-import { FISH_PROMPT, FISH_SCHEMA, ProviderError, arrayBufferToBase64, fetchWithTimeout, parseIdentification, providerFailure,
+import { FISH_PROMPT, FISH_PROMPT_WITH_FORMAT, FISH_SCHEMA, ProviderError, arrayBufferToBase64, fetchWithTimeout, parseIdentification, providerFailure,
   type FishIdentification, type ProviderCall } from "./shared";
 
 /** GPT-5.1 and later take effort "none"; GPT-5 and o-series reasoning models take "minimal"/"low"; others no reasoning field. */
@@ -38,31 +38,63 @@ export async function identifyWithOpenAI(call: ProviderCall): Promise<FishIdenti
 }
 
 /**
- * Any service with OpenAI's Chat Completions format (OpenRouter, Together, Groq, a self-hosted gateway and so on), at
- * `baseUrl` such as https://openrouter.ai/api/v1. Asks for the JSON schema and still accepts JSON in plain text.
+ * How a Chat Completions service is asked for JSON: a strict schema (OpenAI, OpenRouter), JSON object mode (most
+ * Chinese providers, which then need the fields spelled out in the prompt), or the prompt alone.
  */
-export async function identifyWithOpenAICompatible(call: ProviderCall): Promise<FishIdentification> {
+export type JsonMode = "schema" | "object" | "prompt";
+export type CompatibleOptions = { label: string; jsonMode: JsonMode; maxTokens: number };
+
+const GENERIC: CompatibleOptions = { label: "The OpenAI-compatible service", jsonMode: "schema", maxTokens: 800 };
+
+function compatibleBody(call: ProviderCall, options: CompatibleOptions, jsonMode: JsonMode) {
+  const responseFormat = jsonMode === "schema"
+    ? { type: "json_schema", json_schema: { name: "fish_identification", strict: true, schema: FISH_SCHEMA } }
+    : jsonMode === "object" ? { type: "json_object" } : undefined;
+  return {
+    model: call.model,
+    max_tokens: options.maxTokens,
+    messages: [{
+      role: "user",
+      content: [
+        // Image first: some vision models (Qwen-VL, GLM-V) read the picture better before the question.
+        { type: "image_url", image_url: { url: `data:${call.contentType};base64,${arrayBufferToBase64(call.image)}` } },
+        { type: "text", text: jsonMode === "schema" ? FISH_PROMPT : FISH_PROMPT_WITH_FORMAT },
+      ],
+    }],
+    ...(responseFormat ? { response_format: responseFormat } : {}),
+  };
+}
+
+/** A 400 that is about the JSON option rather than the photo or the model, worth one try without it. */
+const formatRejected = (error: ProviderError) => error.status === 400 && /response_format|json|schema/i.test(error.message);
+
+/**
+ * Any service with OpenAI's Chat Completions format at `baseUrl`: OpenRouter, Together, Groq, a self-hosted gateway,
+ * and the Chinese providers in PROVIDERS (Qwen, GLM, Kimi, Doubao, DeepSeek). When a service rejects the JSON option,
+ * it is asked once more with the format spelled out in the prompt. JSON in a code fence or with words around it is
+ * still accepted.
+ */
+export async function identifyWithOpenAICompatible(call: ProviderCall, options: CompatibleOptions = GENERIC): Promise<FishIdentification> {
   if (!call.baseUrl) throw new ProviderError("not_configured", "Add the service's base URL in the CMS.");
-  const response = await fetchWithTimeout(`${call.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+  const url = `${call.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const send = (jsonMode: JsonMode) => fetchWithTimeout(url, {
     method: "POST",
     headers: { authorization: `Bearer ${call.apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model: call.model,
-      max_tokens: 800,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "text", text: FISH_PROMPT },
-          { type: "image_url", image_url: { url: `data:${call.contentType};base64,${arrayBufferToBase64(call.image)}` } },
-        ],
-      }],
-      response_format: { type: "json_schema", json_schema: { name: "fish_identification", strict: true, schema: FISH_SCHEMA } },
-    }),
+    body: JSON.stringify(compatibleBody(call, options, jsonMode)),
   });
-  if (!response.ok) throw await providerFailure("The OpenAI-compatible service", response);
+  let response = await send(options.jsonMode);
+  if (!response.ok) {
+    const failure = await providerFailure(options.label, response);
+    if (options.jsonMode === "prompt" || !formatRejected(failure)) throw failure;
+    response = await send("prompt");
+    if (!response.ok) throw await providerFailure(options.label, response);
+  }
   const payload = await response.json<{ choices?: Array<{ finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }> }>();
   const choice = payload.choices?.[0];
   if (choice?.message?.refusal) throw new ProviderError("response", "The model declined to identify this photo.");
   if (choice?.finish_reason === "length") throw new ProviderError("response", "The answer was cut short.");
+  if (choice?.finish_reason === "content_filter" || choice?.finish_reason === "sensitive") {
+    throw new ProviderError("response", "The provider's content filter blocked this photo.");
+  }
   return parseIdentification(choice?.message?.content);
 }

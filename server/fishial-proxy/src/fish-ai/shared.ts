@@ -32,7 +32,7 @@ export const FISH_SCHEMA = {
   additionalProperties: false,
 };
 
-export type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible";
+export type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible" | "qwen" | "glm" | "kimi" | "doubao" | "deepseek";
 
 /** What one provider call needs. */
 export type ProviderCall = {
