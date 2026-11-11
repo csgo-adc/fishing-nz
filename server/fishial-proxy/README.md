@@ -24,6 +24,12 @@ OpenAI, Anthropic Claude, Google Gemini or an OpenAI-compatible service, with an
 entered in the CMS are stored encrypted; the Worker secrets are the fallback. Admin routes under `/v1/admin/fish-ai`.
 See [fish-identification-ai.md](../../docs/fish-identification-ai.md).
 
+## Fishing rules updates
+
+MPI's site blocks automated downloads, so rules are refreshed from a page saved in a browser and uploaded on the CMS
+**Rules** page (`/v1/admin/rules/preview` and `/publish`), which shows every changed limit before publishing. The
+daily cron emails a reminder when an area looks out of date. See [fishing-rules-updates.md](../../docs/fishing-rules-updates.md).
+
 ## Shared fishing windows
 
 | Route | Purpose |

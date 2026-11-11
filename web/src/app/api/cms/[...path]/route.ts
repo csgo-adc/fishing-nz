@@ -135,6 +135,19 @@ async function proxy(request: Request): Promise<Response> {
     return Response.json({ analytics, users, feedback }, { headers: { "cache-control": "no-store" } });
   }
 
+  // Fishing rules: status, preview and publish of a saved MPI page, reminder settings (docs/fishing-rules-updates.md).
+  const rules = path.match(/^\/rules(?:\/(preview|publish|reminders))?$/);
+  if (rules) {
+    const action = rules[1];
+    if (!action && request.method === "GET") return forwardAdmin(token, "/v1/admin/rules", { method: "GET" });
+    const allowed = (action === "preview" || action === "publish") ? "POST" : action === "reminders" ? "PUT" : null;
+    if (allowed && request.method === allowed) {
+      const body = await request.text();
+      if (body.length > 4 * 1024 * 1024) return errorResponse("That page is too large. Save it as \"Webpage, HTML only\".", 413);
+      return forwardAdmin(token, `/v1/admin/rules/${action}`, { method: allowed, body, headers: { "content-type": "application/json" } });
+    }
+  }
+
   // Fish identification AI: the provider setup, write-only API keys and test runs (docs/fish-identification-ai.md).
   const fishAi = path.match(/^\/fish-ai(?:\/(test)|\/keys\/(openai|anthropic|gemini|openai_compatible))?$/);
   if (fishAi) {

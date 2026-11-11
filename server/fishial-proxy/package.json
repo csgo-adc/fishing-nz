@@ -1,6 +1,6 @@
 {
   "name": "catchcheck-fishial-proxy",
-  "version": "1.0.69",
+  "version": "1.0.70",
   "private": true,
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "node-html-parser": "^9.0.7"
   }
 }

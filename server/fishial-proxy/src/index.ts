@@ -15,6 +15,7 @@ import { recordApiUsage } from "./usage";
 import { handleAppVersionRoute } from "./app-version";
 import { handleFishAiAdmin, identificationFailure, identifyFish, type FishAiEnv } from "./fish-ai";
 import type { FishIdentification } from "./fish-ai/shared";
+import { handleRulesAdmin, sendRulesReminders, type RulesAreas } from "./rules-admin";
 
 export interface Env extends SocialAuthEnv, FishAiEnv {
   OPENAI_API_KEY?: string;
@@ -30,6 +31,8 @@ export interface Env extends SocialAuthEnv, FishAiEnv {
   ANDROID_DOWNLOAD_URL?: string;
   APPLE_TEAM_ID?: string;
   ANDROID_CERT_SHA256?: string;
+  /** The admin CMS, linked from the fishing rules reminder email. */
+  CMS_BASE_URL?: string;
 }
 
 export type Account = {
@@ -70,6 +73,8 @@ const rulesSlugs: Record<string, string> = {
   "chatham-rise": "chatham-rise-area-recreational-fishing-rules",
   fiordland: "fiordland-marine-area-fishing-rules",
 };
+
+const rulesAreaInfo: RulesAreas = { names: rulesAreas, officialUrl: (areaId) => officialRulesUrl(areaId) };
 
 async function register(request: Request, env: Env): Promise<Response> {
   const payload = await readJson(request);
@@ -498,6 +503,9 @@ export default {
     const day = Math.floor(controller.scheduledTime / 86_400_000);
     const areaId = areaIds[day % areaIds.length];
     const refreshed = await refreshRuleArea(areaId, env);
+    // The reminder runs whether or not MPI let the check through (it usually doesn't; see docs/fishing-rules-updates.md).
+    const reminder = await sendRulesReminders(env, rulesAreaInfo, controller.scheduledTime).catch((error) => { console.error("Rules reminder failed", String(error)); return "failed"; });
+    console.log(`Fishing rules reminder: ${reminder}`);
     if (!refreshed) throw new Error(`MPI rules refresh failed for ${areaId}. See /v1/rules/status.`);
   },
 };
@@ -552,6 +560,11 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);
       const adminAnalytics = await handleAdminAnalytics(request, env, pathname);
       if (adminAnalytics) return adminAnalytics;
+    }
+    if (pathname === "/v1/admin/rules" || pathname.startsWith("/v1/admin/rules/")) {
+      if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);
+      const rulesAdmin = await handleRulesAdmin(request, env, pathname, rulesAreaInfo);
+      if (rulesAdmin) return rulesAdmin;
     }
     if (pathname === "/v1/admin/fish-ai" || pathname.startsWith("/v1/admin/fish-ai/")) {
       if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);

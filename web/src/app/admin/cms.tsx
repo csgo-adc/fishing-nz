@@ -86,7 +86,7 @@ export function When({ value, now, fallback = "Never" }: { value: string | null 
 }
 
 type HeaderProps = {
-  page: "accounts" | "usage" | "fish-id";
+  page: "accounts" | "usage" | "fish-id" | "rules";
   updatedAt?: number | null;
   now?: number | null;
   refreshing?: boolean;
@@ -103,6 +103,7 @@ export function AdminHeader({ page, updatedAt = null, now = null, refreshing = f
           <Link href="/admin" aria-current={page === "accounts" ? "page" : undefined}>Accounts</Link>
           <Link href="/admin/analytics" aria-current={page === "usage" ? "page" : undefined}>Usage</Link>
           <Link href="/admin/fish-id" aria-current={page === "fish-id" ? "page" : undefined}>Fish ID</Link>
+          <Link href="/admin/rules" aria-current={page === "rules" ? "page" : undefined}>Rules</Link>
         </nav>
         {(onRefresh || onSignOut) && <div className={styles.headerActions}>
           {onRefresh && <>

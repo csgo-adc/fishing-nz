@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.70 — 2026-11-11 (build code 71)
+
+- **Fishing rules updates in the CMS.** New **Rules** page: each area's MPI review date, when it was saved and why it
+  may need checking. **Update** walks through opening the MPI page, saving it in the browser and uploading it; the
+  API parses it the same way as `tools/crawl_mpi_rules.py` (checked against all 8 saved pages), previews every rule row
+  that changed, was added or removed, refuses another area's page and warns about old or partly saved pages, then
+  publishes it. The apps download published rules on their next sync, with no app update.
+- **Automatic reminders.** MPI's bot protection has blocked every automated check since late September, so updates
+  can't be downloaded by a server; instead the daily cron emails a reminder when an area was saved more than 30 days
+  ago (adjustable) or when a date in MPI's own "recent rule changes" text has passed since it was saved (Auckland's
+  15 October pāua closure, for example). At most one email a week for the same reasons. Address and timing are set on
+  the Rules page; it defaults to `PUBLIC_SUPPORT_EMAIL`. New `CMS_BASE_URL` variable for the email link.
+- See `docs/fishing-rules-updates.md`. Needs migration `0014_app_settings` (from 1.0.69) and an API and CMS deploy.
+  No app code changed.
+
 ## 1.0.69 — 2026-11-11 (build code 70)
 
 - **Fish identification: provider chosen in the CMS, with a backup.** Identification still runs in the API (the apps

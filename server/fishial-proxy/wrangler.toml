@@ -12,6 +12,9 @@ ACCOUNT_EMAIL_FROM = "Fishdays - NZ <accounts@fishnz.space>"
 AUTH_BASE_URL = "https://fishing.fishnz.space"
 PUBLIC_DEVELOPER_NAME = "Tristan"
 PUBLIC_SUPPORT_EMAIL = "tc199558@gmail.com"
+# The admin CMS, linked from the fishing rules reminder email (docs/fishing-rules-updates.md). Reminders go to
+# PUBLIC_SUPPORT_EMAIL until another address is set on the CMS Rules page.
+CMS_BASE_URL = "https://cms.fishnz.space"
 # Shared fishing windows (docs/share-fishing-window.md). An empty or "#" store page hides that download button.
 IOS_DOWNLOAD_URL = "https://apps.apple.com/app/id6820858116"
 ANDROID_DOWNLOAD_URL = "https://play.google.com/store/apps/details?id=nz.fishingnz.app"
