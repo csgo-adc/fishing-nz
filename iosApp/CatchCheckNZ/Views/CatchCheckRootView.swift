@@ -46,6 +46,7 @@ struct CatchCheckRootView: View {
     @State private var moreDestination: MoreDestination?
     @ObservedObject private var updates = AppUpdates.shared
     @State private var updatePrompt: UpdatePromptItem?
+    @ObservedObject private var tour = AppTour.shared
     /// The first launch asks land or boat and where, once. People who used the app before 1.0.48 were already asked for
     /// location at launch, so they skip it.
     @State private var showSetup = !UserDefaults.standard.bool(forKey: "firstRunSetupDone") && CLLocationManager().authorizationStatus == .notDetermined
@@ -68,6 +69,14 @@ struct CatchCheckRootView: View {
                 .badge(updates.state.remindersDone ? 1 : 0)
         }
         .tint(CatchCheckColor.accent)
+        // The first-launch tour (AppTour.swift) covers Home and the tab bar while it runs.
+        .overlay { if vm.selectedTab == 0 && !vm.showingResults { TourOverlay() } }
+        .task(id: tourStartKey) {
+            guard tourStartKey == "home" else { return }
+            try? await Task.sleep(for: .seconds(0.9))
+            guard !Task.isCancelled else { return }
+            tour.startIfPending()
+        }
         .overlay { if updates.state.required { RequiredUpdateView(state: updates.state) { updates.openStore() } } }
         // The update pop-up waits until Home has settled, and never shows over setup, a window, a spot, a More page,
         // another notice or while a trip is under way (docs/in-app-updates.md).
@@ -104,6 +113,7 @@ struct CatchCheckRootView: View {
         .fullScreenCover(isPresented: $showSetup) {
             FirstRunSetupView {
                 UserDefaults.standard.set(true, forKey: "firstRunSetupDone")
+                AppTour.shared.markPending()
                 showSetup = false
             }
         }
@@ -112,11 +122,16 @@ struct CatchCheckRootView: View {
         .onChange(of: vm.openTripsRequest) { _, _ in moreDestination = .trips }
     }
 
+    /// "home" once Home is on screen with nothing over it, when a pending tour may start.
+    private var tourStartKey: String {
+        !showSetup && vm.selectedTab == 0 && !vm.showingResults && vm.selectedSpot == nil && moreDestination == nil ? "home" : "wait"
+    }
+
     /// Changes whenever the pop-up's chance to show changes; starts with "ready" only when it may show now.
     private var updatePromptKey: String {
         let tripUnderWay = (vm.tripBackBy ?? .distantPast) > Date()
         let ready = updates.state.available != nil && vm.selectedTab == 0 && !showSetup && !vm.showingResults && vm.selectedSpot == nil
-            && moreDestination == nil && vm.sharedWindowNotice == nil && !tripUnderWay && updatePrompt == nil
+            && moreDestination == nil && vm.sharedWindowNotice == nil && !tripUnderWay && updatePrompt == nil && tour.step == nil
         return "\(ready ? "ready" : "wait")-\(updates.state.available ?? 0)"
     }
 }
@@ -236,6 +251,14 @@ private struct SettingsView: View {
                     NavigationLink { LanguageView() } label: {
                         MoreNavigationLabel(title: "Language", subtitle: languageSummary, icon: "globe")
                     }
+                    Button {
+                        dismiss()
+                        vm.selectedTab = 0
+                        Task { try? await Task.sleep(for: .seconds(0.6)); AppTour.shared.start() }
+                    } label: {
+                        MoreNavigationLabel(title: "App tour", subtitle: "See how Home works again", icon: "questionmark.circle")
+                    }
+                    .buttonStyle(.plain)
                 }.padding(20)
             }
             .background(CatchCheckColor.cream)
@@ -543,6 +566,7 @@ private struct FeedbackView: View {
 
 struct HomeView: View {
     @EnvironmentObject private var vm: FishingViewModel
+    @ObservedObject private var tour = AppTour.shared
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var showingPlan = false
@@ -571,8 +595,10 @@ struct HomeView: View {
                             }
                             .buttonStyle(.plain).foregroundStyle(CatchCheckColor.accent)
                             .accessibilityLabel("\(vm.locationSummary). Change place")
+                            .tourTarget(.place)
                         }
-                        TodayCard { showingPlace = true }
+                        .id("tour.top")
+                        TodayCard { showingPlace = true }.tourTarget(.today)
                         HStack(alignment: .firstTextBaseline) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Best fishing window").font(.title2.bold()).foregroundStyle(CatchCheckColor.navy)
@@ -582,13 +608,19 @@ struct HomeView: View {
                             Spacer()
                             Button("Edit plan") { showingPlan = true }.font(.subheadline.weight(.semibold))
                         }
-                        PlanQuickChips()
-                        bestWindow
+                        PlanQuickChips().tourTarget(.plan).id("tour.plan")
+                        bestWindow.tourTarget(.best).id("tour.best")
                         HomeShortcuts(rules: { open(.rules) }, identify: { withAnimation { proxy.scrollTo("fishID", anchor: .top) } },
                                       catchLog: { open(.catchLog) }, trips: { open(.trips) })
+                            .tourTarget(.shortcuts).id("tour.shortcuts")
                         NearbySpotsSection()
                         FishIdentifierView(photoItem: $photoItem, showCamera: $showCamera, openAccount: { open(.account) }).id("fishID")
                     }.padding(20)
+                }
+                // The tour scrolls each part it lights up into view.
+                .onChange(of: tour.step) { _, step in
+                    guard let id = step?.scrollID else { return }
+                    withAnimation { proxy.scrollTo(id, anchor: id == "tour.top" ? .top : .center) }
                 }
             }
             .background(CatchCheckColor.cream)

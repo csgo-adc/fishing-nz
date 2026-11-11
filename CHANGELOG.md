@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.73 — 2026-11-11 (build code 74)
+
+- **First-launch tour.** After the two setup questions, Home dims and lights up one part at a time with a short note
+  and Skip, Back and Next: where you fish, Today, the best fishing window, your plan, the shortcuts and the tabs,
+  ending on "You're all set" with Finish. Home scrolls to each part. It shows once (people who already use the app
+  don't see it); **More → Settings → App tour** replays it. Same steps and words on Android (`AppTour.kt`) and iPhone
+  (`AppTour.swift`), translated into all four languages; the update pop-up waits until the tour is closed.
+- Tested on the Android emulator (first launch, every step, Finish, relaunch, replay, Chinese). The iPhone version
+  builds, but this Mac has no iPhone simulator to run it on.
+
 ## 1.0.72 — 2026-11-11 (build code 73)
 
 - **Shares give both store links.** "Share Fishdays - NZ" on the More page now sends the invitation with the App

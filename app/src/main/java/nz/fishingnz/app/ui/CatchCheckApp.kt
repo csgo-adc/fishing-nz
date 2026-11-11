@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Group
@@ -131,9 +132,9 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
         // The update pop-up waits until Home has settled, and never shows over setup, a window, a spot, another
         // notice or while a trip is under way (docs/in-app-updates.md).
         val tripUnderWay = state.tripBackBy?.isAfter(java.time.Instant.now()) == true
-        LaunchedEffect(update.availableBuild, state.tab, setupDone, state.showResults, state.selectedSpot, state.sharedWindowNotice, tripUnderWay) {
+        LaunchedEffect(update.availableBuild, state.tab, setupDone, state.showResults, state.selectedSpot, state.sharedWindowNotice, tripUnderWay, AppTour.step) {
             if (update.availableBuild == null || state.tab != 0 || !setupDone || state.showResults || state.selectedSpot != null
-                || state.sharedWindowNotice != null || tripUnderWay) return@LaunchedEffect
+                || state.sharedWindowNotice != null || tripUnderWay || AppTour.step != null) return@LaunchedEffect
             delay(2_500)
             updatePrompt = AppUpdates.claimPrompt()
         }
@@ -151,15 +152,22 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
                 confirmButton = { TextButton(onClick = vm::dismissSharedWindowNotice) { Text("OK") } },
                 title = { Text("Shared window") }, text = { Text(notice) })
         }
+        // The tour starts once Home is on screen after the first-launch setup (AppTour.kt).
+        LaunchedEffect(setupDone, state.tab, state.showResults, state.selectedSpot) {
+            if (!setupDone || state.tab != 0 || state.showResults || state.selectedSpot != null) return@LaunchedEffect
+            delay(900)
+            AppTour.startIfPending()
+        }
         if (!setupDone && !state.showResults && state.selectedSpot == null) FirstRunSetup(state, vm) {
             firstRun.edit().putBoolean("done", true).apply()
+            AppTour.markPending()
             // Home asks for location by itself only when it was never asked; the setup has covered that.
             locationOnboarding.edit().putBoolean("requested", true).apply()
             setupDone = true
         } else {
         BackHandler(enabled = vm.canGoBack()) { vm.goBack() }
         Scaffold(containerColor = palette.background, snackbarHost = { SnackbarHost(snackbars) }, bottomBar = {
-            if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(containerColor = palette.surface) {
+            if (!state.showResults && state.selectedSpot == null && !imeOpen) NavigationBar(Modifier.tourTarget(TourStep.TABS), containerColor = palette.surface) {
                 val destinations = listOf(
                     Triple(Icons.Default.Home, "Home", 0),
                     Triple(Icons.Default.Place, "Spots", 1),
@@ -205,6 +213,7 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
         }
         if (state.showResults) ResultsScreen(state, vm)
         state.selectedSpot?.let { SpotDetailScreen(it, state.savedSpots.contains(recommendationKey(it)), vm) }
+        if (state.tab == 0 && !state.showResults && state.selectedSpot == null) TourOverlay()
         }
     }
 }
@@ -273,6 +282,8 @@ private fun SettingsScreen(modifier: Modifier, onNavigate: (Int) -> Unit) {
             MoreItem(Icons.Default.SettingsBrightness, "Appearance", "Light, dark or device setting") { onNavigate(10) }
             HorizontalDivider(Modifier.padding(start = 64.dp))
             MoreItem(Icons.Default.Language, "Language", languageSummary(LocalContext.current)) { onNavigate(13) }
+            HorizontalDivider(Modifier.padding(start = 64.dp))
+            MoreItem(Icons.Default.Info, "App tour", "See how Home works again") { onNavigate(0); AppTour.start() }
         }
     }
 }

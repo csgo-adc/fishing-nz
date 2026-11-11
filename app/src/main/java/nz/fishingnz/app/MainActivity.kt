@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
         OfflineCache.initialize(applicationContext)
         nz.fishingnz.app.data.RulesSync.initialize(applicationContext)
         TripStore.initialize(applicationContext)
+        nz.fishingnz.app.ui.AppTour.initialize(applicationContext)
         TripReminders.initialize(applicationContext)
         SyncStore.initialize(applicationContext)
         TideWidgetStation.initialize(applicationContext)

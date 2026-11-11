@@ -51,6 +51,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -209,17 +210,31 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
     }
     val results = s.recommendationSearch?.items.orEmpty()
     val best = results.minWithOrNull(searchOrder)
+    // The tour (AppTour.kt) scrolls each part it lights up into view; positions are dropped when Home leaves the screen.
+    val tourStep = AppTour.step
+    val tourOffset = with(LocalDensity.current) { -120.dp.roundToPx() }
+    LaunchedEffect(tourStep) {
+        val index = when (tourStep) {
+            TourStep.PLACE, TourStep.TODAY -> 0
+            TourStep.PLAN -> 2
+            TourStep.BEST -> 3
+            TourStep.SHORTCUTS -> if (best != null) 5 else 4
+            else -> null
+        } ?: return@LaunchedEffect
+        listState.animateScrollToItem(index, if (index == 0) 0 else tourOffset)
+    }
+    DisposableEffect(Unit) { onDispose { AppTour.targets.clear() } }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), state = listState, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.account?.user?.displayName?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }?.let { "Kia ora, $it" } ?: "Kia ora",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                AssistChip(onClick = { showWhere = true }, label = { Text(whereTitle(s, homeLocationLoading), maxLines = 1) },
+                AssistChip(onClick = { showWhere = true }, label = { Text(whereTitle(s, homeLocationLoading), maxLines = 1) }, modifier = Modifier.tourTarget(TourStep.PLACE),
                     leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp)) })
             }
         }
-        item { TodayCard(s) { showWhere = true } }
+        item { Box(Modifier.tourTarget(TourStep.TODAY)) { TodayCard(s) { showWhere = true } } }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -229,9 +244,9 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                 }
                 TextButton(onClick = { showPlan = true }) { Text("Edit plan") }
             }
-            PlanQuickChips(s, vm)
+            Box(Modifier.tourTarget(TourStep.PLAN)) { PlanQuickChips(s, vm) }
         }
-        item {
+        item { Box(Modifier.tourTarget(TourStep.BEST)) {
             when {
                 s.recommendationsLoading -> Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                     Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -246,17 +261,17 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
                 s.recommendationSearch != null -> HomeNote("No fishing window fits this plan. Try other days, a longer distance or Anytime.", "Edit plan") { showPlan = true }
                 else -> HomeNote("Compare fishing conditions for your plan.", "Find fishing windows", ::search)
             }
-        }
+        } }
         if (best != null) item {
             OutlinedButton(onClick = { vm.showResults() }, modifier = Modifier.fillMaxWidth()) {
                 Text(if (results.size == 1) "See this window" else "See all ${results.size} windows")
             }
         }
-        item {
+        item(contentType = "shortcuts") { Box(Modifier.tourTarget(TourStep.SHORTCUTS)) {
             HomeShortcuts(onRules = { vm.selectTab(4) },
                 onIdentify = { scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 2).coerceAtLeast(0)) } },
                 onCatch = { vm.selectTab(12) }, onTrips = { vm.selectTab(3) })
-        }
+        } }
         item { NearbySpots(s, onSpot = { vm.showOnMap(it.asConditionPlace()) }, onSeeAll = { vm.selectTab(1) }) }
         item { FishIdentifierCard(s, picker, vm) }
         item { Spacer(Modifier.height(12.dp)) }
