@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.74 — 2026-11-11 (build code 75)
+
+- **Release notes for 1.0.73 (74)** in `server/fishial-proxy/app-versions.json`, in all five languages: three lines
+  for Android (windows open straight away, both store links in shares, the Home tour). The iPhone release replaces
+  1.0.65 in App Review, so its notes keep the four 1.0.65 lines (new Home, Spots, rules, languages) before the three
+  new ones, for people coming from 1.0.28. They fill App Store What's New and, once the API is deployed, the in-app
+  update pop-up. No app code changed.
+
 ## 1.0.73 — 2026-11-11 (build code 74)
 
 - **First-launch tour.** After the two setup questions, Home dims and lights up one part at a time with a short note

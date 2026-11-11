@@ -5,6 +5,94 @@
   },
   "releases": [
     {
+      "version": "1.0.73",
+      "build": 74,
+      "platforms": [
+        "ios"
+      ],
+      "notes": {
+        "en": [
+          "New Home: today's tide curve, wind, moon and sunset, and the best fishing window found for you",
+          "Spots tab with a map and a nearest-first list, boat ramps, wharves and breakwaters",
+          "Fishing rules redesigned with species pictures, size bars and Check my catch",
+          "Now in Simplified Chinese, Traditional Chinese, Korean and Hindi: it follows your phone's language, or choose one in Settings → Language",
+          "Fishing windows open straight away: See all and reopening the app show the windows already found",
+          "Sharing the app or a fishing window now includes both the App Store and Google Play links",
+          "A short tour of Home for new users; replay it in Settings → App tour"
+        ],
+        "zh-Hans": [
+          "全新首页：今天的潮汐曲线、风、月相和日落时间，并为您找出最佳钓鱼时段",
+          "新增“钓点”标签页：地图和由近到远的列表，以及下水坡道、码头和防波堤",
+          "钓鱼规则全新设计：物种图片、尺寸条和“核对我的渔获”",
+          "现已支持简体中文、繁体中文、韩语和印地语：默认跟随手机语言，也可在“设置 → 语言”中选择",
+          "钓鱼时段立即显示：“查看全部”和重新打开应用都会直接显示已找到的时段",
+          "分享应用或钓鱼时段时，现在会同时附上 App Store 和 Google Play 链接",
+          "为新用户提供简短的首页导览；可在 设置 → 应用导览 中重看"
+        ],
+        "zh-Hant": [
+          "全新首頁：今天的潮汐曲線、風、月相和日落時間，並為您找出最佳釣魚時段",
+          "新增「釣點」分頁：地圖和由近到遠的清單，以及下水坡道、碼頭和防波堤",
+          "釣魚規則全新設計：物種圖片、尺寸條和「核對我的漁獲」",
+          "現已支援簡體中文、繁體中文、韓語和印地語：預設跟隨手機語言，也可在「設定 → 語言」中選擇",
+          "釣魚時段立即顯示：「查看全部」和重新開啟 App 都會直接顯示已找到的時段",
+          "分享 App 或釣魚時段時，現在會同時附上 App Store 和 Google Play 連結",
+          "為新使用者提供簡短的首頁導覽；可在 設定 → App 導覽 中重看"
+        ],
+        "ko": [
+          "새로워진 홈: 오늘의 조석 곡선, 바람, 달, 일몰을 보여 주고 최고의 낚시 시간대를 찾아 줍니다",
+          "새 '포인트' 탭에서 지도와 가까운 순 목록, 보트 슬로프, 부두, 방파제를 볼 수 있습니다",
+          "낚시 규정이 종별 그림, 크기 막대, '내 조과 확인'으로 새롭게 바뀌었습니다",
+          "이제 중국어 간체, 중국어 번체, 한국어, 힌디어를 지원합니다. 기본으로 휴대폰 언어를 따르며, 설정 → 언어에서 고를 수 있습니다",
+          "낚시 시간대가 바로 열립니다: 모두 보기와 앱을 다시 열 때 이미 찾은 시간대를 바로 보여 줍니다",
+          "앱이나 낚시 시간대를 공유하면 이제 App Store와 Google Play 링크가 함께 들어갑니다",
+          "새 사용자를 위한 짧은 홈 둘러보기; 설정 → 앱 둘러보기에서 다시 볼 수 있습니다"
+        ],
+        "hi": [
+          "नया होम: आज का ज्वार वक्र, हवा, चंद्रमा और सूर्यास्त, और आपके लिए खोजी गई सबसे अच्छी फ़िशिंग विंडो",
+          "नया 'स्पॉट' टैब: मानचित्र और सबसे नज़दीकी पहले वाली सूची, बोट रैंप, घाट और ब्रेकवाटर",
+          "फ़िशिंग नियम नए रूप में: प्रजातियों के चित्र, आकार पट्टियाँ और 'मेरी पकड़ जाँचें'",
+          "अब सरलीकृत चीनी, पारंपरिक चीनी, कोरियाई और हिन्दी में: यह आपके फ़ोन की भाषा अपनाता है, या सेटिंग्स → भाषा में चुनें",
+          "फ़िशिंग विंडो तुरंत खुलती हैं: 'सभी देखें' और ऐप दोबारा खोलने पर पहले से मिली विंडो दिखती हैं",
+          "ऐप या फ़िशिंग विंडो शेयर करने पर अब App Store और Google Play दोनों के लिंक जाते हैं",
+          "नए उपयोगकर्ताओं के लिए होम का छोटा टूर; इसे सेटिंग्स → ऐप टूर में फिर से देखें"
+        ]
+      }
+    },
+    {
+      "version": "1.0.73",
+      "build": 74,
+      "platforms": [
+        "android"
+      ],
+      "notes": {
+        "en": [
+          "Fishing windows open straight away: See all and reopening the app show the windows already found",
+          "Sharing the app or a fishing window now includes both the App Store and Google Play links",
+          "A short tour of Home for new users; replay it in Settings → App tour"
+        ],
+        "zh-Hans": [
+          "钓鱼时段立即显示：“查看全部”和重新打开应用都会直接显示已找到的时段",
+          "分享应用或钓鱼时段时，现在会同时附上 App Store 和 Google Play 链接",
+          "为新用户提供简短的首页导览；可在 设置 → 应用导览 中重看"
+        ],
+        "zh-Hant": [
+          "釣魚時段立即顯示：「查看全部」和重新開啟 App 都會直接顯示已找到的時段",
+          "分享 App 或釣魚時段時，現在會同時附上 App Store 和 Google Play 連結",
+          "為新使用者提供簡短的首頁導覽；可在 設定 → App 導覽 中重看"
+        ],
+        "ko": [
+          "낚시 시간대가 바로 열립니다: 모두 보기와 앱을 다시 열 때 이미 찾은 시간대를 바로 보여 줍니다",
+          "앱이나 낚시 시간대를 공유하면 이제 App Store와 Google Play 링크가 함께 들어갑니다",
+          "새 사용자를 위한 짧은 홈 둘러보기; 설정 → 앱 둘러보기에서 다시 볼 수 있습니다"
+        ],
+        "hi": [
+          "फ़िशिंग विंडो तुरंत खुलती हैं: 'सभी देखें' और ऐप दोबारा खोलने पर पहले से मिली विंडो दिखती हैं",
+          "ऐप या फ़िशिंग विंडो शेयर करने पर अब App Store और Google Play दोनों के लिंक जाते हैं",
+          "नए उपयोगकर्ताओं के लिए होम का छोटा टूर; इसे सेटिंग्स → ऐप टूर में फिर से देखें"
+        ]
+      }
+    },
+    {
       "version": "1.0.65",
       "build": 66,
       "platforms": [
