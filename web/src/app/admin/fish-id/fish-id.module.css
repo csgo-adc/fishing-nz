@@ -1,0 +1,271 @@
+.notice {
+  background: #e6f4ee;
+  border: 1px solid #bfe0d2;
+  border-radius: 10px;
+  color: #12523d;
+  font-size: 14px;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+}
+
+.health {
+  border-left-width: 6px;
+  display: grid;
+  gap: 16px 32px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.health h2 {
+  color: var(--navy);
+  display: inline;
+  font-size: 22px;
+  margin: 0 0 0 10px;
+}
+
+.health > div > p {
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+.health dl {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+
+.health dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.health dd {
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+.dot {
+  border-radius: 50%;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+.working { border-left-color: #2f9e6b; }
+.working .dot { background: #2f9e6b; }
+.failing { border-left-color: #c2412d; }
+.failing .dot { background: #c2412d; }
+.unknown { border-left-color: #9aa9ad; }
+.unknown .dot { background: #9aa9ad; }
+
+.why {
+  background: #fdf1ee;
+  border-radius: 10px;
+  color: #6d2417;
+  font-size: 14px;
+  grid-column: 1 / -1;
+  line-height: 1.5;
+  padding: 12px 16px;
+}
+
+.why p {
+  margin: 0;
+}
+
+.why p + p {
+  margin-top: 6px;
+}
+
+.slots {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.slot,
+.addBackup {
+  border: 1px solid #e1e9e7;
+  border-radius: 12px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 18px;
+}
+
+.slot h3,
+.addBackup h3 {
+  color: var(--navy);
+  font-size: 16px;
+  margin: 0;
+}
+
+.slotHead {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.slot label {
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 750;
+  margin-top: 6px;
+}
+
+.slot input,
+.slot select,
+.keyForm input {
+  background: white;
+  border: 1px solid #cfdcda;
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 11px;
+}
+
+.slot small,
+.footnote,
+.addBackup p,
+.actions span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.addBackup p {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.slot button,
+.addBackup button,
+.actions button,
+.keyForm button,
+.fileButton {
+  background: white;
+  border: 1px solid #cfdcda;
+  border-radius: 999px;
+  color: var(--navy);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  justify-self: start;
+  padding: 8px 14px;
+}
+
+.slot button:hover:not(:disabled),
+.addBackup button:hover,
+.actions button:hover:not(:disabled),
+.keyForm button:hover:not(:disabled),
+.fileButton:hover {
+  background: #edf6f3;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.slot .linkButton {
+  background: none;
+  border: 0;
+  color: var(--ocean);
+  padding: 2px 0;
+}
+
+.testRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fileButton input {
+  display: none;
+}
+
+.testResult {
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+}
+
+.testResult p {
+  margin: 4px 0 0;
+}
+
+.good { background: #e6f4ee; color: #12523d; }
+.bad { background: #fdf1ee; color: #6d2417; }
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 16px;
+}
+
+.actions .primaryButton {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: white;
+}
+
+.actions .primaryButton:hover:not(:disabled) {
+  background: var(--ocean);
+}
+
+.keyForm {
+  display: flex;
+  gap: 6px;
+}
+
+.keyForm input {
+  min-width: 160px;
+  width: 100%;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.problem {
+  color: #a3341f;
+  display: block;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.footnote {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 820px) {
+  .health,
+  .slots {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .health dl {
+    flex-wrap: wrap;
+    gap: 14px 24px;
+  }
+}
+
+.privacy {
+  background: #fff6df;
+  border: 1px solid #f0dca6;
+  border-radius: 10px;
+  color: #5c4205;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 14px 0 0;
+  padding: 10px 14px;
+}

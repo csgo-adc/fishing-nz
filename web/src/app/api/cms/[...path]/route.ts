@@ -31,6 +31,18 @@ function validPage(value: unknown, key: "users" | "feedback"): boolean {
     typeof page.limit === "number" && page.limit > 0 && typeof page.offset === "number";
 }
 
+/** Sends one admin call and passes its JSON answer back; a refused token signs the CMS out. */
+async function forwardAdmin(token: string, path: string, init: { method: string; body?: BodyInit; headers?: Record<string, string> }): Promise<Response> {
+  const result = await fetch(`${API_BASE}${path}`, {
+    method: init.method, body: init.body, headers: { "x-account-admin-token": token, ...init.headers }, cache: "no-store",
+  }).catch(() => null);
+  if (!result) return errorResponse("Could not reach the account service.", 503);
+  if (result.status === 401) return expiredSession();
+  const payload = await result.json().catch(() => null);
+  if (!payload || typeof payload !== "object") return errorResponse(result.status === 404 ? "The API doesn't have this yet. Deploy the latest API first." : "The account service returned an invalid response.", 502);
+  return Response.json(payload, { status: result.status, headers: { "cache-control": "no-store" } });
+}
+
 async function proxy(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api\/cms/, "");
@@ -123,6 +135,43 @@ async function proxy(request: Request): Promise<Response> {
     return Response.json({ analytics, users, feedback }, { headers: { "cache-control": "no-store" } });
   }
 
+  // Fish identification AI: the provider setup, write-only API keys and test runs (docs/fish-identification-ai.md).
+  const fishAi = path.match(/^\/fish-ai(?:\/(test)|\/keys\/(openai|anthropic|gemini|openai_compatible))?$/);
+  if (fishAi) {
+    const [, test, keyProvider] = fishAi;
+    if (!test && !keyProvider && (request.method === "GET" || request.method === "PUT")) {
+      const body = request.method === "PUT" ? await request.text() : undefined;
+      if (body !== undefined && body.length > 8_192) return errorResponse("That setup is too large.", 400);
+      return forwardAdmin(token, "/v1/admin/fish-ai", { method: request.method, body, headers: body ? { "content-type": "application/json" } : undefined });
+    }
+    if (keyProvider && (request.method === "PUT" || request.method === "DELETE")) {
+      const body = request.method === "PUT" ? await request.text() : undefined;
+      if (body !== undefined && body.length > 2_048) return errorResponse("That key is too long.", 400);
+      return forwardAdmin(token, `/v1/admin/fish-ai/keys/${keyProvider}`, { method: request.method, body, headers: body ? { "content-type": "application/json" } : undefined });
+    }
+    if (test && request.method === "POST") {
+      const params = new URLSearchParams();
+      for (const key of ["slot", "provider", "model", "base_url"]) {
+        const value = url.searchParams.get(key);
+        if (value !== null) params.set(key, value.slice(0, 200));
+      }
+      let image: ArrayBuffer;
+      let contentType: string;
+      if (url.searchParams.get("sample") === "1") {
+        // The rules page's snapper picture, so a test needs no photo to hand.
+        const sample = await fetch(`${API_BASE}/species/snapper.webp`, { cache: "no-store" }).catch(() => null);
+        if (!sample?.ok) return errorResponse("Could not load the sample picture.", 503);
+        image = await sample.arrayBuffer();
+        contentType = "image/webp";
+      } else {
+        contentType = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+        if (Number(request.headers.get("content-length") || 0) > 8 * 1024 * 1024) return errorResponse("Choose a photo under 8 MB.", 400);
+        image = await request.arrayBuffer();
+      }
+      return forwardAdmin(token, `/v1/admin/fish-ai/test?${params}`, { method: "POST", body: image, headers: { "content-type": contentType } });
+    }
+  }
+
   const planMatch = path.match(/^\/users\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\/plan$/i);
   if (planMatch && request.method === "PATCH") {
     const body = await request.json().catch(() => null) as { plan?: unknown } | null;
@@ -144,4 +193,5 @@ async function proxy(request: Request): Promise<Response> {
 export const GET = proxy;
 export const POST = proxy;
 export const PATCH = proxy;
+export const PUT = proxy;
 export const DELETE = proxy;

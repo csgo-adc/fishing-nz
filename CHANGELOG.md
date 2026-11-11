@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.69 — 2026-11-11 (build code 70)
+
+- **Fish identification: provider chosen in the CMS, with a backup.** Identification still runs in the API (the apps
+  never hold an AI key), but the provider, model and API keys are now set on a new CMS page, **Fish ID**, with no
+  deploy: OpenAI, Anthropic Claude (official SDK), Google Gemini or any OpenAI-compatible service such as OpenRouter.
+  An optional backup provider is tried when the main one fails. Keys pasted in the CMS are stored encrypted in D1 and
+  never shown again; the Worker secrets stay as the fallback. **Test** runs a provider with a sample picture or a photo
+  before saving and shows the provider's own error.
+- **Why it stopped:** identification worked until 11 October and every attempt since 25 October failed. The code and
+  model were unchanged; the old code hid OpenAI's error, which points to the OpenAI key or project (revoked key,
+  billing, or model access). The API now records each provider's last success and failure with the reason, shown on
+  the CMS page, and logs it. See `docs/fish-identification-ai.md`.
+- The apps get clearer messages: "busy right now" when every provider is out of quota, "temporarily unavailable"
+  otherwise. Needs migration `0014_app_settings` and an API and CMS deploy. No app code changed.
+
 ## 1.0.68 — 2026-11-10 (build code 69)
 
 - **New App Store screenshots.** Six 1320×2868 iPhone screenshots of the 1.0.65 app replace the three from October

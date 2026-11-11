@@ -13,9 +13,11 @@ import { deleteDeviceAnalytics, ingestAnalytics } from "./analytics";
 import { handleAdminAnalytics } from "./admin-analytics";
 import { recordApiUsage } from "./usage";
 import { handleAppVersionRoute } from "./app-version";
+import { handleFishAiAdmin, identificationFailure, identifyFish, type FishAiEnv } from "./fish-ai";
+import type { FishIdentification } from "./fish-ai/shared";
 
-export interface Env extends SocialAuthEnv {
-  OPENAI_API_KEY: string;
+export interface Env extends SocialAuthEnv, FishAiEnv {
+  OPENAI_API_KEY?: string;
   RULES_DB: D1Database;
   RULES_INGEST_TOKEN: string;
   ACCOUNT_ADMIN_TOKEN: string;
@@ -483,33 +485,6 @@ function isAdmin(request: Request, env: Env): boolean {
   return Boolean(env.ACCOUNT_ADMIN_TOKEN && supplied && constantTimeEqual(supplied, env.ACCOUNT_ADMIN_TOKEN));
 }
 
-type OpenAIFishIdentification = {
-  is_fish: boolean;
-  common_name_nz: string;
-  subject_name?: string;
-  scientific_name: string;
-  confidence: number;
-  other_possibilities: string[];
-  visible_clues: string;
-  note: string;
-};
-
-const openAIFishSchema = {
-  type: "object",
-  properties: {
-    is_fish: { type: "boolean" },
-    common_name_nz: { type: "string" },
-    subject_name: { type: "string" },
-    scientific_name: { type: "string" },
-    confidence: { type: "number" },
-    other_possibilities: { type: "array", items: { type: "string" } },
-    visible_clues: { type: "string" },
-    note: { type: "string" },
-  },
-  required: ["is_fish", "common_name_nz", "subject_name", "scientific_name", "confidence", "other_possibilities", "visible_clues", "note"],
-  additionalProperties: false,
-};
-
 export default {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const response = await handleRequest(request, env);
@@ -578,6 +553,11 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       const adminAnalytics = await handleAdminAnalytics(request, env, pathname);
       if (adminAnalytics) return adminAnalytics;
     }
+    if (pathname === "/v1/admin/fish-ai" || pathname.startsWith("/v1/admin/fish-ai/")) {
+      if (!isAdmin(request, env)) return json({ error: "Admin authorization required." }, 401);
+      const fishAi = await handleFishAiAdmin(request, env, pathname);
+      if (fishAi) return fishAi;
+    }
     if (pathname === "/v1/admin/users" && request.method === "GET") return await listUsers(request, env);
     if (pathname === "/v1/admin/feedback" && request.method === "GET") return await listFeedback(request, env);
     const planMatch = pathname.match(/^\/v1\/admin\/users\/([^/]+)\/plan$/);
@@ -595,7 +575,6 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 
     let reservedDay: string | null = null;
     try {
-      if (!env.OPENAI_API_KEY) return json({ error: "Fish identification is not configured. Add the OpenAI API key to the Worker secrets." }, 503);
       const image = await request.arrayBuffer();
       if (image.byteLength === 0 || image.byteLength > 20 * 1024 * 1024) {
         return json({ error: "Upload an image smaller than 20 MB." }, 400);
@@ -607,7 +586,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         code: "daily_identification_limit", fish_identity_quota: await identificationQuota(env.RULES_DB, auth.account.id, day),
       }, 429);
       reservedDay = day;
-      const identification = await identifyFishWithOpenAI(image, contentType, env.OPENAI_API_KEY);
+      const { identification } = await identifyFish(env, image, contentType);
       const result = presentFishIdentification(identification);
       const commonName = result.commonName;
       const areaId = validatedFishingRulesArea(request.headers.get("x-fishing-rules-area"));
@@ -641,8 +620,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     } catch (error) {
       if (reservedDay) await releaseIdentification(env.RULES_DB, auth.account.id, reservedDay)
         .catch((refundError) => console.error("Could not release fish identification allowance", refundError));
-      const message = error instanceof Error ? error.message : "Fish identification is temporarily unavailable.";
-      return json({ error: message }, message.startsWith("OpenAI API usage limit") ? 429 : 502);
+      const failure = identificationFailure(error);
+      return json({ error: failure.message }, failure.status);
     }
     } catch (error) {
       console.error("Worker request failed", error);
@@ -651,47 +630,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   
 }
 
-async function identifyFishWithOpenAI(image: ArrayBuffer, contentType: string, apiKey: string): Promise<OpenAIFishIdentification> {
-  if (!apiKey) throw new Error("Fish identification is not configured yet. Add the OpenAI API key to the Worker secrets.");
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-5.6-luna",
-      store: false,
-      reasoning: { effort: "none" },
-      max_output_tokens: 800,
-      input: [{
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: "Identify the main subject of this photo for a New Zealand angler. First decide whether it is a fish. If it is a fish, give the most likely specific common name in common_name_nz, even when the species is uncommon in New Zealand or the photo was taken elsewhere. Prefer the familiar NZ name when one exists; otherwise use a widely understood common name. Do not replace a plausible leading identification with 'Unknown fish' merely because confidence is low: use a low confidence score and explain the uncertainty. Use 'Unknown fish' only when no useful candidate can be named. Give a scientific name only when supported by visible features. Text printed on the image may help but is not proof of species. If it is not a fish, set is_fish false, leave common_name_nz and scientific_name empty, and put the visible subject's concise common name in subject_name (for example 'Sea star (starfish)' or 'Crab'); if the subject cannot be named, use 'Unidentified object'. For fish, subject_name should match common_name_nz. Return confidence from 0 to 1 conservatively. Give up to three distinct alternative fish names in likelihood order, excluding the leading name. Describe visible clues and uncertainty in plain language without Markdown, headings, bullets, or asterisks used for emphasis. Do not give catch or legal advice. This is an AI suggestion, not a confirmed identification.",
-          },
-          { type: "input_image", image_url: `data:${contentType};base64,${arrayBufferToBase64(image)}`, detail: "high" },
-        ],
-      }],
-      text: { format: { type: "json_schema", name: "fish_identification", strict: true, schema: openAIFishSchema } },
-    }),
-  });
-  const payload = await response.json<{ error?: { message?: string }; status?: string; output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }>();
-  if (!response.ok) {
-    if (response.status === 429) throw new Error("OpenAI API usage limit reached. Check the API account's billing and limits.");
-    throw new Error("Fish identification is temporarily unavailable.");
-  }
-  if (payload.status === "incomplete") throw new Error("The fish identification response was incomplete. Please try again.");
-  const resultText = payload.output?.flatMap((item) => item.type === "message" ? item.content || [] : []).find((item) => item.type === "output_text")?.text;
-  if (!resultText) throw new Error("No fish species could be identified in this photo.");
-  let result: OpenAIFishIdentification;
-  try { result = JSON.parse(resultText) as OpenAIFishIdentification; }
-  catch { throw new Error("The fish identification response was incomplete. Please try again."); }
-  if (typeof result.is_fish !== "boolean" || typeof result.common_name_nz !== "string" || typeof result.confidence !== "number") {
-    throw new Error("The fish identification response was invalid. Please try again.");
-  }
-  return result;
-}
-
-function presentFishIdentification(identification: OpenAIFishIdentification) {
+function presentFishIdentification(identification: FishIdentification) {
   const isFish = identification.is_fish;
   const alternatives = Array.isArray(identification.other_possibilities)
     ? identification.other_possibilities.filter((name): name is string => typeof name === "string").map(plainFishText).filter(isUsefulFishName)
@@ -742,15 +681,6 @@ function subjectFromVisibleClues(clues: string): string {
   const fallback = clues.match(/\b(?:an?\s+)?((?:[a-z-]+\s+){0,3}(?:sea star|starfish|crab|jellyfish|octopus|squid|sea urchin))\b/i);
   const subject = match?.[1]?.trim() || fallback?.[1]?.trim() || "";
   return subject && subject.length <= 80 ? subject[0].toUpperCase() + subject.slice(1) : "";
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-  return btoa(binary);
 }
 
 function confidenceLevel(value: number): string {

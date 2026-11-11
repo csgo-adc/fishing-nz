@@ -17,6 +17,13 @@ The live backend for the Android, iOS and admin web apps, served at `https://fis
 
 A reset link lasts 1 hour, works once, ends every session and also confirms the email address. It works for Google and Apple accounts that want to add a password. A "password was changed" notice goes to the account email after a reset or change.
 
+## Fish identification
+
+`POST /v1/fish/identify` (signed in, a JPEG, PNG or WebP body) asks the AI provider chosen in the CMS → **Fish ID**:
+OpenAI, Anthropic Claude, Google Gemini or an OpenAI-compatible service, with an optional backup provider. API keys
+entered in the CMS are stored encrypted; the Worker secrets are the fallback. Admin routes under `/v1/admin/fish-ai`.
+See [fish-identification-ai.md](../../docs/fish-identification-ai.md).
+
 ## Shared fishing windows
 
 | Route | Purpose |
@@ -95,4 +102,4 @@ npx wrangler d1 migrations apply RULES_DB --remote   # run before deploying code
 npm run deploy
 ```
 
-Required secrets: `OPENAI_API_KEY`, `RULES_INGEST_TOKEN`, `ACCOUNT_ADMIN_TOKEN`, `RESEND_API_KEY`. Public settings (`AUTH_BASE_URL`, `ACCOUNT_EMAIL_FROM`, `PUBLIC_DEVELOPER_NAME`, `PUBLIC_SUPPORT_EMAIL`) are in `wrangler.toml`. The password pages need `RESEND_API_KEY` and `ACCOUNT_EMAIL_FROM`, just like email confirmation.
+Required secrets: `RULES_INGEST_TOKEN`, `ACCOUNT_ADMIN_TOKEN`, `RESEND_API_KEY`. Fish identification needs a key for the chosen provider, saved in the CMS or as `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`; set `SETTINGS_ENCRYPTION_KEY` before saving keys in the CMS. Public settings (`AUTH_BASE_URL`, `ACCOUNT_EMAIL_FROM`, `PUBLIC_DEVELOPER_NAME`, `PUBLIC_SUPPORT_EMAIL`) are in `wrangler.toml`. The password pages need `RESEND_API_KEY` and `ACCOUNT_EMAIL_FROM`, just like email confirmation.
