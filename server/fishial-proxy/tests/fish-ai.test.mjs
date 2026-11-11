@@ -218,6 +218,23 @@ test("fish identification providers, backup and CMS settings, with real D1", { t
       assert.match((await provider("doubao")).status.last_error, /does not support image/);
     });
 
+    await t.test("Workers AI is built in: no key to save, and without the AI binding the app hears 'not set up yet'", async () => {
+      await freshAllowance();
+      const workers = await provider("workers_ai");
+      assert.equal(workers.builtin, true);
+      assert.equal(workers.default_model, "@cf/meta/llama-4-scout-17b-16e-instruct");
+      // This test Worker has no AI binding, as a Worker without [ai] in wrangler.toml would.
+      assert.equal(workers.key.source, null);
+      assert.match(workers.key.problem, /Workers AI binding/);
+      assert.equal((await admin("/keys/workers_ai", "PUT", { key: "anything-long-enough" })).status, 400);
+      assert.equal((await admin("", "PUT", { primary: { provider: "workers_ai", model: "@cf/meta/llama-4-scout-17b-16e-instruct" }, backup: null })).status, 200);
+      const before = await used();
+      const response = await identify();
+      assert.equal(response.status, 503);
+      assert.match((await response.json()).error, /not set up yet/);
+      assert.equal(await used(), before);
+    });
+
     await t.test("a saved key that can no longer be read says so and falls back to the Worker secret", async () => {
       await db.prepare("UPDATE app_settings SET value = ? WHERE key = 'fish_ai.key.openai'")
         .bind(JSON.stringify({ v: 1, iv: "AAAAAAAAAAAAAAAA", data: "AAAA", last4: "zzzz", secret: "admin" })).run();

@@ -5,7 +5,7 @@ import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { AdminHeader, ApiError, DailyColumns, When, api, number, useNow } from "../cms";
 import styles from "./fish-id.module.css";
 
-type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible" | "qwen" | "glm" | "kimi" | "doubao" | "deepseek";
+type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible" | "qwen" | "glm" | "kimi" | "doubao" | "deepseek" | "workers_ai";
 type Slot = { provider: ProviderId; model: string; base_url: string };
 type FailureKind = "auth" | "quota" | "model" | "request" | "server" | "network" | "response" | "not_configured";
 type Status = {
@@ -14,8 +14,8 @@ type Status = {
 };
 type Provider = {
   id: ProviderId; label: string; group: "international" | "china"; default_model: string; needs_base_url: boolean;
-  default_base_url: string; hint: string; key_url: string; secret_name: string | null;
-  key: { source: "cms" | "secret" | null; last4: string | null; updated_at: string | null; problem: string | null };
+  default_base_url: string; hint: string; key_url: string; builtin: boolean; secret_name: string | null;
+  key: { source: "cms" | "secret" | "builtin" | null; last4: string | null; updated_at: string | null; problem: string | null };
   status: Status | null;
 };
 type Overview = {
@@ -206,8 +206,9 @@ export default function FishIdPage() {
               <table>
                 <thead><tr><th>Provider</th><th>Key in use</th><th>Last result</th><th>New key</th></tr></thead>
                 <tbody>{overview.providers.map((row) => <tr key={row.id}>
-                  <td><b>{row.label}</b><small>{row.group === "china" ? "China · " : ""}{row.secret_name ? `Worker secret: ${row.secret_name}` : "Key saved here only"}{row.key_url && <> · <a href={row.key_url} target="_blank" rel="noreferrer">get a key ↗</a></>}</small></td>
+                  <td><b>{row.label}</b><small>{row.builtin ? "Runs on this Cloudflare account" : <>{row.group === "china" ? "China · " : ""}{row.secret_name ? `Worker secret: ${row.secret_name}` : "Key saved here only"}{row.key_url && <> · <a href={row.key_url} target="_blank" rel="noreferrer">get a key ↗</a></>}</>}</small></td>
                   <td>
+                    {row.key.source === "builtin" && <><b>Built in</b><small>No key needed</small></>}
                     {row.key.source === "cms" && <><b>Saved here ••••{row.key.last4}</b><small>Added <When value={row.key.updated_at} now={now} /></small></>}
                     {row.key.source === "secret" && <><b>Worker secret ••••{row.key.last4}</b><small>{row.secret_name}</small></>}
                     {!row.key.source && <span className={styles.muted}>None</span>}
@@ -218,12 +219,13 @@ export default function FishIdPage() {
                     <small>{row.status.model}{healthOf(row.status) === "failing" && row.status.last_error ? ` · ${row.status.last_error}` : row.status.last_latency_ms ? ` · ${(row.status.last_latency_ms / 1000).toFixed(1)} s` : ""}</small>
                   </> : <span className={styles.muted}>Not used yet</span>}</td>
                   <td>
+                    {row.builtin ? <small className={styles.muted}>No key needed</small> :
                     <form className={styles.keyForm} onSubmit={(event) => { event.preventDefault(); void saveKey(row.id); }}>
                       <input type="password" autoComplete="off" spellCheck={false} placeholder="Paste API key" aria-label={`New ${row.label} API key`}
                         value={keyDrafts[row.id] ?? ""} onChange={(event) => setKeyDrafts((drafts) => ({ ...drafts, [row.id]: event.target.value }))} />
                       <button type="submit" disabled={saving || !(keyDrafts[row.id] ?? "").trim()}>Save</button>
                       {row.key.source === "cms" && <button type="button" disabled={saving} onClick={() => void removeKey(row.id)}>Remove</button>}
-                    </form>
+                    </form>}
                   </td>
                 </tr>)}</tbody>
               </table>
@@ -261,10 +263,10 @@ function SlotEditor({ title, slot, providers, onChange, onRemove, test, onTest }
         if (next) onChange({ provider: next.id, model: next.default_model, base_url: next.default_base_url });
       }}>
         {(["international", "china"] as const).map((group) => <optgroup key={group} label={group === "china" ? "China" : "International"}>
-          {providers.filter((row) => row.group === group).map((row) => <option key={row.id} value={row.id}>{row.label}{row.key.source ? "" : " (no key)"}</option>)}
+          {providers.filter((row) => row.group === group).map((row) => <option key={row.id} value={row.id}>{row.label}{row.key.source ? "" : row.builtin ? " (not set up)" : " (no key)"}</option>)}
         </optgroup>)}
       </select>
-      {info?.key_url && <a className={styles.keyLink} href={info.key_url} target="_blank" rel="noreferrer">Get an API key from {info.label} ↗</a>}
+      {info?.key_url && <a className={styles.keyLink} href={info.key_url} target="_blank" rel="noreferrer">{info.builtin ? "See the Workers AI models ↗" : `Get an API key from ${info.label} ↗`}</a>}
       <label htmlFor={`${id}-model`}>Model</label>
       <input id={`${id}-model`} value={slot.model} spellCheck={false} autoComplete="off" placeholder={info?.default_model || "vendor/model-name"}
         onChange={(event) => onChange({ ...slot, model: event.target.value.trim() })} />
@@ -276,7 +278,7 @@ function SlotEditor({ title, slot, providers, onChange, onRemove, test, onTest }
         {info.default_base_url && slot.base_url && slot.base_url !== info.default_base_url && <button type="button" className={styles.linkButton} onClick={() => onChange({ ...slot, base_url: info.default_base_url })}>Use {info.default_base_url}</button>}
       </>}
       {info?.hint && <small>{info.hint}</small>}
-      {!info?.key.source && <p className={styles.problem}>No API key for {info?.label}. Add one under API keys.</p>}
+      {!info?.key.source && <p className={styles.problem}>{info?.builtin ? info.key.problem : `No API key for ${info?.label}. Add one under API keys.`}</p>}
       <div className={styles.testRow}>
         <button type="button" disabled={test !== undefined && "running" in test} onClick={() => onTest()}>Test with sample picture</button>
         <label className={styles.fileButton}>Test with a photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} /></label>

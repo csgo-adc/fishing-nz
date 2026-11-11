@@ -32,6 +32,14 @@ choose another provider.
   (`https://openrouter.ai/api/v1`). Each asks for the same JSON answer, so the apps see no difference.
 - Default models: `gpt-5.6-luna`, `claude-opus-5-5` (at effort `low`, with Anthropic's server-side refusal fallback),
   `gemini-flash-latest`. Any model name can be typed; it must accept photos.
+- **Cloudflare Workers AI** (1.0.76), listed as "Cloudflare Workers AI (built in)". It runs on the same Cloudflare
+  account as the API through the `AI` binding in `wrangler.toml`, so it needs no API key and photos stay with
+  Cloudflare. Default model `@cf/meta/llama-4-scout-17b-16e-instruct` (tested 2026-11-11 with the sample picture:
+  Snapper, 80%, 4.8 s); other vision models such as `@cf/mistralai/mistral-small-3.1-24b-instruct` can be typed in.
+  Free up to 10,000 neurons a day, shared by every Workers AI model on the account; beyond that it is billed on
+  Workers Paid, or refused on the free plan (the CMS then shows a quota failure and the backup is tried). Its vision
+  models have no strict JSON mode, so the fields are spelled out in the prompt. Good as a free backup; for naming
+  New Zealand species the larger paid models are usually more accurate.
 - **Chinese providers** (1.0.75), listed under "China" in the CMS. Each uses its OpenAI-compatible Chat Completions
   API in JSON object mode, with the answer's fields spelled out in the prompt. The base URL is filled in and can be
   changed for another region:

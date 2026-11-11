@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.76 — 2026-11-11 (build code 77)
+
+- **Free built-in fish identification with Cloudflare Workers AI.** New provider "Cloudflare Workers AI (built in)" on
+  the CMS Fish ID page. It runs on the API's own Cloudflare account through a new `AI` binding in `wrangler.toml`, so
+  there is no API key to manage and photos stay with Cloudflare. Default model Llama 4 Scout
+  (`@cf/meta/llama-4-scout-17b-16e-instruct`); tested against the real service with the sample picture: Snapper, 80%,
+  4.8 s. Free up to 10,000 neurons a day across all Workers AI models; when that runs out the CMS shows a quota failure
+  and the backup provider is tried. Model names starting with `@` are now accepted. Needs an API and CMS deploy.
+  No app code changed.
+
 ## 1.0.75 — 2026-11-11 (build code 76)
 
 - **Chinese AI providers for fish identification.** The CMS Fish ID page lists five more providers under "China":

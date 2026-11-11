@@ -32,7 +32,10 @@ export const FISH_SCHEMA = {
   additionalProperties: false,
 };
 
-export type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible" | "qwen" | "glm" | "kimi" | "doubao" | "deepseek";
+export type ProviderId = "openai" | "anthropic" | "gemini" | "openai_compatible" | "qwen" | "glm" | "kimi" | "doubao" | "deepseek" | "workers_ai";
+
+/** The part of the Workers AI binding (`env.AI`) the identification uses. */
+export type WorkersAi = { run(model: string, input: Record<string, unknown>): Promise<unknown> };
 
 /** What one provider call needs. */
 export type ProviderCall = {
@@ -41,6 +44,8 @@ export type ProviderCall = {
   baseUrl: string;
   image: ArrayBuffer;
   contentType: string;
+  /** Cloudflare's AI binding, for the Workers AI provider. */
+  ai?: WorkersAi;
 };
 
 /**

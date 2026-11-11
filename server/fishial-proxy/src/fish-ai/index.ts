@@ -1,7 +1,8 @@
 import { identifyWithAnthropic } from "./anthropic";
 import { identifyWithGemini } from "./gemini";
 import { identifyWithOpenAI, identifyWithOpenAICompatible } from "./openai";
-import { ProviderError, safeProviderMessage, type FailureKind, type FishIdentification, type ProviderCall, type ProviderId } from "./shared";
+import { identifyWithWorkersAI } from "./workers-ai";
+import { ProviderError, safeProviderMessage, type FailureKind, type FishIdentification, type ProviderCall, type ProviderId, type WorkersAi } from "./shared";
 
 /**
  * Fish identification AI, chosen in the admin CMS (docs/fish-identification-ai.md): a main provider and model, an
@@ -17,6 +18,8 @@ export interface FishAiEnv {
   /** Encrypts API keys saved from the CMS. Without it they are encrypted with a key derived from ACCOUNT_ADMIN_TOKEN. */
   SETTINGS_ENCRYPTION_KEY?: string;
   ACCOUNT_ADMIN_TOKEN?: string;
+  /** Cloudflare Workers AI (wrangler.toml [ai]), for the built-in provider that needs no key. */
+  AI?: WorkersAi;
 }
 
 type ProviderInfo = {
@@ -30,8 +33,10 @@ type ProviderInfo = {
   defaultBaseUrl?: string;
   /** Other regions' addresses or model notes, shown under the field. */
   hint?: string;
-  /** Where to create an API key. */
+  /** Where to create an API key (or, for a built-in provider, read about its models). */
   keyUrl?: string;
+  /** Runs on this Cloudflare account through a binding, with no API key. */
+  builtin?: boolean;
   run: (call: ProviderCall) => Promise<FishIdentification>;
 };
 
@@ -65,6 +70,10 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
   doubao: chinese("ByteDance Doubao (Volcano Engine Ark)", "doubao-seed-1-6-vision-250815", "https://ark.cn-beijing.volces.com/api/v3",
     "Beijing region. Use a vision model ID or your Ark endpoint ID (ep-…) from the Ark console.",
     "https://console.volcengine.com/ark"),
+  workers_ai: { label: "Cloudflare Workers AI (built in)", group: "international", defaultModel: "@cf/meta/llama-4-scout-17b-16e-instruct",
+    secret: null, baseUrl: false, builtin: true, keyUrl: "https://developers.cloudflare.com/workers-ai/models/",
+    hint: "Runs on the same Cloudflare account as the API, so no key is needed and photos stay with Cloudflare. Free up to 10,000 neurons a day, shared by all models; beyond that it is billed on Workers Paid or refused on the free plan. Other vision models: @cf/mistralai/mistral-small-3.1-24b-instruct, @cf/meta/llama-3.2-11b-vision-instruct.",
+    run: identifyWithWorkersAI },
   deepseek: chinese("DeepSeek", "deepseek-v4-flash-vision-exp", "https://api.deepseek.com",
     "Only DeepSeek's vision models accept photos; text models such as deepseek-chat answer HTTP 400.",
     "https://platform.deepseek.com/api_keys"),
@@ -117,7 +126,7 @@ function validSlot(value: unknown): SlotConfig | null {
   const model = typeof slot.model === "string" ? slot.model.trim() : "";
   const typed = typeof slot.base_url === "string" ? slot.base_url.trim().replace(/\/+$/, "") : "";
   const baseUrl = typed || PROVIDERS[provider].defaultBaseUrl || "";
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,119}$/.test(model)) return null;
+  if (!/^[A-Za-z0-9@][A-Za-z0-9._:/@+-]{0,119}$/.test(model)) return null;
   if (PROVIDERS[provider].baseUrl) {
     try {
       const url = new URL(baseUrl);
@@ -166,9 +175,13 @@ async function decryptKey(env: FishAiEnv, stored: StoredKey): Promise<string | n
   } catch { return null; }
 }
 
-type KeyInfo = { source: "cms" | "secret" | null; last4: string | null; updated_at: string | null; problem: string | null };
+type KeyInfo = { source: "cms" | "secret" | "builtin" | null; last4: string | null; updated_at: string | null; problem: string | null };
 
 async function resolveKey(env: FishAiEnv, provider: ProviderId): Promise<{ key: string | null; info: KeyInfo }> {
+  if (PROVIDERS[provider].builtin) {
+    return env.AI ? { key: "builtin", info: { source: "builtin", last4: null, updated_at: null, problem: null } }
+      : { key: null, info: { source: null, last4: null, updated_at: null, problem: "The API has no Workers AI binding (wrangler.toml [ai])." } };
+  }
   const stored = await readSetting<StoredKey>(env.RULES_DB, keyName(provider));
   let problem: string | null = null;
   if (stored) {
@@ -217,7 +230,7 @@ async function runSlot(env: FishAiEnv, slot: SlotConfig, image: ArrayBuffer, con
     if (!slot.model) throw new ProviderError("not_configured", `Choose a ${info.label} model in the CMS.`);
     const { key, info: keyInfo } = await resolveKey(env, slot.provider);
     if (!key) throw new ProviderError("not_configured", keyInfo.problem || `No ${info.label} API key. Add one in the CMS (Fish ID).`);
-    const identification = await info.run({ model: slot.model, apiKey: key, baseUrl: slot.base_url || info.defaultBaseUrl || "", image, contentType });
+    const identification = await info.run({ model: slot.model, apiKey: key, baseUrl: slot.base_url || info.defaultBaseUrl || "", image, contentType, ai: env.AI });
     const latency = Date.now() - started;
     await recordResult(env, slot.provider, slot.model, { latency });
     return { identification, latency };
@@ -266,7 +279,7 @@ async function overview(env: FishAiEnv): Promise<Response> {
     const status = (await readSetting<ProviderStatus>(env.RULES_DB, statusName(id)))?.value ?? null;
     const provider = PROVIDERS[id];
     return { id, label: provider.label, group: provider.group, default_model: provider.defaultModel, needs_base_url: provider.baseUrl,
-      default_base_url: provider.defaultBaseUrl ?? "", hint: provider.hint ?? "", key_url: provider.keyUrl ?? "",
+      default_base_url: provider.defaultBaseUrl ?? "", hint: provider.hint ?? "", key_url: provider.keyUrl ?? "", builtin: Boolean(provider.builtin),
       secret_name: provider.secret, key: info, status };
   }));
   const since = new Date(Date.now() - 13 * 86_400_000).toISOString().slice(0, 10);
@@ -298,6 +311,7 @@ async function saveConfig(request: Request, env: FishAiEnv): Promise<Response> {
 }
 
 async function saveKey(request: Request, env: FishAiEnv, provider: ProviderId): Promise<Response> {
+  if (PROVIDERS[provider].builtin) return json({ error: `${PROVIDERS[provider].label} needs no API key.` }, 400);
   const body = await readBody(request);
   const key = typeof body?.key === "string" ? body.key.trim() : "";
   if (key.length < 10 || key.length > 400 || /\s/.test(key)) return json({ error: "Paste the whole API key, without spaces." }, 400);
