@@ -8,7 +8,7 @@ struct FishingSpot: Sendable {
     var id: String { "\(boat ? "boat" : "land"):\(name)" }
 }
 
-struct ScoredFishingWindow: Identifiable, Sendable {
+struct ScoredFishingWindow: Identifiable, Sendable, Codable {
     let id: String
     let spotName: String
     let area: String

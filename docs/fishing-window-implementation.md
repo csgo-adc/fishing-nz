@@ -57,6 +57,26 @@ This is an initial product preference for a less bumpy fishing experience. [MetS
 
 Missing height/period earns zero wave credit; the result stays incomplete without redistributing the missing 60%. Known height ≥2 m still excludes the session even with a missing period. Wind ≥40 km/h, gust ≥55 km/h and thunderstorm codes 95–99 also exclude it. Product wave indicators flag paired height ≥0.5 m with mean period ≤5 seconds as Choppy, and elevated height ≥1.2 m as More motion. Long-period warnings keep height and period paired from the same hour. These are subjective planning defaults, not official warning thresholds. Boat route, launch and return remain outstanding checks.
 
+## Saved windows (1.0.71)
+
+Found windows are kept on the phone (`WindowCache.kt`, `WindowCache.swift`), so Home, **See all** and the next launch
+show them at once instead of searching again:
+
+| Age of the saved windows | What happens |
+| --- | --- |
+| Up to 1 hour | Shown as they are; no new search |
+| 1–6 hours | Shown at once while a new search runs quietly and replaces them ("Updating…") |
+| Over 6 hours | Searched again |
+| Up to 24 hours, when a search fails (no signal) | Shown with "Couldn't refresh. These windows were found …" |
+
+A saved list belongs to one plan: land or boat, distance, days, hours, what matters most, tide choice, session length,
+land options and the chosen spot or station. Changing any of them searches again (or finds that plan's own saved
+list, so switching back is instant); the last 6 plans are kept. The place is compared by distance: GPS drift of up to
+2 km keeps the list, moving further searches again. Windows that have ended are left out, a list with none left is
+searched again, and a new app build starts afresh. Only complete answers are saved (a spot whose forecast failed is
+tried again next time). The results show "Updated 3:10 PM" with **Refresh**, which always searches again. Coming back
+to the app after an hour refreshes the list.
+
 ## Source handling
 
 **Tides:** each app shares one LINZ adapter between its Tide page and recommendations. Selected stations use their own published annual table. Radius searches use explicitly matching names or the published reference coordinate, with no nearest-across-land fallback. Parsing checks station identity, year, units, ordering, missing days, finite heights and alternating high/low events. NZST/NZDT is applied exactly once; ambiguous or nonexistent local times are rejected. Annual cache entries expire after 24 hours. Unavailable local tides stay unverified. [LINZ formats](https://www.linz.govt.nz/guidance/marine-information/tide-prediction-guidance/tide-prediction-formats).

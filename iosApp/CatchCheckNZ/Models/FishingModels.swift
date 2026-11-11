@@ -1,6 +1,6 @@
 import Foundation
 
-struct GeoPoint: Equatable, Sendable { let latitude: Double; let longitude: Double }
+struct GeoPoint: Equatable, Sendable, Codable { let latitude: Double; let longitude: Double }
 /// Current weather for Home. `windFrom` is a compass point such as "SW"; `sunset` is today's, such as "7:48 PM".
 struct WeatherState: Equatable { let temperature: String; let wind: String; let rain: String; var windFrom: String? = nil; var sunset: String? = nil }
 struct TideEvent: Identifiable { let time: String; let height: String; let type: String; var id: String { "\(time)-\(type)" } }
@@ -8,7 +8,7 @@ struct TidePoint: Identifiable { let time: String; let level: Double; let minute
 struct TideState { let currentLevel: String; let nextEvent: String; let eventTime: String; let events: [TideEvent]; let points: [TidePoint]; let stationName: String }
 struct TideStation: Identifiable, Equatable, Sendable { let id: String; let name: String; let csvName: String; let region: String; let latitude: Double; let longitude: Double }
 /// What matters most: comfortable or calm conditions, a part of the tide, or the hours around sunrise and sunset.
-enum WindowPriority: String, CaseIterable, Identifiable, Sendable {
+enum WindowPriority: String, CaseIterable, Identifiable, Sendable, Codable {
     case weather, tide, sun
     var id: String { rawValue }
     func title(boat: Bool) -> String {
@@ -45,7 +45,7 @@ enum ShoreSetting: String, CaseIterable, Sendable {
         }
     }
 }
-enum LandPriority: String, CaseIterable, Sendable {
+enum LandPriority: String, CaseIterable, Sendable, Codable {
     case balanced = "Comfort", casting = "Less wind", dry = "Less rain"
     /// A saved value, including "Easier casting" from before 1.0.32.
     static func saved(_ raw: String?) -> LandPriority { raw == "Easier casting" ? .casting : raw.flatMap(LandPriority.init(rawValue:)) ?? .balanced }
@@ -68,8 +68,8 @@ struct LandPreferences: Equatable, Sendable {
     var returnMinutes: Int? = nil
     var daylightOnly = false
 }
-struct ConditionItem: Equatable, Sendable { let title: String; let value: String; let mood: WindowMood }
-struct WindowAssessment: Equatable, Sendable {
+struct ConditionItem: Equatable, Sendable, Codable { let title: String; let value: String; let mood: WindowMood }
+struct WindowAssessment: Equatable, Sendable, Codable {
     let mood: WindowMood
     let conditions: [ConditionItem]
     let confidence: WindowMood
@@ -98,7 +98,7 @@ func comfortMood(_ band: Int) -> WindowMood {
 let needsDataMood = WindowMood(emoji: "❓", label: "Needs more data")
 
 /// A subjective planning reaction, not a catch probability or safety clearance.
-struct WindowMood: Equatable, Sendable {
+struct WindowMood: Equatable, Sendable, Codable {
     let emoji: String
     let label: String
 

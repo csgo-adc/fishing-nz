@@ -178,6 +178,7 @@ private fun encodedFishPhoto(context: android.content.Context, uri: android.net.
         var initialResumeSeen = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                if (initialResumeSeen) vm.refreshWindowsIfOld()
                 if (initialResumeSeen && hasLocationPermission() && !homeLocationLoading) {
                     homeLocationLoading = true
                     requestCurrentLocation(context, { point -> homeLocationLoading = false; vm.updateLocation(point) },
@@ -1135,6 +1136,26 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
     }.getOrNull()
 }
 
+private val updatedClock = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+
+/** "Updated 3:10 PM" and Refresh; when a refresh failed, which earlier windows are shown instead (WindowCache). */
+@Composable private fun WindowsFreshness(s: FishingUiState, onRefresh: () -> Unit) {
+    val at = s.recommendationsUpdatedAt ?: return
+    val zone = java.time.ZoneId.of("Pacific/Auckland")
+    val label = if (at.atZone(zone).toLocalDate() == java.time.LocalDate.now(zone)) at.atZone(zone).format(updatedClock)
+        else nz.fishingnz.app.data.OfflineCache.savedLabel(at)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(if (s.recommendationsRefreshing) "Updating…" else "Updated $label", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall)
+            if (s.recommendationsOffline && !s.recommendationsRefreshing) Text("Couldn't refresh. These windows were found $label.",
+                color = Orange, style = MaterialTheme.typography.bodySmall)
+        }
+        if (s.recommendationsRefreshing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        else TextButton(onClick = onRefresh) { Text("Refresh") }
+    }
+}
+
 @Composable fun ResultsScreen(s: FishingUiState, vm: FishingViewModel) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1161,6 +1182,7 @@ private suspend fun resolvedCity(context: android.content.Context, point: GeoPoi
                 }
             }
             s.locationNotice?.let { item { Text(it, color = Orange, style = MaterialTheme.typography.bodySmall) } }
+            if (!s.locating && !s.recommendationsLoading && s.recommendationSearch != null) item { WindowsFreshness(s, vm::forceRefreshRecommendations) }
             when {
                 s.locating -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Getting current location…", color = Navy) } }
                 s.recommendationsLoading -> item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(12.dp)); Text("Checking hourly forecasts…", color = Navy) } }

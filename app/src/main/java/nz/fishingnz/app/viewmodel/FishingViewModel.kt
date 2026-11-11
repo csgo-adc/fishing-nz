@@ -29,6 +29,10 @@ import nz.fishingnz.app.data.RecommendationEngine
 import nz.fishingnz.app.data.SearchPreferencesStore
 import nz.fishingnz.app.data.SharedWindowLink
 import nz.fishingnz.app.data.ShareService
+import nz.fishingnz.app.data.WindowCache
+import nz.fishingnz.app.BuildConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import nz.fishingnz.app.model.*
 import java.time.Instant
 import java.time.LocalDate
@@ -82,6 +86,10 @@ data class FishingUiState(
     val savedSpots: Set<String> = emptySet(), val activeTrip: Recommendation? = null,
     val selectedSpot: Recommendation? = null, val showResults: Boolean = false, val recommendationSearch: RecommendationSearch? = null,
     val recommendationsLoading: Boolean = false, val recommendationsError: String? = null, val savedRecommendations: List<Recommendation> = emptyList(),
+    /** When the shown windows were found and where from (see WindowCache), a quiet refresh under way, and whether the
+     *  last refresh failed so older windows stand in. */
+    val recommendationsUpdatedAt: Instant? = null, val recommendationOrigin: GeoPoint? = null,
+    val recommendationsRefreshing: Boolean = false, val recommendationsOffline: Boolean = false,
     val account: AccountSnapshot? = null, val accountBusy: Boolean = false, val accountLoading: Boolean = true,
     val hasStoredSession: Boolean = false,
     val signInProviders: SignInProviders = SignInProviders(),
@@ -108,6 +116,20 @@ val FishingUiState.searchPlaceName: String? get() = selectedSearchSpot?.name ?: 
 
 /** True when the plan searches just one place and that place is known. */
 val FishingUiState.searchesOnePlace: Boolean get() = searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && searchPlaceName != null
+
+/**
+ * Everything a window search depends on except the place, which WindowCache compares by distance. A change to any of
+ * these means a new search; going back to an earlier plan finds its saved windows again.
+ */
+fun windowSearchKey(s: FishingUiState): String {
+    val single = s.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION
+    return listOf(
+        if (s.boat) "boat" else "land", s.radiusKm, s.dateStart, s.dateEnd, s.timeChoice.name,
+        s.searchHours?.let { "${it.start}-${it.end}" } ?: "-", s.preference.name, s.tidePhase.name, s.sessionHours,
+        s.landPreferences, s.searchLocationMode.name, s.selectedSearchStation?.id?.takeIf { single } ?: "-",
+        s.selectedSearchSpot?.name?.takeIf { single } ?: "-",
+    ).joinToString("|")
+}
 
 class FishingViewModel(private val repository: FishingRepository = FishingRepository()) : ViewModel() {
     private val recommendationEngine = RecommendationEngine()
@@ -316,13 +338,16 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             hasDeviceLocation = true, originName = newOriginName, locating = false,
             locationNotice = null, weather = if (originChanged) null else old.weather,
             tide = if (originChanged) null else old.tide,
-            recommendationSearch = if (originChanged) null else old.recommendationSearch,
+            // GPS drift of a few hundred metres keeps the windows; moving further finds them again (WindowCache.MOVE_KM).
+            recommendationSearch = if (originChanged && movedFar(old, value)) null else old.recommendationSearch,
             tideDeviceLocation = value, tidePlaceName = placeName ?: nearestCityName(value), tideLocationAttempted = true, tideLocationNotice = null, selectedStation = nearest)
         syncRulesAreaFromDeviceLocation(value)
         if (nearest != old.selectedStation) refreshStationTide()
         if (originChanged) refreshConditions()
-        if (_state.value.showResults && (originChanged || old.locating)) refreshRecommendations()
+        if (_state.value.showResults && ((originChanged && movedFar(old, value)) || old.locating)) refreshRecommendations()
     }
+    private fun movedFar(old: FishingUiState, point: GeoPoint): Boolean =
+        old.recommendationSearch == null || old.recommendationOrigin?.let { WindowCache.distanceKm(it, point) > WindowCache.MOVE_KM } != false
     fun completeLocationSearch(value: GeoPoint, placeName: String? = null) {
         if (_state.value.locating) updateLocation(value, placeName)
     }
@@ -400,7 +425,19 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
             tideLocationNotice = "Current location unavailable. Showing ${_state.value.selectedStation.name}; choose a station below or try again.")
     }
     fun changeTideDate(value: LocalDate) { _state.value = _state.value.copy(tideDate = value); refreshStationTide() }
-    fun showResults() { _state.value = _state.value.copy(showResults = true); refreshRecommendations() }
+    /** "See all": the windows Home already found, without searching again unless they are missing or over an hour old. */
+    fun showResults() {
+        val current = _state.value
+        _state.value = current.copy(showResults = true)
+        if (current.recommendationSearch == null || current.recommendationsError != null || windowsAreOld(current)) refreshRecommendations()
+    }
+    /** Coming back to the app: windows over an hour old are refreshed (quietly while they are under six hours old). */
+    fun refreshWindowsIfOld() {
+        val current = _state.value
+        if (current.recommendationSearch != null && !current.recommendationsLoading && !current.recommendationsRefreshing && windowsAreOld(current)) refreshRecommendations()
+    }
+    private fun windowsAreOld(s: FishingUiState): Boolean =
+        s.recommendationsUpdatedAt?.let { System.currentTimeMillis() - it.toEpochMilli() > WindowCache.FRESH_MS } ?: true
     fun closeResults() { _state.value = _state.value.copy(showResults = false) }
     fun openSpot(value: Recommendation) {
         Analytics.track("spot_opened", "spot_id" to recommendationKey(value), "mode" to if (value.boat) "boat" else "land")
@@ -600,20 +637,37 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
         return repository.fishRules(species.trim(), areaId).also { rulesCache[key] = it }
     }
 
-    fun refreshRecommendations() {
+    /** Shows the windows for the plan: from the phone when WindowCache has them, otherwise from a new search. */
+    fun refreshRecommendations() = findWindows(force = false)
+    /** "Refresh" on the results: always searches again, keeping the shown windows until the new ones arrive. */
+    fun forceRefreshRecommendations() = findWindows(force = true)
+
+    private fun findWindows(force: Boolean) {
         recommendationJob?.cancel()
         val query = _state.value
         if (query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION && query.searchPlaceName == null) {
-            _state.value = query.copy(locating = false, recommendationsLoading = false,
+            _state.value = query.copy(locating = false, recommendationsLoading = false, recommendationsRefreshing = false,
                 recommendationsError = "Choose a place in your plan before searching.", recommendationSearch = null)
             return
         }
         if (query.originName == null) {
-            _state.value = query.copy(locating = false, recommendationsLoading = false,
+            _state.value = query.copy(locating = false, recommendationsLoading = false, recommendationsRefreshing = false,
                 recommendationsError = "Go back to Home to choose a city for the search.", recommendationSearch = null)
             return
         }
-        _state.value = query.copy(recommendationsLoading = true, recommendationsError = null, recommendationSearch = null)
+        val key = windowSearchKey(query)
+        val build = BuildConfig.VERSION_CODE
+        val hit = if (force) null else WindowCache.lookup(WindowCache.load(), key, query.location, System.currentTimeMillis(), build)
+        if (hit != null) {
+            _state.value = query.copy(recommendationSearch = hit.entry.search, recommendationsLoading = false, recommendationsError = null,
+                recommendationsUpdatedAt = Instant.ofEpochMilli(hit.entry.savedAtMs), recommendationOrigin = hit.entry.origin,
+                recommendationsOffline = false, recommendationsRefreshing = hit.freshness == WindowCache.Freshness.STALE)
+            if (hit.freshness == WindowCache.Freshness.FRESH) return
+        }
+        // A forced refresh keeps the shown windows on screen; a first search shows the loading card.
+        val quiet = hit != null || (force && query.recommendationSearch != null)
+        _state.value = if (quiet) _state.value.copy(recommendationsRefreshing = true, recommendationsError = null)
+            else query.copy(recommendationsLoading = true, recommendationsError = null, recommendationSearch = null, recommendationsOffline = false)
         recommendationJob = viewModelScope.launch {
             try {
                 val single = query.searchLocationMode == SearchLocationMode.SPECIFIC_LOCATION
@@ -622,15 +676,35 @@ class FishingViewModel(private val repository: FishingRepository = FishingReposi
                     priority = query.preference, land = query.landPreferences,
                     daylightOnly = query.timeChoice == TimeChoice.DAYTIME, specificSpot = query.selectedSearchSpot.takeIf { single },
                     tidePhase = query.tidePhase, sessionHours = query.sessionHours)
-                _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false)
+                val allFailed = result.nearbySpots > 0 && result.failedSpots >= result.nearbySpots
+                if (allFailed && showSavedWindows(key, query, build)) return@launch
+                val now = System.currentTimeMillis()
+                // Only complete answers are kept: a spot whose forecast failed is tried again next time.
+                if (result.failedSpots == 0) withContext(Dispatchers.IO) { WindowCache.save(WindowCache.Entry(key, query.location, now, build, result)) }
+                _state.value = _state.value.copy(recommendationSearch = result, recommendationsLoading = false, recommendationsRefreshing = false,
+                    recommendationsUpdatedAt = Instant.ofEpochMilli(now), recommendationOrigin = query.location, recommendationsOffline = false)
                 Analytics.track("search_run", "mode" to if (query.boat) "boat" else "land", "radius_km" to query.radiusKm,
                     "date_preset" to query.dateLabel, "result_count" to result.items.size)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                _state.value = _state.value.copy(recommendationsLoading = false, recommendationsError = error.message ?: "Forecasts are unavailable. Try again.")
+                if (showSavedWindows(key, query, build)) return@launch
+                // A quiet refresh that fails keeps the shown windows, marked as not refreshed.
+                _state.value = if (quiet) _state.value.copy(recommendationsRefreshing = false, recommendationsOffline = true)
+                    else _state.value.copy(recommendationsLoading = false, recommendationsRefreshing = false,
+                        recommendationsError = error.message ?: "Forecasts are unavailable. Try again.")
             }
         }
+    }
+
+    /** When a search fails (often no signal): the last windows for this plan, up to a day old, marked as not refreshed. */
+    private fun showSavedWindows(key: String, query: FishingUiState, build: Int): Boolean {
+        val saved = WindowCache.lookup(WindowCache.load(), key, query.location, System.currentTimeMillis(), build, maxAgeMs = WindowCache.OFFLINE_MS)
+            ?: return false
+        _state.value = _state.value.copy(recommendationSearch = saved.entry.search, recommendationsLoading = false, recommendationsRefreshing = false,
+            recommendationsError = null, recommendationsUpdatedAt = Instant.ofEpochMilli(saved.entry.savedAtMs),
+            recommendationOrigin = saved.entry.origin, recommendationsOffline = true)
+        return true
     }
     fun setFishPhoto(uri: Uri?) {
         fishIdentifyGeneration += 1

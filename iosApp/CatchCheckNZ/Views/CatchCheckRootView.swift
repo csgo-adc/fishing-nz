@@ -1967,6 +1967,40 @@ private struct AccountInput<Content: View>: View {
     }
 }
 
+/// "Updated 3:10 PM" and Refresh; when a refresh failed, which earlier windows are shown instead (`WindowCache`).
+/// Android has the same row in `WindowsFreshness` (Screens.kt).
+private struct WindowsFreshnessRow: View {
+    let updated: Date
+    let refreshing: Bool
+    let offline: Bool
+    let refresh: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(refreshing ? "Updating…" : "Updated \(label)").font(.footnote).foregroundStyle(.secondary)
+                if offline && !refreshing {
+                    Text("Couldn't refresh. These windows were found \(label).").font(.footnote).foregroundStyle(CatchCheckColor.orange)
+                }
+            }
+            Spacer()
+            if refreshing { ProgressView().controlSize(.small) }
+            else { Button("Refresh", action: refresh).font(.footnote.weight(.semibold)).buttonStyle(.borderless) }
+        }
+    }
+
+    private var label: String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        guard calendar.isDateInToday(updated) else { return OfflineCache.savedLabel(updated) }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: updated)
+    }
+}
+
 struct ResultsView: View {
     @EnvironmentObject private var vm: FishingViewModel
     var body: some View {
@@ -1981,6 +2015,12 @@ struct ResultsView: View {
                         Text(vm.locationSummary)
                         Text(vm.whatMattersLabel)
                     }.font(.subheadline).foregroundStyle(.secondary)
+                    if vm.hasSearchedRecommendations, !vm.isLoadingRecommendations, !vm.isResolvingRecommendationLocation,
+                       let updated = vm.recommendationsUpdatedAt {
+                        WindowsFreshnessRow(updated: updated, refreshing: vm.isRefreshingRecommendations, offline: vm.recommendationsOffline) {
+                            vm.searchRecommendations(force: true)
+                        }
+                    }
                     if vm.searchesOnePlace, vm.hasSearchedRecommendations,
                        !vm.isResolvingRecommendationLocation, !vm.isLoadingRecommendations,
                        vm.recommendationError == nil {

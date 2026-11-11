@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.71 — 2026-11-11 (build code 72)
+
+- **Fishing windows open instantly.** Android and iPhone keep the windows they found on the phone. **See all** now
+  shows the windows Home already found instead of searching again, a GPS fix that moved less than 2 km no longer
+  starts a new search, and opening the app later shows the last windows at once. Rules: up to 1 hour old they are used
+  as they are; up to 6 hours old they show at once while a new search runs quietly; older ones, another plan, a move of
+  more than 2 km or a new app build search again. Ended windows are left out, the last 6 plans are kept, and with no
+  signal the last list (up to a day old) stands in with "Couldn't refresh". The results show "Updated 3:10 PM" and
+  **Refresh**. See `docs/fishing-window-implementation.md`. Tested in the Android emulator, online and offline; the
+  iPhone code builds and its regression passes, but this Mac has no iPhone simulator to run it.
+- Translations for the two new texts in Chinese (Simplified and Traditional), Korean and Hindi.
+
 ## 1.0.70 — 2026-11-11 (build code 71)
 
 - **Fishing rules updates in the CMS.** New **Rules** page: each area's MPI review date, when it was saved and why it

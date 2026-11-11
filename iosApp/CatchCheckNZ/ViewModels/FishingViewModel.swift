@@ -241,6 +241,13 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
     @Published var isLoadingRecommendations = false
     @Published var hasSearchedRecommendations = false
     @Published var recommendationError: String?
+    /// When the shown windows were found (see `WindowCache`), a quiet refresh under way, and whether the last refresh
+    /// failed so older windows stand in.
+    @Published private(set) var recommendationsUpdatedAt: Date?
+    @Published private(set) var isRefreshingRecommendations = false
+    @Published private(set) var recommendationsOffline = false
+    /// Where the shown windows were searched from, so GPS drift doesn't search again.
+    private var recommendationResultsOrigin: GeoPoint?
     /// Nearby spots from the last search whose forecast failed, nearest first.
     @Published private(set) var failedSpotNames: [String] = []
     /// Nearby spots from the last search that loaded but had no window that fits, nearest first.
@@ -711,17 +718,66 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         recommendationError = nil
         hasSearchedRecommendations = false
         isLoadingRecommendations = false
+        isRefreshingRecommendations = false
+        recommendationsOffline = false
+        recommendationsUpdatedAt = nil
+        recommendationResultsOrigin = nil
     }
 
-    func searchRecommendations() {
+    /// Everything a window search depends on except the place, which `WindowCache` compares by distance.
+    private var windowSearchKey: String {
+        let days = recommendationDays().map { Self.isoDay($0) }
+        let hours = preferredHours.map { "\($0.startMinute)-\($0.endMinute)" } ?? "-"
+        return [isBoatFishing ? "boat" : "land", String(radiusKm), days.joined(separator: ","), timeMode.rawValue, hours,
+                preference.rawValue, tidePhase.rawValue, String(sessionHours), "\(landPreferences)", searchesOnePlace ? "one" : "near",
+                searchesOnePlace ? (selectedSearchStation?.id ?? "-") : "-", searchesOnePlace ? (selectedSearchSpot?.name ?? "-") : "-"]
+            .joined(separator: "|")
+    }
+
+    private static func isoDay(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Pacific/Auckland")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private func showWindows(_ entry: WindowCache.Entry, offline: Bool) {
+        scoredWindows = entry.windows
+        failedSpotNames = entry.failedSpots
+        nearbyPlacesWithoutWindows = entry.spotsWithoutWindows
+        recommendationError = nil
+        hasSearchedRecommendations = true
+        isLoadingRecommendations = false
+        recommendationsUpdatedAt = entry.savedAt
+        recommendationResultsOrigin = entry.origin
+        recommendationsOffline = offline
+    }
+
+    /// True when the phone has moved more than `WindowCache.moveKm` from where the shown windows were searched.
+    private func movedFarFromWindows(_ point: GeoPoint) -> Bool {
+        guard hasSearchedRecommendations, let origin = recommendationResultsOrigin else { return true }
+        return WindowCache.distanceKm(origin, point) > WindowCache.moveKm
+    }
+
+    /// Coming back to the app: windows over an hour old are refreshed (quietly while they are under six hours old).
+    func refreshWindowsIfOld() {
+        guard hasSearchedRecommendations, !isLoadingRecommendations, !isRefreshingRecommendations,
+              let updated = recommendationsUpdatedAt, Date.now.timeIntervalSince(updated) > WindowCache.freshFor else { return }
+        searchRecommendations()
+    }
+
+    /// Shows the windows for the plan: from the phone when `WindowCache` has them, otherwise from a new search.
+    /// `force` (Refresh on the results) always searches again, keeping the shown windows until the new ones arrive.
+    func searchRecommendations(force: Bool = false) {
         recommendationTask?.cancel()
         let searchID = UUID()
         recommendationSearchID = searchID
-        scoredWindows = []
-        failedSpotNames = []
-        nearbyPlacesWithoutWindows = []
-        recommendationError = nil
         guard let origin = recommendationOrigin else {
+            scoredWindows = []
+            failedSpotNames = []
+            nearbyPlacesWithoutWindows = []
+            recommendationError = nil
             hasSearchedRecommendations = false
             isLoadingRecommendations = false
             isResolvingRecommendationLocation = true
@@ -750,27 +806,58 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
         let hours = preferredHours
         let priority = preference
         let land = landPreferences
-        scoredWindows = []
-        recommendationError = nil
-        hasSearchedRecommendations = true
-        isLoadingRecommendations = true
+        let key = windowSearchKey
+        let build = AppUpdates.installedBuild
+        let hit = force ? nil : WindowCache.lookup(WindowCache.load(), key: key, origin: origin, now: .now, build: build)
+        if let hit {
+            showWindows(hit.entry, offline: false)
+            isRefreshingRecommendations = hit.freshness == .stale
+            if hit.freshness == .fresh { return }
+        }
+        // A forced refresh keeps the shown windows on screen; a first search shows the loading state.
+        let quiet = hit != nil || (force && hasSearchedRecommendations && recommendationError == nil)
+        if quiet {
+            isRefreshingRecommendations = true
+        } else {
+            scoredWindows = []
+            failedSpotNames = []
+            nearbyPlacesWithoutWindows = []
+            recommendationError = nil
+            recommendationsOffline = false
+            hasSearchedRecommendations = true
+            isLoadingRecommendations = true
+        }
+        /// When a search fails (often no signal): the last windows for this plan, up to a day old, marked as not refreshed.
+        func showSavedWindows() -> Bool {
+            guard let saved = WindowCache.lookup(WindowCache.load(), key: key, origin: origin, now: .now, build: build, maxAge: WindowCache.offlineFor) else { return false }
+            showWindows(saved.entry, offline: true)
+            isRefreshingRecommendations = false
+            return true
+        }
         recommendationTask = Task {
             do {
                 let result = try await scoringService.search(origin: origin, radiusKm: radius, selectedStation: station, selectedSpot: spot,
                                                              days: days, boat: boat, preferredHours: hours, priority: priority, land: land,
                                                              daylightOnly: daylightOnly, tidePhase: phase, sessionHours: session)
                 guard !Task.isCancelled, recommendationSearchID == searchID else { return }
-                let windows = result.windows
-                scoredWindows = windows
-                failedSpotNames = result.failedSpots
-                nearbyPlacesWithoutWindows = result.spotsWithoutWindows
+                let allFailed = result.windows.isEmpty && result.spotsWithoutWindows.isEmpty && !result.failedSpots.isEmpty
+                if allFailed, showSavedWindows() { return }
+                let entry = WindowCache.Entry(key: key, origin: origin, savedAt: .now, build: build, windows: result.windows,
+                                              failedSpots: result.failedSpots, spotsWithoutWindows: result.spotsWithoutWindows)
+                // Only complete answers are kept: a spot whose forecast failed is tried again next time.
+                if result.failedSpots.isEmpty { WindowCache.save(entry) }
+                showWindows(entry, offline: false)
+                isRefreshingRecommendations = false
                 Analytics.track("search_run", ["mode": .text(boat ? "boat" : "land"), "radius_km": .number(radius),
-                                               "date_preset": .text(datePreset.rawValue), "result_count": .number(Double(windows.count))])
+                                               "date_preset": .text(datePreset.rawValue), "result_count": .number(Double(result.windows.count))])
             } catch is CancellationError {
                 return
             } catch {
                 guard recommendationSearchID == searchID else { return }
-                recommendationError = error.localizedDescription
+                if showSavedWindows() { return }
+                isRefreshingRecommendations = false
+                // A quiet refresh that fails keeps the shown windows, marked as not refreshed.
+                if quiet { recommendationsOffline = true } else { recommendationError = error.localizedDescription }
             }
             guard recommendationSearchID == searchID else { return }
             isLoadingRecommendations = false
@@ -913,7 +1000,8 @@ final class FishingViewModel: NSObject, ObservableObject, @preconcurrency CLLoca
             }
         }
         refreshConditions()
-        if searchesFromDeviceLocation {
+        // GPS drift of a few hundred metres keeps the windows; moving further finds them again (WindowCache.moveKm).
+        if searchesFromDeviceLocation, movedFarFromWindows(location) {
             if showingResults { searchRecommendations() } else { invalidateRecommendations() }
         }
         if pendingFishPhoto != nil { identifyPendingFish(at: location) }
