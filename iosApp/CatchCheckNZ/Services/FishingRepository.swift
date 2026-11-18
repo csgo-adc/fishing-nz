@@ -254,9 +254,7 @@ struct FishingRepository {
 
     func conditions(at point: GeoPoint) async throws -> (WeatherState, TideState?) {
         let weatherURL = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(point.latitude)&longitude=\(point.longitude)&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation&daily=sunset&forecast_days=1&timezone=auto")!
-        let (data, response) = try await URLSession.shared.data(from: weatherURL)
-        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-        let state = try Self.currentWeather(data)
+        let state = try Self.currentWeather(try await OpenMeteo.data(from: weatherURL, timeout: 15))
         let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
         let nearest = tideStations.min {
             origin.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <

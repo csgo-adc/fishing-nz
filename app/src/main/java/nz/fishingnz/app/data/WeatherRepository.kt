@@ -4,8 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import nz.fishingnz.app.model.GeoPoint
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -59,16 +57,7 @@ class WeatherRepository {
             "&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code,is_day" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max" +
             "&forecast_days=16&timezone=auto&wind_speed_unit=kmh&temperature_unit=celsius&precipitation_unit=mm"
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 15_000
-        try {
-            if (connection.responseCode !in 200..299) error("Weather service returned ${connection.responseCode}.")
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            decodeWeatherForecast(JSONObject(body), Instant.now())
-        } finally {
-            connection.disconnect()
-        }
+        decodeWeatherForecast(JSONObject(OpenMeteo.getText(url, connectTimeoutMillis = 10_000, readTimeoutMillis = 15_000)), Instant.now())
     }
 }
 

@@ -30,15 +30,12 @@ class FishingRepository {
     private val nzZone = ZoneId.of("Pacific/Auckland")
 
     suspend fun conditions(point: GeoPoint): Pair<WeatherState, TideState?> = withContext(Dispatchers.IO) {
-        val connection = get("https://api.open-meteo.com/v1/forecast?latitude=${point.latitude}&longitude=${point.longitude}&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation&daily=sunset&forecast_days=1&timezone=auto")
-        try {
-            if (connection.responseCode !in 200..299) error("Weather request failed")
-            val weather = currentWeather(connection.inputStream.bufferedReader().use { it.readText() })
-            val tide = try { tide(nearestTideStation(point), LocalDate.now(nzZone)) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { null }
-            weather to tide
-        } finally { connection.disconnect() }
+        val weather = currentWeather(OpenMeteo.getText("https://api.open-meteo.com/v1/forecast?latitude=${point.latitude}&longitude=${point.longitude}&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation&daily=sunset&forecast_days=1&timezone=auto",
+            connectTimeoutMillis = 8_000, readTimeoutMillis = 8_000))
+        val tide = try { tide(nearestTideStation(point), LocalDate.now(nzZone)) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+        weather to tide
     }
 
     /** Home's current weather from an Open-Meteo response; the wind direction and sunset are left out when missing. */

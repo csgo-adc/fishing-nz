@@ -250,6 +250,7 @@ import Foundation
         try expect(FishingScoringService.daylightFraction(start: at(30, 23), end: at(30, 23).addingTimeInterval(7200), solar: solar, calendar: calendar) == nil, "Midnight needs next-day solar")
         try landChecks(calendar: calendar)
         try highlightChecks(calendar: calendar)
+        try await openMeteoChecks()
         print("Passed \(checks) Swift fishing-window regression checks.")
         print("Frozen Raglan: weather 07:00–09:00; around high 11:00–13:00; official high 13:23.")
         if CommandLine.arguments.contains("--live") {
@@ -268,6 +269,38 @@ import Foundation
         }
     }
 
+    /// A hanging api.open-meteo.com server falls back to the second server, which then goes first for half an hour.
+    static func openMeteoChecks() async throws {
+        let forecast = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=-36.85&longitude=174.76&current=temperature_2m&timezone=auto")!
+        let fallback = URL(string: "https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=-36.85&longitude=174.76&current=temperature_2m&timezone=auto")!
+        let marine = URL(string: "https://marine-api.open-meteo.com/v1/marine?latitude=-36.85&longitude=174.76&hourly=wave_height")!
+        final class Calls: @unchecked Sendable { var items: [(URL, TimeInterval)] = [] }
+        OpenMeteo.reset(); defer { OpenMeteo.reset() }
+        try expect(OpenMeteo.candidates(for: forecast) == [forecast, fallback], "Forecast requests try the second server after the main one")
+        try expect(OpenMeteo.candidates(for: marine) == [marine], "Marine requests have no second server")
+
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let calls = Calls()
+        let data = try await OpenMeteo.data(from: forecast, timeout: 15, now: { start }, download: { url, timeout in
+            calls.items.append((url, timeout))
+            if url == forecast { throw URLError(.timedOut) }
+            return Data("{}".utf8)
+        })
+        try expect(data == Data("{}".utf8), "Fallback answer returned")
+        try expect(calls.items.map(\.0) == [forecast, fallback] && calls.items.map(\.1) == [10, 15], "Main server gets the quick limit; the second server keeps the caller's")
+        try expect(OpenMeteo.candidates(for: forecast, now: start.addingTimeInterval(29 * 60)) == [fallback, forecast], "Second server goes first after a failure")
+        calls.items = []
+        _ = try await OpenMeteo.data(from: forecast, timeout: 20, now: { start.addingTimeInterval(29 * 60) }, download: { url, timeout in
+            calls.items.append((url, timeout)); return Data("{}".utf8)
+        })
+        try expect(calls.items.map(\.0) == [fallback] && calls.items.map(\.1) == [20], "Going first, the second server keeps the full limit")
+        try expect(OpenMeteo.candidates(for: forecast, now: start.addingTimeInterval(31 * 60)) == [forecast, fallback], "Main server goes first again after half an hour")
+
+        OpenMeteo.reset()
+        var failed = false
+        do { _ = try await OpenMeteo.data(from: marine, timeout: 15, download: { _, _ in throw URLError(.timedOut) }) } catch { failed = true }
+        try expect(failed && OpenMeteo.candidates(for: forecast) == [forecast, fallback], "A marine failure is not retried and does not move forecasts")
+    }
     static func landChecks(calendar: Calendar) throws {
         func at(_ hour: Int) -> Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: 4, hour: hour))! }
         func hour(_ h: Int, wind: Double = 10, gust: Double = 18, rain: Double = 0,

@@ -136,10 +136,7 @@ struct PlaceConditionsService: Sendable {
         do { return try await work() } catch is CancellationError { throw CancellationError() } catch { try Task.checkCancellation(); return nil }
     }
     private func fetch(_ url: URL) async throws -> Data {
-        var request = URLRequest(url: url); request.timeoutInterval = 20
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-        return data
+        try await OpenMeteo.data(from: url, timeout: 20)
     }
     static func weatherURL(_ point: GeoPoint, pastDays: Int) -> URL {
         url("api.open-meteo.com", "/v1/forecast", point, pastDays, weatherDays, [

@@ -10,8 +10,6 @@ import kotlinx.coroutines.sync.withPermit
 import nz.fishingnz.app.model.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -279,13 +277,8 @@ class RecommendationEngine {
     }
     private fun JSONArray.number(index: Int): Double? = if (index >= length() || isNull(index)) null else optDouble(index, Double.NaN).takeIf { it.isFinite() }
 
-    private fun getJson(url: String): JSONObject {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 8_000; readTimeout = 15_000 }
-        try {
-            require(connection.responseCode in 200..299) { "Forecast request failed (${connection.responseCode})." }
-            return JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-        } finally { connection.disconnect() }
-    }
+    private fun getJson(url: String): JSONObject =
+        JSONObject(OpenMeteo.getText(url, connectTimeoutMillis = 8_000, readTimeoutMillis = 15_000))
     private fun distanceKm(a: GeoPoint, b: GeoPoint): Double {
         val dLat = Math.toRadians(b.latitude - a.latitude)
         val dLon = Math.toRadians(b.longitude - a.longitude)

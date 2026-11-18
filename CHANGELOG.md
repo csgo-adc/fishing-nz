@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.79 — 2026-11-18 (build code 80)
+
+- **Weather forecast loads again when Open-Meteo's NZ server hangs.** Since 13 November `api.open-meteo.com` sends
+  New Zealand to a single server (51.81.167.44) that often leaves connections hanging until they time out
+  (open-meteo/open-meteo#2329), so the Weather page, Home weather, fishing windows and place conditions showed "could
+  not be loaded". Measured from NZ on 18 November: 2 of 10 requests answered. Android and iPhone now send every
+  `/v1/forecast` request through one helper (`OpenMeteo.kt`; `OpenMeteo` in `FishingScoringService.swift`) that gives
+  the main server 6–10 s, then retries the same request on `historical-forecast-api.open-meteo.com`. That host runs on
+  a different server and returned the same forecast, value for value, for all four request types the apps send; it
+  answered 10 of 10. After a failure the second server goes first for 30 minutes. Marine requests are unchanged.
+  Unit tests on both platforms; a live Android load with the main server blocked took 7.7 s, then 0.7 s. Needs new
+  store builds; no API or CMS deploy.
+
 ## 1.0.78 — 2026-11-11 (build code 79)
 
 - **Release note for Android 1.0.77 (78)** in `server/fishial-proxy/app-versions.json`, in all five languages: the app

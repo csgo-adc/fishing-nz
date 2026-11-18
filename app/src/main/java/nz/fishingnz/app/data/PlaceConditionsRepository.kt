@@ -3,8 +3,6 @@ package nz.fishingnz.app.data
 import kotlinx.coroutines.*
 import nz.fishingnz.app.model.*
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.*
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -68,13 +66,8 @@ class PlaceConditionsRepository {
     private suspend fun <T> outcome(work: suspend () -> T): Result<T> = try { Result.success(work()) }
         catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { Result.failure(error) }
     private suspend fun request(url: String): JSONObject = withContext(Dispatchers.IO) {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000; connection.readTimeout = 20_000
-        try {
-            require(connection.responseCode in 200..299) { "Provider unavailable" }
-            val response = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            ensureActive(); response
-        } finally { connection.disconnect() }
+        val response = JSONObject(OpenMeteo.getText(url, connectTimeoutMillis = 15_000, readTimeoutMillis = 20_000))
+        ensureActive(); response
     }
     internal fun weatherURL(point: GeoPoint, past: Int) = "https://api.open-meteo.com/v1/forecast?latitude=${point.latitude}&longitude=${point.longitude}" +
         "&hourly=temperature_2m,apparent_temperature,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,precipitation_probability,weather_code,is_day,visibility" +

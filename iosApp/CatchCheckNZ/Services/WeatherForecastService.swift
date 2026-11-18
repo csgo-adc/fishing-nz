@@ -57,11 +57,7 @@ struct WeatherForecastService {
             URLQueryItem(name: "precipitation_unit", value: "mm")
         ]
         guard let url = components.url else { throw URLError(.badURL) }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 15
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
-        return try Self.decode(data)
+        return try Self.decode(try await OpenMeteo.data(from: url, timeout: 15))
     }
 
     static func decode(_ data: Data, fetchedAt: Date = .now) throws -> WeatherSnapshot {

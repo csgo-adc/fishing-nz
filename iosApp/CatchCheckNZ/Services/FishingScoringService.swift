@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct FishingSpot: Sendable {
     let name: String
@@ -814,10 +815,7 @@ struct FishingScoringService: Sendable {
         return components.url!
     }
     private static func fetch<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {
-        var request = URLRequest(url: url); request.timeoutInterval = 15
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let response = response as? HTTPURLResponse, 200...299 ~= response.statusCode else { throw URLError(.badServerResponse) }
-        return try JSONDecoder().decode(type, from: data)
+        try JSONDecoder().decode(type, from: try await OpenMeteo.data(from: url, timeout: 15))
     }
 }
 
@@ -1097,5 +1095,64 @@ private enum ScoringError: LocalizedError {
         case .invalidForecast: return "Forecast units or timestamps could not be verified."
         case .missingAccessTime: return "Set access/setup and return time for daylight only."
         }
+    }
+}
+
+/// Open-Meteo forecast requests, with a second server to fall back on.
+///
+/// api.open-meteo.com sends New Zealand to a single server, and since 13 November 2026 that server has often left new
+/// connections hanging until they time out (github.com/open-meteo/open-meteo/issues/2329), so the forecast failed to
+/// load. historical-forecast-api.open-meteo.com runs on a different server and answers the same `/v1/forecast` request
+/// with the same forecast, so a forecast request that fails is tried there as well, and that server goes first for
+/// half an hour after a failure. Marine and every other request go out unchanged, with no second try.
+enum OpenMeteo {
+    static let primaryHost = "api.open-meteo.com"
+    static let fallbackHost = "historical-forecast-api.open-meteo.com"
+    static let preferFallbackFor: TimeInterval = 30 * 60
+    /// The main server gives up sooner when the second server follows it, so a hang costs seconds, not half a minute.
+    /// The second server always gets the caller's full limit: a request it has not answered lately can take 15 s.
+    static let quickTimeout: TimeInterval = 10
+    typealias Download = @Sendable (URL, TimeInterval) async throws -> Data
+    private static let primaryFailedAt = OSAllocatedUnfairLock<Date?>(initialState: nil)
+
+    /// The URLs to try for `url`, in order.
+    static func candidates(for url: URL, now: Date = .now) -> [URL] {
+        guard url.scheme == "https", url.host == primaryHost, url.path == "/v1/forecast",
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return [url] }
+        components.host = fallbackHost
+        guard let fallback = components.url else { return [url] }
+        if let failedAt = primaryFailedAt.withLock({ $0 }), (0..<preferFallbackFor).contains(now.timeIntervalSince(failedAt)) { return [fallback, url] }
+        return [url, fallback]
+    }
+
+    /// The body of the first 2xx answer for `url`; throws the last error when no server gives one.
+    static func data(from url: URL, timeout: TimeInterval, now: () -> Date = { .now },
+                     download: Download = { url, timeout in try await OpenMeteo.download(url, timeout: timeout) }) async throws -> Data {
+        let urls = candidates(for: url, now: now())
+        var failure: Error = URLError(.badServerResponse)
+        for (index, candidate) in urls.enumerated() {
+            let primary = candidate.host == primaryHost
+            do {
+                let data = try await download(candidate, primary && index < urls.count - 1 ? min(timeout, quickTimeout) : timeout)
+                if primary { primaryFailedAt.withLock { $0 = nil } }
+                return data
+            } catch {
+                // A cancelled load stops here: it is not a server failure and must not be retried elsewhere.
+                if error is CancellationError || Task.isCancelled { throw error }
+                if primary, urls.count > 1 { let at = now(); primaryFailedAt.withLock { $0 = at } }
+                failure = error
+            }
+        }
+        throw failure
+    }
+
+    /// Forgets an earlier failure; for tests.
+    static func reset() { primaryFailedAt.withLock { $0 = nil } }
+
+    static func download(_ url: URL, timeout: TimeInterval) async throws -> Data {
+        var request = URLRequest(url: url); request.timeoutInterval = timeout
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard 200...299 ~= ((response as? HTTPURLResponse)?.statusCode ?? 0) else { throw URLError(.badServerResponse) }
+        return data
     }
 }
