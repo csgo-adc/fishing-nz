@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -117,23 +118,28 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
     val firstRun = remember(context) { context.getSharedPreferences("first_run", Context.MODE_PRIVATE) }
     val locationOnboarding = remember(context) { context.getSharedPreferences("location_onboarding", Context.MODE_PRIVATE) }
     var setupDone by remember { mutableStateOf(firstRun.getBoolean("done", false) || locationOnboarding.getBoolean("requested", false)) }
+    // The launch scene (LaunchScene.kt) plays over everything on a cold start, with light bar icons on its night sea.
+    val launching = LaunchScene.playing
     SideEffect {
         (context as? Activity)?.window?.let { window ->
-            window.statusBarColor = palette.background.toArgb()
-            window.navigationBarColor = palette.surface.toArgb()
+            window.statusBarColor = (if (launching) LaunchScene.Night else palette.background).toArgb()
+            window.navigationBarColor = (if (launching) LaunchScene.Deep else palette.surface).toArgb()
+            // The theme's night-sea window background sits behind the system splash; the app's own colour after it.
+            if (!launching) window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(palette.background.toArgb()))
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !dark
-                isAppearanceLightNavigationBars = !dark
+                isAppearanceLightStatusBars = !dark && !launching
+                isAppearanceLightNavigationBars = !dark && !launching
             }
         }
     }
+    Box(Modifier.fillMaxSize()) {
     MaterialTheme(colorScheme = palette) {
         if (update.required) { RequiredUpdateScreen(update, onUpdate); return@MaterialTheme }
         // The update pop-up waits until Home has settled, and never shows over setup, a window, a spot, another
         // notice or while a trip is under way (docs/in-app-updates.md).
         val tripUnderWay = state.tripBackBy?.isAfter(java.time.Instant.now()) == true
-        LaunchedEffect(update.availableBuild, state.tab, setupDone, state.showResults, state.selectedSpot, state.sharedWindowNotice, tripUnderWay, AppTour.step) {
-            if (update.availableBuild == null || state.tab != 0 || !setupDone || state.showResults || state.selectedSpot != null
+        LaunchedEffect(update.availableBuild, state.tab, setupDone, state.showResults, state.selectedSpot, state.sharedWindowNotice, tripUnderWay, AppTour.step, launching) {
+            if (update.availableBuild == null || launching || state.tab != 0 || !setupDone || state.showResults || state.selectedSpot != null
                 || state.sharedWindowNotice != null || tripUnderWay || AppTour.step != null) return@LaunchedEffect
             delay(2_500)
             updatePrompt = AppUpdates.claimPrompt()
@@ -146,15 +152,15 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
         updatePrompt?.let { number ->
             UpdatePromptSheet(update, number, onUpdate = { updatePrompt = null; onUpdate() }, onLater = { updatePrompt = null; AppUpdates.later() })
         }
-        state.sharedWindowNotice?.let { notice ->
+        if (!launching) state.sharedWindowNotice?.let { notice ->
             LaunchedEffect(notice) { AppUpdates.noteOtherNotice() }
             AlertDialog(onDismissRequest = vm::dismissSharedWindowNotice,
                 confirmButton = { TextButton(onClick = vm::dismissSharedWindowNotice) { Text("OK") } },
                 title = { Text("Shared window") }, text = { Text(notice) })
         }
         // The tour starts once Home is on screen after the first-launch setup (AppTour.kt).
-        LaunchedEffect(setupDone, state.tab, state.showResults, state.selectedSpot) {
-            if (!setupDone || state.tab != 0 || state.showResults || state.selectedSpot != null) return@LaunchedEffect
+        LaunchedEffect(setupDone, state.tab, state.showResults, state.selectedSpot, launching) {
+            if (!setupDone || launching || state.tab != 0 || state.showResults || state.selectedSpot != null) return@LaunchedEffect
             delay(900)
             AppTour.startIfPending()
         }
@@ -215,6 +221,9 @@ fun CatchCheckApp(vm: FishingViewModel = viewModel(), onUpdate: () -> Unit = {})
         state.selectedSpot?.let { SpotDetailScreen(it, state.savedSpots.contains(recommendationKey(it)), vm) }
         if (state.tab == 0 && !state.showResults && state.selectedSpot == null) TourOverlay()
         }
+    }
+    // On the first launch the scene settles into the welcome page; its Get started reveals the setup questions.
+    if (launching) LaunchSceneOverlay(welcome = !setupDone && !state.showResults && state.selectedSpot == null)
     }
 }
 

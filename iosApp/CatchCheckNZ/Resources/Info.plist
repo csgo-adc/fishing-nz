@@ -22,5 +22,6 @@
     <key>FishIdentificationAPIBaseURL</key><string>https://fishing.fishnz.space</string>
     <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>nz.fishingnz.catchcheck.tripcheck</string></array>
     <key>UIBackgroundModes</key><array><string>fetch</string></array>
-    <key>UILaunchScreen</key><dict><key>UIColorName</key><string></string></dict>
+    <key>UILaunchScreen</key><dict><key>UIColorName</key><string>LaunchBackground</string><key>UIImageName</key><string>LaunchIcon</string><key>UIImageRespectsSafeAreaInsets</key><false/></dict>
+    <key>UIStatusBarStyle</key><string>UIStatusBarStyleLightContent</string>
 </dict></plist>

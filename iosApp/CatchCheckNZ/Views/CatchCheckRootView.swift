@@ -47,6 +47,8 @@ struct CatchCheckRootView: View {
     @ObservedObject private var updates = AppUpdates.shared
     @State private var updatePrompt: UpdatePromptItem?
     @ObservedObject private var tour = AppTour.shared
+    /// The animated scene that opens the app on a cold start (LaunchScene.swift); sheets and alerts wait for it.
+    @ObservedObject private var launch = LaunchScene.shared
     /// The first launch asks land or boat and where, once. People who used the app before 1.0.48 were already asked for
     /// location at launch, so they skip it.
     @State private var showSetup = !UserDefaults.standard.bool(forKey: "firstRunSetupDone") && CLLocationManager().authorizationStatus == .notDetermined
@@ -78,6 +80,8 @@ struct CatchCheckRootView: View {
             tour.startIfPending()
         }
         .overlay { if updates.state.required { RequiredUpdateView(state: updates.state) { updates.openStore() } } }
+        // On the first launch the scene settles into the welcome page; its Get started brings up the setup questions.
+        .overlay { if launch.playing { LaunchSceneView(welcome: { showSetup && !vm.showingResults }).transition(.opacity) } }
         // The update pop-up waits until Home has settled, and never shows over setup, a window, a spot, a More page,
         // another notice or while a trip is under way (docs/in-app-updates.md).
         .task(id: updatePromptKey) {
@@ -92,15 +96,16 @@ struct CatchCheckRootView: View {
                               onLater: { updatePrompt = nil; updates.later() })
         }
         .onChange(of: vm.sharedWindowNotice) { _, notice in if notice != nil { updates.noteOtherNotice() } }
-        .preferredColorScheme(preferredAppearance)
-        .fullScreenCover(isPresented: $vm.showingResults) { ResultsView() }
+        // Light status bar text on the scene's night sky.
+        .preferredColorScheme(launch.covering ? .dark : preferredAppearance)
+        .fullScreenCover(isPresented: Binding(get: { vm.showingResults && !launch.covering }, set: { vm.showingResults = $0 })) { ResultsView() }
         // "Show on map" from a saved window under More closes that sheet too.
         .onChange(of: vm.mapFocus?.id) { _, id in if id != nil { moreDestination = nil } }
         .sheet(item: $vm.selectedSpot) { SpotDetailView(spot: $0) }
-        .alert(tr("Shared window"), isPresented: Binding(get: { vm.sharedWindowNotice != nil }, set: { if !$0 { vm.sharedWindowNotice = nil } })) {
+        .alert(tr("Shared window"), isPresented: Binding(get: { vm.sharedWindowNotice != nil && !launch.covering }, set: { if !$0 { vm.sharedWindowNotice = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(vm.sharedWindowNotice ?? "") }
-        .sheet(item: $moreDestination) { destination in
+        .sheet(item: Binding(get: { launch.covering ? nil : moreDestination }, set: { moreDestination = $0 })) { destination in
             switch destination {
             case .trips: TripsView()
             case .catchLog: CatchLogView()
@@ -110,7 +115,7 @@ struct CatchCheckRootView: View {
             }
         }
         .task { if !showSetup { vm.requestLocation() } }
-        .fullScreenCover(isPresented: $showSetup) {
+        .fullScreenCover(isPresented: Binding(get: { showSetup && !launch.covering }, set: { showSetup = $0 })) {
             FirstRunSetupView {
                 UserDefaults.standard.set(true, forKey: "firstRunSetupDone")
                 AppTour.shared.markPending()
@@ -124,13 +129,13 @@ struct CatchCheckRootView: View {
 
     /// "home" once Home is on screen with nothing over it, when a pending tour may start.
     private var tourStartKey: String {
-        !showSetup && vm.selectedTab == 0 && !vm.showingResults && vm.selectedSpot == nil && moreDestination == nil ? "home" : "wait"
+        !showSetup && !launch.playing && vm.selectedTab == 0 && !vm.showingResults && vm.selectedSpot == nil && moreDestination == nil ? "home" : "wait"
     }
 
     /// Changes whenever the pop-up's chance to show changes; starts with "ready" only when it may show now.
     private var updatePromptKey: String {
         let tripUnderWay = (vm.tripBackBy ?? .distantPast) > Date()
-        let ready = updates.state.available != nil && vm.selectedTab == 0 && !showSetup && !vm.showingResults && vm.selectedSpot == nil
+        let ready = updates.state.available != nil && !launch.playing && vm.selectedTab == 0 && !showSetup && !vm.showingResults && vm.selectedSpot == nil
             && moreDestination == nil && vm.sharedWindowNotice == nil && !tripUnderWay && updatePrompt == nil && tour.step == nil
         return "\(ready ? "ready" : "wait")-\(updates.state.available ?? 0)"
     }

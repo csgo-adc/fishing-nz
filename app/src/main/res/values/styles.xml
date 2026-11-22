@@ -1,8 +1,12 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- The window starts on the launch scene's night sea, so the system splash, the first frame and the animated
+         scene (ui/LaunchScene.kt) follow on without a flash; the app sets its own colours once the scene has gone. -->
     <style name="Theme.FishingNZ" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:statusBarColor">#F6F8FC</item>
-        <item name="android:navigationBarColor">#F6F8FC</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/launch_night</item>
+        <item name="android:statusBarColor">@color/launch_night</item>
+        <item name="android:navigationBarColor">@color/launch_night</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/launch_night</item>
     </style>
 </resources>

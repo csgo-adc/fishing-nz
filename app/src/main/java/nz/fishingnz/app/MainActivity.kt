@@ -36,6 +36,9 @@ class MainActivity : ComponentActivity() {
     private val installWhenAway = Runnable { AppUpdates.installIfDownloaded() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The launch scene's first frame matches the system splash, so the splash goes at once instead of fading over
+        // the app's first, heavy frames (ui/LaunchScene.kt).
+        if (android.os.Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener { it.remove() }
         I18n.initialize(applicationContext)
         AccountSessionStore.initialize(applicationContext)
         SearchPreferencesStore.initialize(applicationContext)

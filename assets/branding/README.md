@@ -12,7 +12,7 @@ The built-in ImageGen tool produced the concept and refinements. The production 
 - [fishing-days-icon-preview.png](fishing-days-icon-preview.png): shape and small-size comparisons.
 - [fishing-days-icon-background-comparison.png](fishing-days-icon-background-comparison.png): previous white-background icon beside the revised pale-ocean icon.
 
-Run `node tools/export_app_icons.cjs` from the repository root to regenerate the platform assets, using the existing web workspace's Sharp dependency.
+Run `node tools/export_app_icons.cjs` from the repository root to regenerate the platform assets, using the existing web workspace's Sharp dependency. `node tools/export_launch_art.cjs` makes the fish, pale-sea tile and iPhone launch tile for the animated launch scene ([docs/launch-scene.md](../../docs/launch-scene.md)).
 
 Android uses separate fish foreground and pale-ocean background layers. The water extends across the entire 108 dp canvas, while the whole mark fits inside the central 66 dp safe circle. A dedicated monochrome silhouette includes an eye cutout for Android themed icons. The preview covers circle, squircle, rounded-square and teardrop masks; the launcher chooses the final device shape. See [Android's adaptive-icon guidance](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive).
 

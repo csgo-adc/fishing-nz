@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.80 — 2026-11-22 (build code 81)
+
+- **Animated launch scene and welcome page.** Every cold start on Android and iPhone now opens with a short scene:
+  the fish's tile sits on a night sea where the system splash left it, the sky brightens into dawn, the sun rises,
+  three layers of waves roll in, and "Kia ora · Fishdays - NZ" fades in; the fish bobs, ripples spread, stars twinkle,
+  bubbles rise and the sun glints on the water. Returning users see it fade and zoom into the app after about 2 s (a
+  tap skips it); on the first launch the tide comes in and it becomes a welcome page (tagline, three highlights, **Get
+  started**) before the unchanged setup questions and tour. Update pop-ups, notices, shared windows and sheets wait
+  until it has gone. Android starts on the night-sea window background and removes the system splash at once;
+  iPhone's launch screen shows the same tile on `LaunchBackground`. Reduced motion keeps it still. New text in all
+  four languages, plus two forecast messages from 1.0.79 that were missing. `ui/LaunchScene.kt`,
+  `Views/LaunchScene.swift`, artwork from `tools/export_launch_art.cjs`; see `docs/launch-scene.md`. Run on the
+  Android emulator (debug and release); the iPhone app was built but not run (no simulator on this Mac). Needs store
+  builds; no API or CMS deploy.
+
 ## 1.0.79 — 2026-11-18 (build code 80)
 
 - **Weather forecast loads again when Open-Meteo's NZ server hangs.** Since 13 November `api.open-meteo.com` sends

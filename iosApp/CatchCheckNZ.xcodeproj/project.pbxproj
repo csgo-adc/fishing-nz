@@ -23,6 +23,7 @@
 		AA000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100015 /* Assets.xcassets */; };
 		AA000014 /* SharedWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100016 /* SharedWindow.swift */; };
 		AA0000A2 /* PhotoConsentText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000A2 /* PhotoConsentText.swift */; };
+		AA0000A3 /* LaunchScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000A3 /* LaunchScene.swift */; };
 		AA000015 /* ShareLinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100017 /* ShareLinkService.swift */; };
 		AA000016 /* MoonPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100018 /* MoonPhase.swift */; };
 		AA000099 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA100099 /* PrivacyInfo.xcprivacy */; };
@@ -118,6 +119,7 @@
 		AA100015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA100016 /* SharedWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedWindow.swift; sourceTree = "<group>"; };
 		AA1000A2 /* PhotoConsentText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoConsentText.swift; sourceTree = "<group>"; };
+		AA1000A3 /* LaunchScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchScene.swift; sourceTree = "<group>"; };
 		AA100017 /* ShareLinkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkService.swift; sourceTree = "<group>"; };
 		AA100018 /* MoonPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonPhase.swift; sourceTree = "<group>"; };
 		AA100099 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 				AA100006 /* FeatureViews.swift */,
 				AA100012 /* WeatherView.swift */,
 				AA1000A1 /* AppTour.swift */,
+				AA1000A3 /* LaunchScene.swift */,
 				AA100014 /* PlaceConditionsView.swift */,
 			);
 			path = Views;
@@ -470,6 +473,7 @@
 				AA000009 /* WeatherForecastService.swift in Sources */,
 				AA000010 /* WeatherView.swift in Sources */,
 				AA0000A1 /* AppTour.swift in Sources */,
+				AA0000A3 /* LaunchScene.swift in Sources */,
 				AA000011 /* PlaceConditionsService.swift in Sources */,
 				AA000012 /* PlaceConditionsView.swift in Sources */,
 				AA000014 /* SharedWindow.swift in Sources */,
@@ -524,8 +528,8 @@
 		AA700001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 80;
-				MARKETING_VERSION = 1.0.79;
+				CURRENT_PROJECT_VERSION = 81;
+				MARKETING_VERSION = 1.0.80;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -538,8 +542,8 @@
 		AA700002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 80;
-				MARKETING_VERSION = 1.0.79;
+				CURRENT_PROJECT_VERSION = 81;
+				MARKETING_VERSION = 1.0.80;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;

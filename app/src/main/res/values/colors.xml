@@ -1,3 +1,5 @@
 <resources>
     <color name="icon_fishing_days_background">#D0EEF9</color>
+    <!-- LaunchScene.Night: behind the system splash and the first frame of the launch scene. -->
+    <color name="launch_night">#0A1A3F</color>
 </resources>
